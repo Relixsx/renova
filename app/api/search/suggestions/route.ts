@@ -1,0 +1,2 @@
+import { getProducts } from "../../../lib/server-catalog";
+export async function GET(request: Request) { const q = new URL(request.url).searchParams.get("q")?.trim() ?? ""; if (q.length < 2) return Response.json({ suggestions: [] }); const products = await getProducts({ query: q }); return Response.json({ suggestions: products.slice(0, 6).map((product) => ({ name: product.name, slug: product.slug, imageUrl: product.imageUrl, categorySlug: product.categorySlug })) }); }
