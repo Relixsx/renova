@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { categoryName, formatNaira, type Product } from "../lib/catalog";
+import { categories, categoryName, formatNaira, type Product } from "../lib/catalog";
+import { BUSINESS_IDENTITY, SUPPORT_EMAIL } from "../lib/site";
+import { PrivacyChoicesButton } from "./cookie-consent";
 import { CartDrawer, useCart } from "./cart-provider";
 import { ProductAssistant } from "./product-assistant";
 import { ShopperTools } from "./shopper-tools";
@@ -13,8 +14,9 @@ export function StoreHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Array<{ name: string; slug: string; imageUrl: string }>>([]);
-  useEffect(() => { if (searchQuery.trim().length < 2) { setSuggestions([]); return; } const timer = window.setTimeout(async () => { const response = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchQuery)}`); const payload = await response.json() as { suggestions?: Array<{ name: string; slug: string; imageUrl: string }> }; setSuggestions(payload.suggestions ?? []); }, 180); return () => window.clearTimeout(timer); }, [searchQuery]);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<{ name: string; slug: string; imageUrl: string; categorySlug: string; priceKobo: number }>>([]);
+  useEffect(() => { if (searchQuery.trim().length < 2) { setSuggestions([]); return; } const timer = window.setTimeout(async () => { const response = await fetch(`/api/search/suggestions?q=${encodeURIComponent(searchQuery)}`); const payload = await response.json() as { suggestions?: Array<{ name: string; slug: string; imageUrl: string; categorySlug: string; priceKobo: number }> }; setSuggestions(payload.suggestions ?? []); }, 180); return () => window.clearTimeout(timer); }, [searchQuery]);
   return (
     <>
       <header className="site-header">
@@ -25,7 +27,9 @@ export function StoreHeader() {
             <span><strong>RENOVA</strong><small>Everyday finds, renewed.</small></span>
           </Link>
           <nav className={menuOpen ? "is-open" : ""} aria-label="Main navigation">
-            <Link href="/shop">Shop all</Link><Link href="/collections/phones-tablets">Technology</Link><Link href="/collections/fashion">Style</Link><Link href="/collections/home-office">Home</Link><Link href="/collections/health-beauty">Beauty</Link>
+            <Link href="/shop" onClick={() => setMenuOpen(false)}>Shop all</Link>
+            <button className="categories-trigger" type="button" aria-expanded={categoriesOpen} onClick={() => setCategoriesOpen((open) => !open)}>Categories <span>⌄</span></button>
+            <Link href="/collections/phones-tablets" onClick={() => setMenuOpen(false)}>Technology</Link><Link href="/collections/fashion" onClick={() => setMenuOpen(false)}>Style</Link><Link href="/collections/home-office" onClick={() => setMenuOpen(false)}>Home</Link><Link href="/collections/health-beauty" onClick={() => setMenuOpen(false)}>Beauty</Link>
           </nav>
           <div className="header-actions">
             <button className="header-action" onClick={() => setSearchOpen(!searchOpen)} aria-label="Search">⌕<span>Search</span></button>
@@ -34,7 +38,8 @@ export function StoreHeader() {
             <button className="header-action cart-button" onClick={() => setCartOpen(true)} aria-label={`Open bag with ${count} items`}>◇<span>Bag</span>{count > 0 && <b>{count}</b>}</button>
           </div>
         </div>
-        {searchOpen && <div className="search-shell"><form className="search-bar" action="/search"><label htmlFor="site-search">Search Renova</label><input id="site-search" name="q" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus autoComplete="off" placeholder="Try “portable blender” or “school bag”" /><button type="submit">Search</button></form>{suggestions.length > 0 && <div className="search-suggestions">{suggestions.map((item) => <Link key={item.slug} href={`/products/${item.slug}`} onClick={() => setSearchOpen(false)}><img src={item.imageUrl} alt="" loading="lazy"/><span>{item.name}</span><b>View →</b></Link>)}</div>}</div>}
+        {categoriesOpen && <div className="mega-menu" role="region" aria-label="Product categories"><div className="mega-menu-head"><div><span className="eyebrow">Shop by department</span><h2>Everything, clearly organised.</h2></div><Link href="/shop" onClick={() => { setCategoriesOpen(false); setMenuOpen(false); }}>View all products →</Link></div><div className="mega-menu-grid">{categories.map((category) => <section key={category.slug}><Link className="mega-category" href={`/collections/${category.slug}`} onClick={() => { setCategoriesOpen(false); setMenuOpen(false); }}>{category.name}</Link><div>{category.subcategories?.slice(0, 4).map((subcategory) => <Link key={subcategory} href={`/shop?category=${category.slug}&q=${encodeURIComponent(subcategory)}`} onClick={() => { setCategoriesOpen(false); setMenuOpen(false); }}>{subcategory}</Link>)}</div></section>)}</div></div>}
+        {searchOpen && <div className="search-shell"><form className="search-bar" action="/search"><label htmlFor="site-search">Search Renova</label><input id="site-search" name="q" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus autoComplete="off" placeholder="Try “portable blender” or “school bag”" /><button type="submit">Search</button></form>{suggestions.length > 0 && <div className="search-suggestions">{suggestions.map((item) => <Link key={item.slug} href={`/products/${item.slug}`} onClick={() => setSearchOpen(false)}><img src={item.imageUrl} alt="" loading="lazy"/><span><b>{item.name}</b><small>{categoryName(item.categorySlug)} · {formatNaira(item.priceKobo)}</small></span><strong>View →</strong></Link>)}</div>}</div>}
       </header>
       <CartDrawer />
     </>
@@ -47,11 +52,11 @@ export function StoreFooter() {
       <div className="footer-story"><img src="/renova-mark.svg" alt="" /><div><strong>RENOVA</strong><p>Useful finds for everyday life, selected with a spirit of renewal.</p></div></div>
       <div className="footer-grid">
         <div><h3>Shop</h3><Link href="/shop">All products</Link><Link href="/collections/fashion">Fashion</Link><Link href="/collections/electronics">Electronics</Link><Link href="/collections/home-office">Home & office</Link></div>
-        <div><h3>Help</h3><Link href="/track-order">Track an order</Link><Link href="/delivery">Delivery</Link><Link href="/returns">Returns & refunds</Link><a href="mailto:airebirth5@gmail.com">Email support</a></div>
-        <div><h3>Renova</h3><Link href="/about">Our story</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/admin">Owner dashboard</Link></div>
-        <div className="newsletter"><h3>Need a hand?</h3><p>For order or product support, email our customer care desk.</p><a href="mailto:airebirth5@gmail.com">airebirth5@gmail.com</a></div>
+        <div><h3>Help</h3><Link href="/track-order">Track an order</Link><Link href="/delivery">Delivery</Link><Link href="/returns">Returns & refunds</Link><a href={`mailto:${SUPPORT_EMAIL}`}>Email support</a></div>
+        <div><h3>Renova</h3><Link href="/about">Our story</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><PrivacyChoicesButton /></div>
+        <div className="newsletter"><h3>Business information</h3><p>{BUSINESS_IDENTITY.name} is an {BUSINESS_IDENTITY.legalDescription.toLowerCase()} serving customers across Nigeria.</p><span>{BUSINESS_IDENTITY.location}</span><a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></div>
       </div>
-      <div className="footer-bottom"><span>© 2026 Renova. Lagos, Nigeria.</span><span>Secure prepaid checkout powered by Paystack at launch.</span></div>
+      <div className="footer-bottom"><span>© 2026 Renova. Lagos, Nigeria.</span><span>Secure prepaid checkout powered by Paystack.</span></div>
     </footer>
   );
 }
@@ -66,7 +71,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <article className="product-card">
       <Link href={`/products/${product.slug}`} className="product-image-wrap">
-        <img src={product.imageUrl} alt={product.name} loading="lazy" />
+        <img src={product.imageUrl} alt={product.name} width="418" height="418" loading="lazy" decoding="async" />
         {product.badge && <span className="product-badge">{product.badge}</span>}
         {discount > 0 && <span className="discount-badge">−{discount}%</span>}
       </Link>
@@ -106,7 +111,7 @@ export function ProductGallery({ product }: { product: Product }) {
   };
   return <div className="product-gallery">
     <div className="product-main-image" onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => finishSwipe(event.changedTouches[0]?.clientX ?? 0)}>
-      {isVideo(selected) ? <video src={selected} controls playsInline preload="metadata"/> : <img src={selected} alt={`${product.name}, view ${selectedIndex + 1} of ${media.length}`}/>}
+      {isVideo(selected) ? <video src={selected} controls playsInline preload="metadata"/> : <img src={selected} alt={`${product.name}, view ${selectedIndex + 1} of ${media.length}`} width="900" height="900" decoding="async"/>} 
       {product.badge && <span>{product.badge}</span>}
       {media.length > 1 && <><button type="button" className="gallery-arrow gallery-previous" onClick={showPrevious} aria-label="View previous product image">‹</button><button type="button" className="gallery-arrow gallery-next" onClick={showNext} aria-label="View next product image">›</button><small className="gallery-count" aria-live="polite">{selectedIndex + 1} / {media.length}</small></>}
     </div>
@@ -131,8 +136,7 @@ export function ReviewSubmission({ productSlug }: { productSlug: string }) {
 }
 
 export function ProductPurchase({ product }: { product: Product }) {
-  const { add, buyNow } = useCart();
-  const router = useRouter();
+  const { add } = useCart();
   const [variant, setVariant] = useState(product.variants[0] ?? "Standard");
   const [quantity, setQuantity] = useState(1);
   return (
@@ -140,7 +144,7 @@ export function ProductPurchase({ product }: { product: Product }) {
       <div className="variant-block"><div className="field-head"><label>Choose option</label><span>{variant}</span></div><div className="variant-pills">{product.variants.map((item) => <button key={item} className={variant === item ? "is-selected" : ""} onClick={() => setVariant(item)}>{item}</button>)}</div></div>
       <div className="quantity-block"><label htmlFor="quantity">Quantity</label><div><button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><input id="quantity" value={quantity} readOnly/><button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button></div></div>
       <button className="button primary wide purchase-button" onClick={() => add(product, variant, quantity)}>Add to bag</button>
-      <button className="button espresso wide" onClick={() => { buyNow(product, variant, quantity); router.push("/checkout"); }}>Buy now</button>
+      <button className="button espresso wide" onClick={() => { add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
       <ShopperTools product={product} recordView/>
       <div className="purchase-trust"><span>✓ Prepaid secure checkout</span><span>✓ 3–5 working days</span><span>✓ Order tracking included</span></div>
     </div>

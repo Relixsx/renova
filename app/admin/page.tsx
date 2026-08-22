@@ -11,7 +11,5 @@ export default async function AdminPage() {
     return <main className="admin-access"><img src="/renova-mark.svg" alt=""/><span className="eyebrow">Protected workspace</span><h1>This owner console is private.</h1><p>You are signed in as {user.email}. Sign in with an approved Renova owner account to continue.</p><a className="button espresso" href="/admin/login">Change account</a></main>;
   }
   const [products, reviews, orders] = await Promise.all([getProducts({ includeDrafts: true }), getAdminReviews(), getAdminOrders()]);
-  const paystackKey = process.env.PAYSTACK_SECRET_KEY?.trim() || "";
-  const paystackMode = paystackKey.startsWith("sk_test_") ? "test" : paystackKey.startsWith("sk_live_") ? "live" : "not configured";
-  return <AdminCatalogue initialProducts={products} initialReviews={reviews} initialOrders={orders} categories={categories} ownerName={user.name || "Lateef"} paystackMode={paystackMode} />;
+  return <AdminCatalogue initialProducts={products} initialReviews={reviews} initialOrders={orders} categories={categories} ownerName={user.name || "Lateef"} />;
 }

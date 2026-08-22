@@ -40,7 +40,7 @@ function stateLabel(code: string, name: string) {
 }
 
 export default function CheckoutPage() {
-  const { lines, loaded, subtotalKobo } = useCart();
+  const { lines, subtotalKobo } = useCart();
   const [step, setStep] = useState(1);
   const [delivery, setDelivery] = useState("jumia");
   const [notice, setNotice] = useState("");
@@ -74,10 +74,6 @@ export default function CheckoutPage() {
       if (!response.ok || !payload.authorizationUrl) throw new Error(payload.error || "Payment could not be started.");
       window.location.href = payload.authorizationUrl;
     } catch (error) { setNotice(error instanceof Error ? error.message : "Payment could not be started."); setPaying(false); }
-  }
-
-  if (!loaded) {
-    return <main className="checkout-loading" aria-live="polite"><img src="/renova-mark.svg" alt=""/><span className="eyebrow">Preparing secure checkout</span><div className="checkout-loading-bar"/><p>Loading your order…</p></main>;
   }
 
   if (!lines.length) {

@@ -10,10 +10,10 @@ export default async function Home() {
   return (
     <StoreFrame>
       <section className="hero">
-        <img src="/renova-hero.webp" alt="A warm editorial arrangement of Renova everyday products" />
+        <img src="/renova-hero.webp" alt="A warm editorial arrangement of Renova everyday products" width="1536" height="1024" decoding="async" fetchPriority="high" />
         <div className="hero-shade" />
         <div className="hero-copy">
-          <span className="eyebrow light">The first Renova edit</span>
+          <span className="eyebrow light">The Renova selection</span>
           <h1>Find something<br/><em>worth renewing.</em></h1>
           <p>Thoughtfully selected technology, style, beauty and home essentials for everyday life in Nigeria.</p>
           <div className="hero-actions"><Link className="button primary" href="/shop">Explore all finds</Link><Link className="button glass" href="/collections/home-office">Refresh your space</Link></div>
@@ -25,7 +25,7 @@ export default async function Home() {
         <div><b>01</b><span><strong>Secure prepaid checkout</strong><small>Payments protected by Paystack</small></span></div>
         <div><b>02</b><span><strong>3–5 working days</strong><small>Clear delivery expectations</small></span></div>
         <div><b>03</b><span><strong>Track every order</strong><small>From payment to delivery</small></span></div>
-        <div><b>04</b><span><strong>Email-first support</strong><small>airebirth5@gmail.com</small></span></div>
+        <div><b>04</b><span><strong>Email-first support</strong><small>support@shoprenova.com.ng</small></span></div>
       </section>
 
       <section className="section categories-section">
@@ -33,7 +33,7 @@ export default async function Home() {
         <div className="category-grid">
           {categories.map((category, index) => (
             <Link href={`/collections/${category.slug}`} className={`category-tile ${category.accent}`} key={category.slug}>
-              <img className="category-image" src={category.imageUrl} alt={`${category.name} collection`} loading="lazy" />
+              <img className="category-image" src={category.imageUrl} alt={`${category.name} collection`} width="1200" height="900" loading="lazy" decoding="async" />
               <span className="category-overlay" />
               <span className="category-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="category-copy"><h3>{category.name}</h3><p>{category.description}</p></span>
