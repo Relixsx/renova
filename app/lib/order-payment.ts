@@ -15,21 +15,32 @@ async function notifyOwner(order: typeof orders.$inferSelect) {
     console.warn("FORMSPREE_ENDPOINT is not configured; owner notification skipped.");
     return false;
   }
+  const items = JSON.parse(order.itemsJson || "[]") as Array<{ name?: string; quantity?: number; variant?: string }>;
+  const address = JSON.parse(order.addressJson || "{}") as Record<string, unknown>;
+  const productSummary = items.map((item, index) => {
+    const variant = item.variant && item.variant !== "Standard" ? ` (${item.variant})` : "";
+    return `${index + 1}. ${item.name || "Product"}${variant} — Quantity: ${Number(item.quantity ?? 1)}`;
+  }).join("\n");
+  const deliveryAddress = [
+    address.streetAddress,
+    address.cityTown ?? address.town,
+    address.lga ?? address.localGovernment,
+    address.state ?? address.stateCode,
+  ].filter(Boolean).join(", ");
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
-      _subject: `Paid Renova order ${order.orderNumber}`,
-      order_number: order.orderNumber,
-      payment_status: "PAID",
-      amount_ngn: order.totalKobo / 100,
-      customer_name: order.customerName,
-      customer_email: order.customerEmail,
-      customer_phone: order.customerPhone,
-      items: JSON.parse(order.itemsJson),
-      delivery_address: JSON.parse(order.addressJson),
-      delivery_method: JSON.parse(order.shippingJson),
-      placed_at: order.createdAt,
+      _subject: `New paid Renova order — ${order.orderNumber}`,
+      "Order Number": order.orderNumber,
+      "Tracking Number": order.trackingNumber || order.orderNumber,
+      "Payment Status": "Paid",
+      "Amount Paid": `₦${(order.totalKobo / 100).toLocaleString("en-NG")}`,
+      "Customer Name": order.customerName,
+      "Customer Email": order.customerEmail,
+      "Phone Number": order.customerPhone,
+      "Product and Quantity": productSummary || "No product details available",
+      "Delivery Address": deliveryAddress || "No delivery address available",
     }),
   });
   if (!response.ok) {
