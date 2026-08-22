@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --ivory: #fff9ef;
-  --cream: #f5ead9;
-  --sand: #e7d5bd;
-  --espresso: #291912;
-  --brown: #5e4337;
-  --muted: #887166;
-  --coral: #e95e3c;
-  --ember: #c8442b;
-  --amber: #f1a141;
-  --sage: #7d8f72;
-  --ink: #263038;
-  --line: rgba(55, 31, 21, .14);
+  --ivory: #ffffff;
+  --cream: #f7f7f5;
+  --sand: #ece9e4;
+  --espresso: #151719;
+  --brown: #3e444b;
+  --muted: #697078;
+  --coral: #ff5a1f;
+  --ember: #e94324;
+  --amber: #ffb547;
+  --sage: #6f8f78;
+  --ink: #111316;
+  --line: rgba(17, 19, 22, .13);
   --serif: Georgia, "Times New Roman", serif;
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -504,3 +504,25 @@ p, li, dd { text-wrap: pretty; }
   .world-camera { transform: scale(1.03); transition: none; }
   .world-particles { display: none; }
 }
+
+/* Phoenix commerce palette: neutral shopping surfaces with luminous brand energy. */
+html,body{background:#fff;color:#151719}
+.site-header{background:rgba(255,255,255,.94);box-shadow:0 8px 30px rgba(17,19,22,.035)}
+.test-ribbon,.site-footer,.editorial-banner,.product-highlights,.checkout-summary,.consent-banner{background:#111316}
+.mega-menu{background:#fff;box-shadow:0 28px 70px rgba(17,19,22,.14)}
+.trust-row,.review-grid article,.drawer-summary,.catalogue-empty,.customer-review-form,.cart-totals,.product-delivery-card,.search-suggestions,.shopper-tools button,.shopper-tools a,.saved-grid article,.ai-product-studio,.subcategory-chips a{background:#fff}
+.checkout-shell{background:#f4f5f6}.checkout-form-area{background:#fff}.tracking-intro,.product-specifications{background:#f3f4f5}
+.product-image-wrap{background:#f5f6f7}
+.button.primary,.assistant-launcher,.category-tile:hover i{background:#ff5a1f}.button.primary:hover{background:#e94324}
+.button.espresso,.search-bar button,.catalogue-bar button,.product-badge{background:#151719}
+.category-tile{background:#111316;box-shadow:0 18px 44px rgba(17,19,22,.09)}
+.category-overlay{background:linear-gradient(180deg,rgba(10,12,15,.02) 10%,rgba(10,12,15,.08) 42%,rgba(10,12,15,.9) 100%)}
+.hero-note{background:rgba(17,19,22,.66)}
+.cinematic-home-hero{background:#111316}
+.cinematic-hero-shade{background:linear-gradient(90deg,rgba(8,10,13,.94) 0%,rgba(10,12,15,.72) 30%,rgba(10,12,15,.12) 61%,transparent 100%),linear-gradient(0deg,rgba(8,10,13,.32),transparent 42%)}
+.cinematic-hero-copy h1 em{color:#ff9a62}.eyebrow.light{color:#ffb547}
+.site-footer{color:#f7f7f5}.footer-story img{background:#fff}.footer-grid h3{color:#ff9a62}
+.product-delivery-card>div>span{background:#fff0e9}.integration-notice{background:#fff5df;color:#65420f}
+.assistant-panel,.assistant-panel footer{background:#fff}.assistant-panel header{background:#111316}
+.world-background,.collection-world-camera img{image-rendering:auto;backface-visibility:hidden;-webkit-font-smoothing:antialiased}
+@media(min-width:1800px){.collection-world-camera{inset:-1%}.collection-world-camera img{transform:scale(1.015)}.world-camera{inset:-2%;transform:translate3d(calc(var(--pointer-x)*-4px),calc(var(--pointer-y)*-3px),0) scale(1.025)}}

@@ -44,7 +44,7 @@ export function CinematicHomeHero() {
   return (
     <section className="cinematic-home-hero" ref={heroRef}>
       <div className="world-camera" aria-hidden="true">
-        <img className="world-background" src="/renova-cinematic-world.png" alt="" fetchPriority="high" />
+        <img className="world-background" src="/renova-cinematic-world-hd.webp" alt="" fetchPriority="high" />
         <div className="world-depth world-depth-far" />
         <div className="world-depth world-depth-near" />
         <div className="world-light-trail trail-one" />
