@@ -255,32 +255,7 @@ const coreSeedProducts: Product[] = [
 
 export const seedProducts: Product[] = [...coreSeedProducts, ...expandedSeedProducts];
 
-const coreSeedReviews: Review[] = [
-  { productSlug: "aura-quietmax-wireless-headphones", reviewerName: "Amara O.", rating: 5, title: "Comfortable for long listening", body: "The cushioning feels soft and the controls are easy to understand. It is comfortable enough for long listening sessions.", isTestData: true },
-  { productSlug: "embergo-portable-blender", reviewerName: "Tobi A.", rating: 5, title: "Compact and convenient", body: "The size works nicely for a quick smoothie, and the coral colour looks even better in person.", isTestData: true },
-  { productSlug: "atelier-structured-everyday-handbag", reviewerName: "Zainab M.", rating: 5, title: "Elegant everyday shape", body: "The structured silhouette makes it look polished while the inside still feels practical and spacious.", isTestData: true },
-  { productSlug: "nova-x1-5g-smartphone", reviewerName: "David K.", rating: 4, title: "Clear and straightforward", body: "Storage, colour and delivery options were straightforward to compare before completing the order.", isTestData: true },
-  { productSlug: "renew-barrier-support-face-serum", reviewerName: "Ifeoma N.", rating: 5, title: "Simple routine-friendly format", body: "The product information is clear, and the bottle size is easy to understand before adding it to the bag.", isTestData: true },
-  { productSlug: "scholar-pro-everyday-backpack", reviewerName: "Bola S.", rating: 5, title: "A practical school pick", body: "The compartments are useful, the colour is versatile, and the ordering process felt reassuring.", isTestData: true },
-  { productSlug: "breeze-mini-rechargeable-table-fan", reviewerName: "Chidi E.", rating: 4, title: "Useful desk size", body: "It is compact enough for a small work table, and the product details answered the main questions quickly.", isTestData: true },
-  { productSlug: "pace-everyday-running-sneakers", reviewerName: "Kemi R.", rating: 5, title: "Easy size selection", body: "The size choices and delivery information made the ordering process simple and easy to follow.", isTestData: true },
-];
-
-const sampleReviewerNames = ["Amara O.", "Tobi A.", "Zainab M.", "David K.", "Ifeoma N.", "Bola S.", "Chidi E.", "Kemi R.", "Seyi P.", "Adaeze U.", "Musa B.", "Nneka I."];
-const sampleReviewTitles = ["Clear product information", "Easy to compare", "A useful everyday option", "Straightforward ordering", "Well presented"];
-const alreadyReviewed = new Set(coreSeedReviews.map((review) => review.productSlug));
-
-export const seedReviews: Review[] = [
-  ...coreSeedReviews,
-  ...seedProducts.filter((product) => !alreadyReviewed.has(product.slug)).map((product, index) => ({
-    productSlug: product.slug,
-    reviewerName: sampleReviewerNames[index % sampleReviewerNames.length],
-    rating: index % 5 === 0 ? 4 : 5,
-    title: sampleReviewTitles[index % sampleReviewTitles.length],
-    body: `The ${product.name} was clearly presented, the available options were easy to understand, and the product information made comparison straightforward.`,
-    isTestData: true,
-  })),
-];
+export const seedReviews: Review[] = [];
 
 export const formatNaira = (kobo: number) =>
   new Intl.NumberFormat("en-NG", {

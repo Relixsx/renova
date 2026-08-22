@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { categories, seedReviews } from "./lib/catalog";
-import { getProducts } from "./lib/server-catalog";
+import { categories } from "./lib/catalog";
+import { getProducts, getPublicReviews } from "./lib/server-catalog";
 import { ProductCard, StoreFrame } from "./components/storefront";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const products = await getProducts();
+  const [products, reviews] = await Promise.all([getProducts(), getPublicReviews(3)]);
   return (
     <StoreFrame>
       <section className="hero">
@@ -22,7 +22,7 @@ export default async function Home() {
       </section>
 
       <section className="trust-row" aria-label="Store assurances">
-        <div><b>01</b><span><strong>Secure prepaid checkout</strong><small>Paystack integration prepared</small></span></div>
+        <div><b>01</b><span><strong>Secure prepaid checkout</strong><small>Payments protected by Paystack</small></span></div>
         <div><b>02</b><span><strong>3–5 working days</strong><small>Clear delivery expectations</small></span></div>
         <div><b>03</b><span><strong>Track every order</strong><small>From payment to delivery</small></span></div>
         <div><b>04</b><span><strong>Email-first support</strong><small>airebirth5@gmail.com</small></span></div>
@@ -50,18 +50,18 @@ export default async function Home() {
 
       <section className="editorial-banner">
         <div className="editorial-mark"><img src="/renova-mark.svg" alt="" /></div>
-        <div><span className="eyebrow light">Renova philosophy</span><h2>Not more things.<br/><em>Better everyday choices.</em></h2><p>Our catalogue is being shaped around practical products, clear information and a buying experience that feels calm from first click to delivery.</p><Link href="/about" className="button glass">Discover our story</Link></div>
+        <div><span className="eyebrow light">Renova philosophy</span><h2>Not more things.<br/><em>Better everyday choices.</em></h2><p>Our catalogue brings together practical products, clear information and a buying experience that feels calm from first click to delivery.</p><Link href="/about" className="button glass">Discover our story</Link></div>
         <blockquote>“Renew the ordinary.”</blockquote>
       </section>
 
-      <section className="section review-section">
+      {reviews.length > 0 && <section className="section review-section">
         <div className="section-head"><div><span className="eyebrow">Customer experiences</span><h2>Thoughtful details, noticed.</h2></div></div>
         <div className="review-grid">
-          {seedReviews.slice(0, 3).map((review) => (
-            <article key={`${review.productSlug}-${review.reviewerName}`}><span className="stars">★★★★★</span>{review.isTestData && <i className="sample-review-label">Presentation sample</i>}<h3>{review.title}</h3><p>“{review.body}”</p><footer><b>{review.reviewerName}</b><span>{review.isTestData ? "Demonstration content" : "Renova customer"}</span></footer></article>
+          {reviews.map((review) => (
+            <article key={`${review.productSlug}-${review.reviewerName}`}><span className="stars">{"★".repeat(review.rating)}</span><h3>{review.title}</h3><p>“{review.body}”</p><footer><b>{review.reviewerName}</b><span>Renova customer</span></footer></article>
           ))}
         </div>
-      </section>
+      </section>}
 
       <section className="closing-cta"><span className="eyebrow">Start somewhere new</span><h2>Your next favourite find<br/>may already be here.</h2><Link href="/shop" className="button primary">Shop Renova</Link></section>
     </StoreFrame>

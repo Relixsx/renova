@@ -57,20 +57,22 @@ export async function ensureSeedData() {
     )
     .onConflictDoNothing();
 
-  await db
-    .insert(reviewTable)
-    .values(
-      seedReviews.map((review) => ({
-        productSlug: review.productSlug,
-        reviewerName: review.reviewerName,
-        rating: review.rating,
-        title: review.title,
-        body: review.body,
-        status: "approved",
-        isTestData: true,
-      })),
-    )
-    .onConflictDoNothing();
+  if (seedReviews.length) {
+    await db
+      .insert(reviewTable)
+      .values(
+        seedReviews.map((review) => ({
+          productSlug: review.productSlug,
+          reviewerName: review.reviewerName,
+          rating: review.rating,
+          title: review.title,
+          body: review.body,
+          status: "approved",
+          isTestData: true,
+        })),
+      )
+      .onConflictDoNothing();
+  }
 
   seedAttempted = true;
 }
@@ -134,10 +136,23 @@ export async function getProducts(options?: {
   try {
     await ensureSeedData();
     const db = getDb();
-    const rows = await db.select().from(productTable).orderBy(asc(productTable.id));
+    const [rows, publicReviews] = await Promise.all([
+      db.select().from(productTable).orderBy(asc(productTable.id)),
+      db.select().from(reviewTable),
+    ]);
+    const reviewStats = new Map<string, { count: number; total: number }>();
+    for (const review of publicReviews) {
+      if (review.status !== "approved" || review.isTestData) continue;
+      const current = reviewStats.get(review.productSlug) ?? { count: 0, total: 0 };
+      reviewStats.set(review.productSlug, { count: current.count + 1, total: current.total + review.rating });
+    }
     const query = options?.query?.trim().toLowerCase();
     return rows
-      .map(mapProduct)
+      .map((row) => {
+        const product = mapProduct(row);
+        const stats = reviewStats.get(product.slug);
+        return { ...product, reviewCount: stats?.count ?? 0, rating: stats ? Math.round(stats.total / stats.count * 10) : 0 };
+      })
       .filter((product) => options?.includeDrafts || product.isPublished)
       .filter((product) => !options?.categorySlug || product.categorySlug === options.categorySlug)
       .filter(
@@ -149,7 +164,7 @@ export async function getProducts(options?: {
       );
   } catch {
     const query = options?.query?.trim().toLowerCase();
-    return seedProducts
+    return seedProducts.map((product) => ({ ...product, rating: 0, reviewCount: 0 }))
       .filter((product) => options?.includeDrafts || product.isPublished)
       .filter((product) => !options?.categorySlug || product.categorySlug === options.categorySlug)
       .filter(
@@ -166,14 +181,17 @@ export async function getProduct(slug: string): Promise<Product | null> {
   try {
     await ensureSeedData();
     const db = getDb();
-    const [row] = await db
-      .select()
-      .from(productTable)
-      .where(eq(productTable.slug, slug))
-      .limit(1);
-    return row ? mapProduct(row) : null;
+    const [[row], productReviews] = await Promise.all([
+      db.select().from(productTable).where(eq(productTable.slug, slug)).limit(1),
+      db.select().from(reviewTable).where(eq(reviewTable.productSlug, slug)),
+    ]);
+    if (!row) return null;
+    const publicReviews = productReviews.filter((review) => review.status === "approved" && !review.isTestData);
+    const product = mapProduct(row);
+    return { ...product, reviewCount: publicReviews.length, rating: publicReviews.length ? Math.round(publicReviews.reduce((sum, review) => sum + review.rating, 0) / publicReviews.length * 10) : 0 };
   } catch {
-    return seedProducts.find((product) => product.slug === slug) ?? null;
+    const product = seedProducts.find((item) => item.slug === slug);
+    return product ? { ...product, rating: 0, reviewCount: 0 } : null;
   }
 }
 
@@ -187,7 +205,7 @@ export async function getReviews(slug: string): Promise<Review[]> {
       .where(eq(reviewTable.productSlug, slug))
       .orderBy(asc(reviewTable.id));
     return rows
-      .filter((review) => review.status === "approved")
+      .filter((review) => review.status === "approved" && !review.isTestData)
       .map((review) => ({
         id: review.id,
         productSlug: review.productSlug,
@@ -199,14 +217,27 @@ export async function getReviews(slug: string): Promise<Review[]> {
         status: review.status,
       }));
   } catch {
-    return seedReviews.filter((review) => review.productSlug === slug);
+    return [];
+  }
+}
+
+export async function getPublicReviews(limit = 3): Promise<Review[]> {
+  try {
+    await ensureSeedData();
+    const rows = await getDb().select().from(reviewTable).orderBy(desc(reviewTable.id));
+    return rows
+      .filter((review) => review.status === "approved" && !review.isTestData)
+      .slice(0, limit)
+      .map((review) => ({ id: review.id, productSlug: review.productSlug, reviewerName: review.reviewerName, rating: review.rating, title: review.title, body: review.body, status: review.status, isTestData: false }));
+  } catch {
+    return [];
   }
 }
 
 export async function getAdminReviews(): Promise<Review[]> {
   await ensureSeedData();
   const rows = await getDb().select().from(reviewTable).orderBy(desc(reviewTable.id));
-  return rows.map((review) => ({
+  return rows.filter((review) => !review.isTestData).map((review) => ({
     id: review.id,
     productSlug: review.productSlug,
     reviewerName: review.reviewerName,
