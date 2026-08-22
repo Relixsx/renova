@@ -2,6 +2,7 @@ import Link from "next/link";
 import { categories } from "./lib/catalog";
 import { getProducts, getPublicReviews } from "./lib/server-catalog";
 import { ProductCard, StoreFrame } from "./components/storefront";
+import { CinematicHomeHero } from "./components/cinematic-home-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -9,17 +10,7 @@ export default async function Home() {
   const [products, reviews] = await Promise.all([getProducts(), getPublicReviews(3)]);
   return (
     <StoreFrame>
-      <section className="hero">
-        <img src="/renova-hero.webp" alt="A warm editorial arrangement of Renova everyday products" width="1536" height="1024" decoding="async" fetchPriority="high" />
-        <div className="hero-shade" />
-        <div className="hero-copy">
-          <span className="eyebrow light">The Renova selection</span>
-          <h1>Find something<br/><em>worth renewing.</em></h1>
-          <p>Thoughtfully selected technology, style, beauty and home essentials for everyday life in Nigeria.</p>
-          <div className="hero-actions"><Link className="button primary" href="/shop">Explore all finds</Link><Link className="button glass" href="/collections/home-office">Refresh your space</Link></div>
-        </div>
-        <div className="hero-note"><strong>Free Jumia Delivery</strong><span>On eligible campaign orders</span></div>
-      </section>
+      <CinematicHomeHero />
 
       <section className="trust-row" aria-label="Store assurances">
         <div><b>01</b><span><strong>Secure prepaid checkout</strong><small>Payments protected by Paystack</small></span></div>
