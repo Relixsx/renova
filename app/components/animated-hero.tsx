@@ -11,16 +11,13 @@ export function AnimatedCatalogueHero({ items, query }: { items: HeroItem[]; que
 }
 
 export function AnimatedCollectionHero({ category, products }: { category: Category; products: Product[] }) {
-  const fallback = category.imageUrl || "/renova-hero.webp";
-  const items = products.length ? products.slice(0, 5).map((product) => ({ imageUrl: product.imageUrl, label: product.name })) : (category.subcategories || [category.name]).slice(0, 5).map((label) => ({ imageUrl: fallback, label }));
-  return <section className={`motion-hero collection-motion-hero accent-${category.accent}`}>
-    <div className="collection-cinematic-bg" aria-hidden="true" style={{ backgroundImage: `url(${category.imageUrl || "/renova-hero.webp"})` }}/>
-    <div className="cinematic-sweep" aria-hidden="true"><i/><i/><i/><i/></div>
-    <div className="collection-watermark" aria-hidden="true">{category.monogram}</div>
-    <div className="collection-motion-stage" aria-hidden="true">
-      <div className="motion-ring ring-one"/><div className="motion-ring ring-two"/>
-      {items.map((item, index) => <figure className={`collection-motion-card collection-card-${index + 1}`} key={`${item.label}-${index}`}><img src={item.imageUrl} alt="" loading={index < 2 ? "eager" : "lazy"}/><span>{String(index + 1).padStart(2, "0")}</span></figure>)}
-    </div>
-    <div className="collection-motion-copy"><i className="eyebrow">Renova collection</i><h1>{category.name}</h1><p>{category.description}, selected for clear choices and easier everyday shopping.</p>{category.subcategories && <div className="subcategory-pills" aria-label={`${category.name} subcategories`}>{category.subcategories.map((item) => <span key={item}>{item}</span>)}</div>}<div className="collection-pulse"><i/>Live collection</div></div>
+  const worldUrl = `/category-worlds/${category.slug}.webp`;
+  return <section className={`motion-hero collection-motion-hero accent-${category.accent}`} data-world={category.slug}>
+    <div className="collection-world-camera" aria-hidden="true"><img src={worldUrl} alt="" fetchPriority="high"/></div>
+    <div className="collection-world-shade" aria-hidden="true"/>
+    <div className="collection-world-effects" aria-hidden="true"><i/><i/><i/><i/><i/><i/></div>
+    <div className="collection-energy-rings" aria-hidden="true"><i/><i/><i/></div>
+    <div className="collection-motion-copy"><i className="eyebrow">Renova collection</i><h1>{category.name}</h1><p>{category.description}, selected for clear choices and easier everyday shopping.</p>{category.subcategories && <div className="subcategory-pills" aria-label={`${category.name} subcategories`}>{category.subcategories.map((item) => <span key={item}>{item}</span>)}</div>}<div className="collection-pulse"><i/>Explore the collection</div></div>
+    <div className="collection-world-index" aria-hidden="true"><b>{category.monogram}</b><span>Renova world</span></div>
   </section>;
 }
