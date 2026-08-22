@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { categoryName, formatNaira, type Category, type Product, type Review } from "../lib/catalog";
 
-type AdminOrder = { id: number; orderNumber: string; customerName: string; paymentStatus: string; status: string; totalKobo: number; createdAt: string };
+type AdminOrderItem = { slug?: string; name?: string; categorySlug?: string; quantity?: number; unitPriceKobo?: number; supplierCostKobo?: number | null };
+type AdminOrder = { id: number; orderNumber: string; customerName: string; paymentStatus: string; status: string; totalKobo: number; itemsJson: string; shippingJson: string; createdAt: string };
 const emptyForm = { name: "", categorySlug: "phones-tablets", sku: "", shortDescription: "", description: "", priceNaira: "", compareAtNaira: "", supplierCostNaira: "", stock: "10", variants: "Standard", badge: "", supplierName: "", supplierUrl: "", imageUrl: "", brand: "", model: "", materials: "", dimensions: "", weight: "", colour: "", size: "", warranty: "", packageContents: "", countryOfOrigin: "", careInstructions: "", compatibility: "", specifications: "", chatbotKnowledge: "", chatbotFaq: "", isFeatured: false, isPublished: true };
-const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "", body: "", isTestData: true };
+const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "", body: "", isTestData: false };
 
 function parseList(value: unknown) { if (Array.isArray(value)) return value.map(String); try { return JSON.parse(String(value ?? "[]")) as string[]; } catch { return []; } }
 function fileKey(file: File) { return `${file.name}:${file.size}:${file.lastModified}`; }
+function parseOrderItems(value: string) { try { return JSON.parse(value || "[]") as AdminOrderItem[]; } catch { return []; } }
+function lagosDay(value: string | Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)); }
+function shortDay(value: Date) { return new Intl.DateTimeFormat("en-NG", { timeZone: "Africa/Lagos", weekday: "short" }).format(value); }
 async function optimizeProductImage(file: File) {
   const bitmap = await createImageBitmap(file);
   const maximumEdge = 1800;
@@ -35,11 +39,13 @@ function rawProduct(raw: Record<string, unknown>): Product {
   return { id: Number(raw.id), name: String(raw.name), slug: String(raw.slug), sku: String(raw.sku), categorySlug: String(raw.categorySlug), shortDescription: String(raw.shortDescription ?? ""), description: String(raw.description ?? ""), priceKobo: Number(raw.priceKobo), compareAtKobo: raw.compareAtKobo ? Number(raw.compareAtKobo) : null, supplierCostKobo: raw.supplierCostKobo ? Number(raw.supplierCostKobo) : null, imageUrl: String(raw.imageUrl), gallery: parseList(raw.gallery ?? raw.galleryJson), stock: Number(raw.stock), badge: raw.badge ? String(raw.badge) : null, rating: Number(raw.rating ?? 0), reviewCount: Number(raw.reviewCount ?? 0), isFeatured: Boolean(raw.isFeatured), isPublished: Boolean(raw.isPublished), isTestData: Boolean(raw.isTestData), variants: parseList(raw.variants ?? raw.variantsJson), specifications, chatbotFaq, brand: String(raw.brand ?? ""), model: String(raw.model ?? ""), materials: String(raw.materials ?? ""), dimensions: String(raw.dimensions ?? ""), weight: String(raw.weight ?? ""), colour: String(raw.colour ?? ""), size: String(raw.size ?? ""), warranty: String(raw.warranty ?? ""), packageContents: String(raw.packageContents ?? ""), countryOfOrigin: String(raw.countryOfOrigin ?? ""), careInstructions: String(raw.careInstructions ?? ""), compatibility: String(raw.compatibility ?? ""), chatbotKnowledge: String(raw.chatbotKnowledge ?? "") };
 }
 
-export function AdminCatalogue({ initialProducts, initialReviews, initialOrders, categories, ownerName }: { initialProducts: Product[]; initialReviews: Review[]; initialOrders: AdminOrder[]; categories: Category[]; ownerName: string }) {
+export function AdminCatalogue({ initialProducts, initialReviews, initialOrders, categories, ownerName, paystackMode }: { initialProducts: Product[]; initialReviews: Review[]; initialOrders: AdminOrder[]; categories: Category[]; ownerName: string; paystackMode: string }) {
   const [products, setProducts] = useState(initialProducts);
   const [reviews, setReviews] = useState(initialReviews);
+  const [adminOrders, setAdminOrders] = useState(initialOrders);
   const [form, setForm] = useState(emptyForm);
   const [reviewForm, setReviewForm] = useState({ ...emptyReview, productSlug: initialProducts[0]?.slug ?? "" });
+  const [reviewCategory, setReviewCategory] = useState(initialProducts[0]?.categorySlug ?? categories[0]?.slug ?? "");
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
@@ -60,11 +66,69 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [search, setSearch] = useState("");
 
   const visibleProducts = useMemo(() => products.filter((product) => { const needle = search.trim().toLowerCase(); return (filter === "all" || product.categorySlug === filter) && (!needle || product.name.toLowerCase().includes(needle) || product.sku.toLowerCase().includes(needle)); }), [products, filter, search]);
+  const reviewProducts = useMemo(() => products.filter((product) => product.categorySlug === reviewCategory).sort((a, b) => a.name.localeCompare(b.name)), [products, reviewCategory]);
+  const analytics = useMemo(() => {
+    const paidOrders = adminOrders.filter((order) => order.paymentStatus === "paid");
+    const todayKey = lagosDay(new Date());
+    const categoryTotals = new Map<string, { revenue: number; profit: number; units: number }>();
+    const productTotals = new Map<string, { name: string; categorySlug: string; revenue: number; profit: number; units: number }>();
+    let productRevenue = 0; let estimatedProfit = 0; let units = 0;
+    for (const order of paidOrders) for (const item of parseOrderItems(order.itemsJson)) {
+      const product = products.find((candidate) => candidate.slug === item.slug);
+      const quantity = Math.max(1, Number(item.quantity ?? 1));
+      const unitPrice = Number(item.unitPriceKobo ?? product?.priceKobo ?? 0);
+      const supplierCost = Number(item.supplierCostKobo ?? product?.supplierCostKobo ?? unitPrice);
+      const revenue = unitPrice * quantity;
+      const profit = Math.max(0, unitPrice - supplierCost) * quantity;
+      const categorySlug = item.categorySlug || product?.categorySlug || "uncategorised";
+      productRevenue += revenue; estimatedProfit += profit; units += quantity;
+      const category = categoryTotals.get(categorySlug) ?? { revenue: 0, profit: 0, units: 0 };
+      category.revenue += revenue; category.profit += profit; category.units += quantity; categoryTotals.set(categorySlug, category);
+      const productTotal = productTotals.get(item.slug || item.name || "unknown") ?? { name: item.name || product?.name || "Product", categorySlug, revenue: 0, profit: 0, units: 0 };
+      productTotal.revenue += revenue; productTotal.profit += profit; productTotal.units += quantity; productTotals.set(item.slug || item.name || "unknown", productTotal);
+    }
+    const todayOrders = paidOrders.filter((order) => lagosDay(order.createdAt) === todayKey);
+    const trend = Array.from({ length: 7 }, (_, index) => { const date = new Date(); date.setUTCDate(date.getUTCDate() - (6 - index)); const key = lagosDay(date); return { key, label: shortDay(date), revenue: paidOrders.filter((order) => lagosDay(order.createdAt) === key).reduce((sum, order) => sum + order.totalKobo, 0) }; });
+    return {
+      paidOrders,
+      todayOrders,
+      todayRevenue: todayOrders.reduce((sum, order) => sum + order.totalKobo, 0),
+      totalRevenue: paidOrders.reduce((sum, order) => sum + order.totalKobo, 0),
+      productRevenue,
+      estimatedProfit,
+      units,
+      categories: [...categoryTotals.entries()].sort((a, b) => b[1].revenue - a[1].revenue),
+      products: [...productTotals.values()].sort((a, b) => b.units - a.units),
+      trend,
+      maxTrend: Math.max(1, ...trend.map((day) => day.revenue)),
+    };
+  }, [adminOrders, products]);
+  useEffect(() => {
+    async function refreshOrders() {
+      try {
+        const response = await fetch("/api/orders/admin", { cache: "no-store" });
+        const payload = await response.json() as { orders?: AdminOrder[] };
+        if (response.ok && payload.orders) setAdminOrders(payload.orders);
+      } catch {}
+    }
+    const timer = window.setInterval(() => void refreshOrders(), 30_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") void refreshOrders(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
+  }, []);
   const revenueEstimate = products.reduce((sum, product) => sum + product.priceKobo * Math.min(product.stock, 2), 0);
   function updateField(name: keyof typeof emptyForm, value: string | boolean) { setForm((current) => ({ ...current, [name]: value })); }
   function resetStudio() { setOriginalCoverPreview(""); setEnhancedCoverUrl(""); setEnhancedGalleryUrls({}); setStudioStatus(""); }
   function openNew(categorySlug = "phones-tablets") { setEditingId(null); setForm({ ...emptyForm, categorySlug }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery([]); setLocalPreview(""); resetStudio(); setMessage(""); setProductModalOpen(true); }
   function openEdit(product: Product) { setEditingId(product.id ?? null); setForm({ ...emptyForm, name: product.name, categorySlug: product.categorySlug, sku: product.sku, shortDescription: product.shortDescription, description: product.description, priceNaira: String(product.priceKobo / 100), compareAtNaira: product.compareAtKobo ? String(product.compareAtKobo / 100) : "", supplierCostNaira: product.supplierCostKobo ? String(product.supplierCostKobo / 100) : "", stock: String(product.stock), variants: product.variants.join(", "), badge: product.badge ?? "", imageUrl: product.imageUrl, brand: product.brand ?? "", model: product.model ?? "", materials: product.materials ?? "", dimensions: product.dimensions ?? "", weight: product.weight ?? "", colour: product.colour ?? "", size: product.size ?? "", warranty: product.warranty ?? "", packageContents: product.packageContents ?? "", countryOfOrigin: product.countryOfOrigin ?? "", careInstructions: product.careInstructions ?? "", compatibility: product.compatibility ?? "", specifications: Object.entries(product.specifications ?? {}).map(([key, value]) => `${key}: ${value}`).join("\n"), chatbotKnowledge: product.chatbotKnowledge ?? "", chatbotFaq: (product.chatbotFaq ?? []).map((item) => `${item.question} | ${item.answer}`).join("\n"), isFeatured: product.isFeatured, isPublished: product.isPublished }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery(product.gallery?.length ? product.gallery : [product.imageUrl]); setLocalPreview(product.imageUrl); resetStudio(); setMessage(""); setProductModalOpen(true); }
+  function openReview() {
+    const categorySlug = reviewCategory || products[0]?.categorySlug || categories[0]?.slug || "";
+    const firstProduct = products.find((product) => product.categorySlug === categorySlug);
+    setReviewCategory(categorySlug);
+    setReviewForm((current) => ({ ...current, productSlug: products.some((product) => product.slug === current.productSlug && product.categorySlug === categorySlug) ? current.productSlug : firstProduct?.slug ?? "" }));
+    setReviewMessage("");
+    setReviewModalOpen(true);
+  }
   async function upload(file: File) { const body = new FormData(); body.set("file", file); const response = await fetch("/api/media", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "Media upload failed."); return payload.url; }
   async function enhance(file: File) { const body = new FormData(); body.set("file", file); body.set("mode", enhancementMode); const response = await fetch("/api/media/enhance", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "AI enhancement failed."); return payload.url; }
   async function prepareCover(file: File | null) {
@@ -140,8 +204,10 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <a href="#catalogue">
 <span>□</span>Products</a>
 <a href="#orders">
-<span>▤</span>Orders <i>{initialOrders.length}</i>
+<span>▤</span>Orders <i>{adminOrders.length}</i>
 </a>
+<a href="#analytics">
+<span>⌁</span>Analytics</a>
 <a href="#reviews">
 <span>☆</span>Reviews <i>{reviews.length}</i>
 </a>
@@ -156,11 +222,11 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Owner workspace</span>
 <h1>Good day, {ownerName.split(" ")[0]}.</h1>
 </div>
-<button className="button primary" onClick={() => openNew()}>＋ New product</button>
+<div className="admin-topbar-actions"><span className={`paystack-mode ${paystackMode.replace(" ", "-")}`}><i/>Paystack {paystackMode}</span><button className="button primary" onClick={() => openNew()}>＋ New product</button></div>
 </header>
       <section className="admin-notice">
 <b>Owner-only catalogue control</b>
-<span>Add or edit products by department, upload product images or videos, control stock and pricing, and manage presentation or genuine reviews.</span>
+<span>Add or edit products by department, upload product images or videos, control stock and pricing, and manage customer reviews.</span>
 </section>
       <section id="overview" className="admin-metrics">
 <article>
@@ -175,7 +241,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 </article>
 <article>
 <span>Paid orders</span>
-<strong>{initialOrders.filter((order) => order.paymentStatus === "paid").length}</strong>
+<strong>{analytics.paidOrders.length}</strong>
 <small>Verified Paystack orders</small>
 </article>
 <article>
@@ -183,6 +249,21 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <strong>{products.filter((item) => item.stock < 10).length}</strong>
 <small>Low-stock products</small>
 </article>
+</section>
+
+      <section className="admin-panel sales-analytics" id="analytics">
+<div className="admin-panel-head"><div><span className="eyebrow">Sales intelligence</span><h2>Store performance</h2><p>Calculated from Paystack-verified orders only · Lagos time</p></div><span className="analytics-live"><i/> Live ledger</span></div>
+<div className="analytics-kpis">
+<article><span>Today’s sales</span><strong>{formatNaira(analytics.todayRevenue)}</strong><small>{analytics.todayOrders.length} paid order{analytics.todayOrders.length === 1 ? "" : "s"}</small></article>
+<article><span>Total revenue</span><strong>{formatNaira(analytics.totalRevenue)}</strong><small>Including delivery charges</small></article>
+<article><span>Units sold</span><strong>{analytics.units}</strong><small>Across {analytics.products.length} products</small></article>
+<article><span>Estimated gross profit</span><strong>{formatNaira(analytics.estimatedProfit)}</strong><small>{analytics.productRevenue ? `${Math.round(analytics.estimatedProfit / analytics.productRevenue * 100)}% estimated margin` : "Add supplier costs for margin"}</small></article>
+</div>
+<div className="analytics-grid">
+<article className="sales-chart"><header><div><span className="eyebrow">Last seven days</span><h3>Verified revenue</h3></div><b>{formatNaira(analytics.trend.reduce((sum, day) => sum + day.revenue, 0))}</b></header><div className="chart-bars">{analytics.trend.map((day) => <div key={day.key}><span><i style={{ height: `${Math.max(day.revenue ? 8 : 2, day.revenue / analytics.maxTrend * 100)}%` }}/></span><b>{day.label}</b><small>{day.revenue ? formatNaira(day.revenue) : "₦0"}</small></div>)}</div></article>
+<article className="category-sales"><header><span className="eyebrow">Category mix</span><h3>Where sales come from</h3></header>{analytics.categories.length ? analytics.categories.slice(0, 8).map(([slug, total]) => <div key={slug}><span><b>{categoryName(slug)}</b><small>{total.units} unit{total.units === 1 ? "" : "s"}</small></span><strong>{formatNaira(total.revenue)}</strong><i><span style={{ width: `${analytics.productRevenue ? total.revenue / analytics.productRevenue * 100 : 0}%` }}/></i></div>) : <p>No verified sales yet. Complete a Paystack test payment to populate this analysis.</p>}</article>
+</div>
+<div className="top-products"><header><span className="eyebrow">Product performance</span><h3>Best-selling products</h3></header>{analytics.products.length ? <div>{analytics.products.slice(0, 10).map((item, index) => <article key={`${item.name}-${index}`}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{item.name}</strong><small>{categoryName(item.categorySlug)}</small></span><i>{item.units} sold</i><em>{formatNaira(item.revenue)}</em><small>{formatNaira(item.profit)} est. profit</small></article>)}</div> : <div className="admin-empty"><p>Product sales will appear after the first verified payment.</p></div>}</div>
 </section>
 
       <section className="admin-panel" id="categories">
@@ -252,12 +333,12 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Trust & feedback</span>
 <h2>Product reviews</h2>
 </div>
-<button className="button espresso" onClick={() => setReviewModalOpen(true)}>＋ Add review</button>
+<button className="button espresso" onClick={openReview}>＋ Add review</button>
 </div>
 <div className="admin-review-list">{reviews.slice(0, 30).map((review) => <article key={review.id ?? `${review.productSlug}-${review.reviewerName}`}>
 <div>
 <span>{"★".repeat(review.rating)}</span>
-<i>{review.isTestData ? "Presentation sample" : "Customer review"}</i>
+<i>Customer review</i>
 </div>
 <h3>{review.title}</h3>
 <p>{review.body}</p>
@@ -274,7 +355,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Fulfilment</span>
 <h2>Recent orders</h2>
 </div>
-</div>{initialOrders.length ? <div className="admin-order-list">{initialOrders.slice(0, 20).map((order) => <article key={order.id}>
+</div>{adminOrders.length ? <div className="admin-order-list">{adminOrders.slice(0, 20).map((order) => <article key={order.id}>
 <b>{order.orderNumber}</b>
 <span>{order.customerName}</span>
 <span>{formatNaira(order.totalKobo)}</span>
@@ -428,13 +509,17 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <div>
 <span className="eyebrow">Review manager</span>
 <h2>Add a product review</h2>
-<p>Use “presentation sample” for pitch content. Import genuine feedback only with permission.</p>
+<p>Choose a category first, then select the exact product receiving the review.</p>
 </div>
 <button type="button" onClick={() => setReviewModalOpen(false)}>×</button>
 </header>
 <div>
-<label>Product<select required value={reviewForm.productSlug} onChange={(e) => setReviewForm((current) => ({ ...current, productSlug: e.target.value }))}>{products.map((product) => <option value={product.slug} key={product.slug}>{product.name}</option>)}</select>
+<div className="form-two review-product-picker">
+<label>Category<select required value={reviewCategory} onChange={(e) => { const categorySlug = e.target.value; const firstProduct = products.find((product) => product.categorySlug === categorySlug); setReviewCategory(categorySlug); setReviewForm((current) => ({ ...current, productSlug: firstProduct?.slug ?? "" })); }}>{categories.filter((category) => products.some((product) => product.categorySlug === category.slug)).map((category) => <option value={category.slug} key={category.slug}>{category.name} ({products.filter((product) => product.categorySlug === category.slug).length})</option>)}</select>
 </label>
+<label>Product<select required value={reviewForm.productSlug} onChange={(e) => setReviewForm((current) => ({ ...current, productSlug: e.target.value }))}><option value="" disabled>Select a product</option>{reviewProducts.map((product) => <option value={product.slug} key={product.slug}>{product.name}</option>)}</select>
+</label>
+</div>
 <div className="form-two">
 <label>Reviewer name<input required value={reviewForm.reviewerName} onChange={(e) => setReviewForm((current) => ({ ...current, reviewerName: e.target.value }))}/>
 </label>
@@ -445,13 +530,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 </label>
 <label>Review text<textarea required rows={5} value={reviewForm.body} onChange={(e) => setReviewForm((current) => ({ ...current, body: e.target.value }))}/>
 </label>
-<label className="check-row">
-<input type="checkbox" checked={reviewForm.isTestData} onChange={(e) => setReviewForm((current) => ({ ...current, isTestData: e.target.checked }))}/>
-<span>
-<b>Presentation sample</b>
-<small>Labels demonstration content on the storefront.</small>
-</span>
-</label>{reviewMessage && <p className="save-message">{reviewMessage}</p>}</div>
+{reviewMessage && <p className="save-message">{reviewMessage}</p>}</div>
 <footer>
 <button type="button" className="button quiet" onClick={() => setReviewModalOpen(false)}>Cancel</button>
 <button className="button primary" disabled={saving}>Add review</button>

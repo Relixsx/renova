@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { categoryName, formatNaira, type Product } from "../lib/catalog";
 import { CartDrawer, useCart } from "./cart-provider";
@@ -130,7 +131,8 @@ export function ReviewSubmission({ productSlug }: { productSlug: string }) {
 }
 
 export function ProductPurchase({ product }: { product: Product }) {
-  const { add } = useCart();
+  const { add, buyNow } = useCart();
+  const router = useRouter();
   const [variant, setVariant] = useState(product.variants[0] ?? "Standard");
   const [quantity, setQuantity] = useState(1);
   return (
@@ -138,7 +140,7 @@ export function ProductPurchase({ product }: { product: Product }) {
       <div className="variant-block"><div className="field-head"><label>Choose option</label><span>{variant}</span></div><div className="variant-pills">{product.variants.map((item) => <button key={item} className={variant === item ? "is-selected" : ""} onClick={() => setVariant(item)}>{item}</button>)}</div></div>
       <div className="quantity-block"><label htmlFor="quantity">Quantity</label><div><button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><input id="quantity" value={quantity} readOnly/><button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button></div></div>
       <button className="button primary wide purchase-button" onClick={() => add(product, variant, quantity)}>Add to bag</button>
-      <button className="button espresso wide" onClick={() => { add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
+      <button className="button espresso wide" onClick={() => { buyNow(product, variant, quantity); router.push("/checkout"); }}>Buy now</button>
       <ShopperTools product={product} recordView/>
       <div className="purchase-trust"><span>✓ Prepaid secure checkout</span><span>✓ 3–5 working days</span><span>✓ Order tracking included</span></div>
     </div>

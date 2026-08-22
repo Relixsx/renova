@@ -1,9 +1,8 @@
-import { env } from "cloudflare:workers";
 import { getProduct } from "../../lib/server-catalog";
 import { categoryName, formatNaira } from "../../lib/catalog";
 import { categories } from "../../lib/catalog";
 
-function setting(name: string) { return (env as unknown as Record<string, string | undefined>)[name]?.trim(); }
+function setting(name: string) { return process.env[name]?.trim(); }
 function safeFacts(product: NonNullable<Awaited<ReturnType<typeof getProduct>>>) {
   return `PRODUCT: ${product.name}\nCATEGORY: ${categoryName(product.categorySlug)}\nPRICE: ${formatNaira(product.priceKobo)}\nAVAILABILITY: ${product.stock > 0 ? "Available" : "Unavailable"}\nDESCRIPTION: ${product.description}\nBRAND: ${product.brand || "Not specified"}\nMODEL: ${product.model || "Not specified"}\nMATERIALS: ${product.materials || "Not specified"}\nSIZE: ${product.size || "Not specified"}\nCOLOUR: ${product.colour || product.variants.join(", ") || "Not specified"}\nWARRANTY: ${product.warranty || "Not specified"}\nPACKAGE: ${product.packageContents || "Not specified"}\nCOMPATIBILITY: ${product.compatibility || "Not specified"}\nAPPROVED NOTES: ${product.chatbotKnowledge || "None"}\nAPPROVED FAQ: ${(product.chatbotFaq ?? []).map((item) => `${item.question}: ${item.answer}`).join("\n") || "None"}\nDELIVERY: Usually 3–5 working days. Current Jumia campaign delivery is free.\nRETURNS: Eligible unused items can be requested for return within 7 days; customer pays return delivery.`;
 }

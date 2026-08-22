@@ -13,7 +13,7 @@ async function refreshProductRating(productSlug: string) {
 }
 
 export async function GET(request: Request) {
-  const denied = requireOwnerRequest(request);
+  const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   await ensureSeedData();
   const rows = await getDb().select().from(reviews).orderBy(desc(reviews.id));
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const denied = requireOwnerRequest(request);
+  const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
     const payload = (await request.json()) as Record<string, unknown>;
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const denied = requireOwnerRequest(request);
+  const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isFinite(id)) return Response.json({ error: "Review id is required." }, { status: 400 });

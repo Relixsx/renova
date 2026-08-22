@@ -1,11 +1,11 @@
-import { env } from "cloudflare:workers";
 import { requireOwnerRequest } from "../../../lib/admin-auth";
+import { uploadMedia } from "../../../lib/media-storage";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 const MAX_BYTES = 15 * 1024 * 1024;
 
 function setting(name: string) {
-  return (env as unknown as Record<string, string | undefined>)[name]?.trim();
+  return process.env[name]?.trim();
 }
 
 function decodeBase64(value: string) {
@@ -22,9 +22,8 @@ const MODE_PROMPTS: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  const denied = requireOwnerRequest(request);
+  const denied = await requireOwnerRequest(request);
   if (denied) return denied;
-  if (!env.BUCKET) return Response.json({ error: "Media storage is not configured." }, { status: 503 });
   const apiKey = setting("OPENAI_API_KEY");
   if (!apiKey) return Response.json({ error: "Local optimization is ready. Add OPENAI_API_KEY to enable AI enhancement." }, { status: 503 });
 
@@ -67,7 +66,10 @@ export async function POST(request: Request) {
   } else return Response.json({ error: "The AI image service returned no image." }, { status: 502 });
 
   const extension = contentType.includes("webp") ? "webp" : contentType.includes("jpeg") ? "jpg" : "png";
-  const key = `products/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-ai.${extension}`;
-  await env.BUCKET.put(key, bytes, { httpMetadata: { contentType, cacheControl: "public, max-age=31536000, immutable" } });
-  return Response.json({ url: `/api/media/${key}`, provider: "openai", model: setting("OPENAI_IMAGE_MODEL") || "gpt-image-2" });
+  try {
+    const stored = await uploadMedia(new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], { type: contentType }), `renova-ai-${crypto.randomUUID()}.${extension}`, { suffix: "ai" });
+    return Response.json({ ...stored, provider: "openai", model: setting("OPENAI_IMAGE_MODEL") || "gpt-image-2" });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "The enhanced image could not be stored." }, { status: 503 });
+  }
 }

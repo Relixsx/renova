@@ -1,19 +1,19 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { boolean, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const categories = sqliteTable("categories", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description").notNull().default(""),
   accent: text("accent").notNull().default("ember"),
   sortOrder: integer("sort_order").notNull().default(0),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
 });
 
-export const products = sqliteTable("products", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   sku: text("sku").notNull().unique(),
@@ -45,33 +45,33 @@ export const products = sqliteTable("products", {
   badge: text("badge"),
   rating: integer("rating").notNull().default(0),
   reviewCount: integer("review_count").notNull().default(0),
-  isFeatured: integer("is_featured", { mode: "boolean" }).notNull().default(false),
-  isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
-  isTestData: integer("is_test_data", { mode: "boolean" }).notNull().default(true),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  isPublished: boolean("is_published").notNull().default(false),
+  isTestData: boolean("is_test_data").notNull().default(true),
   supplierName: text("supplier_name"),
   supplierUrl: text("supplier_url"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
 });
 
-export const reviews = sqliteTable(
+export const reviews = pgTable(
   "reviews",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     productSlug: text("product_slug").notNull(),
     reviewerName: text("reviewer_name").notNull(),
     rating: integer("rating").notNull(),
     title: text("title").notNull().default(""),
     body: text("body").notNull(),
     status: text("status").notNull().default("pending"),
-    isTestData: integer("is_test_data", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    isTestData: boolean("is_test_data").notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [uniqueIndex("reviews_seed_unique").on(table.productSlug, table.reviewerName)],
 );
 
-export const orders = sqliteTable("orders", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
@@ -85,6 +85,6 @@ export const orders = sqliteTable("orders", {
   trackingNumber: text("tracking_number"),
   estimatedDelivery: text("estimated_delivery"),
   customerNotifiedAt: text("customer_notified_at"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
 });
