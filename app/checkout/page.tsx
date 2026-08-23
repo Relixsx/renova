@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { getAllStates, getLGAsByState } from "ng-geo-data";
 import { useCart } from "../components/cart-provider";
+import { OrderMotionVisual } from "../components/order-motion-visual";
 import { formatNaira } from "../lib/catalog";
 import { deliveryOptions } from "../lib/checkout";
 
@@ -82,7 +83,10 @@ export default function CheckoutPage() {
 
   return <main className="checkout-shell">
     <header className="checkout-header"><Link href="/"><img src="/renova-mark.svg" alt=""/><span>RENOVA</span></Link><b>Secure Paystack checkout</b><Link href="/cart">← Return to bag</Link></header>
-    <div className="checkout-progress"><span className={step >= 1 ? "active" : ""}><b>1</b>Contact & address</span><i/><span className={step >= 2 ? "active" : ""}><b>2</b>Delivery</span><i/><span className={step >= 3 ? "active" : ""}><b>3</b>Review & pay</span></div>
+    <div className="checkout-journey">
+      <OrderMotionVisual compact />
+      <div className="checkout-progress"><span className={step >= 1 ? "active" : ""}><b>1</b>Contact & address</span><i/><span className={step >= 2 ? "active" : ""}><b>2</b>Delivery</span><i/><span className={step >= 3 ? "active" : ""}><b>3</b>Review & pay</span></div>
+    </div>
     <div className="checkout-grid">
       <section className="checkout-form-area">
         {step === 1 && <form onSubmit={continueForm}>

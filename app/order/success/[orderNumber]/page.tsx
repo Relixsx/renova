@@ -3,6 +3,24 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { PaidOrderCompletion } from "../../../components/paid-order-completion";
+import { OrderMotionVisual } from "../../../components/order-motion-visual";
 import { formatNaira } from "../../../lib/catalog";
 export const dynamic = "force-dynamic";
-export default async function SuccessPage({ params }: { params: Promise<{ orderNumber: string }> }) { const { orderNumber } = await params; const [order] = await getDb().select().from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1); const paid = order?.paymentStatus === "paid"; return <main className="order-result">{paid && <PaidOrderCompletion orderNumber={orderNumber}/>}<img src="/renova-mark.svg" alt=""/><span className="eyebrow">{paid ? "Payment verified" : "Payment status"}</span><h1>{paid ? "Thank you. Your renewal is in motion." : "We are confirming your payment."}</h1>{order ? <><p>Order <b>{order.orderNumber}</b> · {formatNaira(order.totalKobo)}. {paid ? "A confirmation email has been prepared, your tracking record is active, and your shopping bag has been cleared." : "Please do not pay twice; refresh after a moment if Paystack has completed your payment."}</p><div className="success-facts"><span>Order status <b>{order.status.replaceAll("_", " ")}</b></span><span>Estimated delivery <b>{order.estimatedDelivery ?? "3–5 working days"}</b></span></div></> : <p>We could not find this order reference. Please email support if payment was deducted.</p>}<div><Link href="/track-order" className="button primary">Track this order</Link><Link href="/shop" className="button quiet">Shop again</Link></div><small>Payment status is shown only from Renova’s server-verified order record.</small></main>; }
+export default async function SuccessPage({ params }: { params: Promise<{ orderNumber: string }> }) {
+  const { orderNumber } = await params;
+  const [order] = await getDb().select().from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
+  const paid = order?.paymentStatus === "paid";
+
+  return <main className="order-result order-result-signature">
+    {paid && <PaidOrderCompletion orderNumber={orderNumber}/>} 
+    <OrderMotionVisual />
+    <span className="eyebrow">{paid ? "Payment verified" : "Payment status"}</span>
+    <h1>{paid ? <>Thank you.<br/><em>Your order is in motion.</em></> : "We are confirming your payment."}</h1>
+    {order ? <>
+      <p>Order <b>{order.orderNumber}</b> · {formatNaira(order.totalKobo)}. {paid ? "Your confirmation is being sent, tracking is active, and your shopping bag has been cleared." : "Please do not pay twice; refresh after a moment if Paystack has completed your payment."}</p>
+      <div className="success-facts"><span>Order status <b>{order.status.replaceAll("_", " ")}</b></span><span>Estimated delivery <b>{order.estimatedDelivery ?? "3–5 working days"}</b></span></div>
+    </> : <p>We could not find this order reference. Please email support if payment was deducted.</p>}
+    <div className="success-actions"><Link href="/track-order" className="button primary">Track this order</Link><Link href="/shop" className="button quiet">Continue shopping</Link></div>
+    <small>Payment status is shown only from Renova’s server-verified order record.</small>
+  </main>;
+}

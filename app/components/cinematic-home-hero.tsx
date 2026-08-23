@@ -12,10 +12,10 @@ const particles = Array.from({ length: 18 }, (_, index) => ({
 }));
 
 const products = [
-  { src: "/products/nova-smartphone.webp", label: "Technology", className: "world-product-one" },
-  { src: "/products/atelier-handbag.webp", label: "Style", className: "world-product-two" },
+  { src: "/products/nova-smartphone-white.webp", label: "Technology", className: "world-product-one" },
+  { src: "/products/atelier-handbag-white.webp", label: "Style", className: "world-product-two" },
   { src: "/products/renew-serum.webp", label: "Beauty", className: "world-product-three" },
-  { src: "/products/ember-blender.webp", label: "Home", className: "world-product-four" },
+  { src: "/products/ember-blender-white.webp", label: "Home", className: "world-product-four" },
 ];
 
 export function CinematicHomeHero() {
@@ -67,6 +67,7 @@ export function CinematicHomeHero() {
       <div className="cinematic-hero-copy">
         <span className="eyebrow light">Enter the Renova world</span>
         <h1>Find something<br/><em>worth renewing.</em></h1>
+        <span className="hero-emberline" aria-hidden="true"><i /><i /><i /></span>
         <p>Thoughtfully selected technology, style, beauty and home essentials, moving through one extraordinary marketplace.</p>
         <div className="hero-actions">
           <Link className="button primary" href="/shop">Explore all finds</Link>
@@ -76,6 +77,7 @@ export function CinematicHomeHero() {
       </div>
       <div className="hero-note"><strong>Free Jumia Delivery</strong><span>On eligible campaign orders</span></div>
       <div className="world-scroll-cue" aria-hidden="true"><span>Discover</span><i /></div>
+      <div className="hero-white-transition" aria-hidden="true" />
     </section>
   );
 }
