@@ -21,9 +21,9 @@ async function optimizeProductImage(file: File) {
   if (!context) throw new Error("This browser could not optimize the image.");
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.fillStyle = "#fffaf2";
+  context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.filter = "brightness(1.02) contrast(1.025) saturate(1.015)";
+  context.filter = "brightness(1.035) contrast(1.025) saturate(1.015)";
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Image optimization failed.")), "image/webp", .88));
@@ -96,6 +96,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   }
   function removeExistingMedia(url: string) { setExistingGallery((current) => current.filter((item) => item !== url)); }
   function removeNewMedia(file: File) { setGalleryFiles((current) => current.filter((item) => item !== file)); }
+  function mediaKind(file: File) { return file.type.startsWith("video/") ? "video" : "image"; }
 
   async function submitProduct(event: FormEvent) {
     event.preventDefault(); setSaving(true);
@@ -363,7 +364,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <legend>AI Product Studio</legend>
 <div className="ai-studio-title"><span>✦</span><div><b>Polish product photos before they go live</b><small>Images are compressed automatically. AI enhancement is optional and never changes videos.</small></div></div>
 <label className="check-row"><input type="checkbox" checked={aiStudioEnabled} onChange={(event) => setAiStudioEnabled(event.target.checked)}/><span><b>Enhance new images with AI</b><small>Requires OPENAI_API_KEY on the server.</small></span></label>
-<label>Image style<select value={enhancementMode} onChange={(event) => setEnhancementMode(event.target.value)}><option value="studio">Warm premium studio</option><option value="background">Clean neutral background</option><option value="natural">Natural light correction</option></select></label>
+<label>Image style<select value={enhancementMode} onChange={(event) => setEnhancementMode(event.target.value)}><option value="studio">Bright white product studio</option><option value="background">Replace background with pure white</option><option value="natural">Natural light correction</option></select></label>
 <p className="ai-safety-note">AI must preserve the real product. Check colour, shape, labels, included items and logos before publishing.</p>
 {studioStatus && <p className="ai-studio-status"><i/>{studioStatus}</p>}
 </fieldset>
@@ -379,14 +380,14 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 {enhancedCoverUrl && <div className="ai-approval"><b>Enhanced version selected</b><button type="button" onClick={() => { setEnhancedCoverUrl(""); if (primaryFile) setLocalPreview(URL.createObjectURL(primaryFile)); setStudioStatus("Keeping the locally optimized original."); }}>Keep optimized original instead</button></div>}
 </fieldset>
 <fieldset>
-<legend>Product gallery</legend>
-<div className="gallery-upload-heading"><b>{Array.from(new Set([form.imageUrl, ...existingGallery, ...galleryFiles.map((file) => file.name)].filter(Boolean))).length} media selected</b><span>Upload four or five different product views, or add more when needed.</span></div>
+<legend>Images & videos</legend>
+<div className="gallery-upload-heading"><b>{Array.from(new Set([form.imageUrl, ...existingGallery, ...galleryFiles.map((file) => file.name)].filter(Boolean))).length} media selected</b><span>Add up to five useful product views plus short demonstration videos.</span></div>
 <label className="media-gallery-drop">
 <input multiple type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" onChange={(e) => { void prepareGallery(Array.from(e.target.files ?? [])); e.currentTarget.value = ""; }}/>
-<b>＋ Add gallery images or videos</b>
-<span>Select several files together · Images up to 15 MB · MP4/WebM up to 50 MB</span>
+<b>＋ Upload images or videos</b>
+<span>JPG, PNG, WebP or AVIF up to 15 MB · MP4 or WebM up to 50 MB</span>
 </label>
-<div className="admin-media-grid">{existingGallery.filter((url) => url !== form.imageUrl).map((url, index) => <article key={url}>{/\.(mp4|webm)(?:\?|$)/i.test(url) ? <div className="admin-video-preview">▶<small>Video</small></div> : <img src={url} alt={`Existing gallery item ${index + 1}`}/>}<span>Saved {index + 2}</span><button type="button" onClick={() => removeExistingMedia(url)} aria-label={`Remove saved gallery item ${index + 1}`}>×</button></article>)}{galleryFiles.map((media, index) => { const enhanced = enhancedGalleryUrls[fileKey(media)]; return <article className={enhanced ? "ai-ready" : ""} key={`${media.name}-${media.lastModified}`}>{media.type.startsWith("video/") ? <div className="admin-video-preview">▶<small>Video</small></div> : <img src={enhanced || URL.createObjectURL(media)} alt={`New gallery item ${index + 1}`}/>}<span>{enhanced ? "✦ AI ready" : media.type.startsWith("video/") ? "Video" : "Optimized"}</span><button type="button" onClick={() => removeNewMedia(media)} aria-label={`Remove ${media.name}`}>×</button>{enhanced && <button type="button" className="keep-original" onClick={() => setEnhancedGalleryUrls((current) => { const next = { ...current }; delete next[fileKey(media)]; return next; })}>Use original</button>}</article>; })}</div>
+<div className="admin-media-grid">{existingGallery.filter((url) => url !== form.imageUrl).map((url, index) => <article key={url}>{/\.(mp4|webm)(?:\?|$)/i.test(url) ? <video src={url} controls muted playsInline preload="metadata"/> : <img src={url} alt={`Existing gallery item ${index + 1}`}/>}<span>{/\.(mp4|webm)(?:\?|$)/i.test(url) ? "Saved video" : `Saved image ${index + 2}`}</span><button type="button" onClick={() => removeExistingMedia(url)} aria-label={`Remove saved gallery item ${index + 1}`}>×</button></article>)}{galleryFiles.map((media, index) => { const enhanced = enhancedGalleryUrls[fileKey(media)]; return <article className={enhanced ? "ai-ready" : ""} key={`${media.name}-${media.lastModified}`}>{mediaKind(media) === "video" ? <video src={URL.createObjectURL(media)} controls muted playsInline preload="metadata"/> : <img src={enhanced || URL.createObjectURL(media)} alt={`New gallery item ${index + 1}`}/>}<span>{enhanced ? "✦ AI ready" : mediaKind(media) === "video" ? "New video" : "Optimized image"}</span><button type="button" onClick={() => removeNewMedia(media)} aria-label={`Remove ${media.name}`}>×</button>{enhanced && <button type="button" className="keep-original" onClick={() => setEnhancedGalleryUrls((current) => { const next = { ...current }; delete next[fileKey(media)]; return next; })}>Use original</button>}</article>; })}</div>
 <p className="gallery-admin-note">The cover appears first. Customers can use thumbnails, arrows, or swipe left and right on phones.</p>
 </fieldset>
 <fieldset>

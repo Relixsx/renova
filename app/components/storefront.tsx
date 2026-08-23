@@ -76,16 +76,16 @@ export function ProductCard({ product }: { product: Product }) {
         {discount > 0 && <span className="discount-badge">−{discount}%</span>}
       </Link>
       <div className="product-card-body">
-        <div className="product-card-kicker"><span className="product-category">{categoryName(product.categorySlug)}</span><span className={product.stock > 0 ? "card-stock in" : "card-stock"}>{product.stock > 0 ? "In stock" : "Unavailable"}</span></div>
         <Link href={`/products/${product.slug}`}><h3>{product.name}</h3></Link>
+        <div className="price-row"><strong>{formatNaira(product.priceKobo)}</strong></div>
+        <div className="compare-row">{product.compareAtKobo ? <s>{formatNaira(product.compareAtKobo)}</s> : <span/>}{discount > 0 && <b>−{discount}%</b>}</div>
         {product.reviewCount > 0 ? (
-          <div className="rating" aria-label={`${(product.rating / 10).toFixed(1)} out of 5 from ${product.reviewCount} reviews`}><b>{(product.rating / 10).toFixed(1)}</b><span>★★★★★</span><small>{product.reviewCount} reviews</small></div>
+          <div className="rating" aria-label={`${(product.rating / 10).toFixed(1)} out of 5 from ${product.reviewCount} reviews`}><span>★★★★★</span><small>({product.reviewCount})</small></div>
         ) : (
-          <div className="rating unrated" aria-label="New arrival with no reviews yet"><span>New arrival</span><small>No reviews yet</small></div>
+          <div className="rating unrated" aria-label="No reviews yet"><small>No reviews yet</small></div>
         )}
-        <div className="price-row"><strong>{formatNaira(product.priceKobo)}</strong>{product.compareAtKobo && <s>{formatNaira(product.compareAtKobo)}</s>}</div>
-        <div className="product-commerce-note"><span>Free Jumia delivery</span>{product.stock > 0 && product.stock <= 5 ? <b>Only {product.stock} available</b> : <b>Secure prepaid order</b>}</div>
-        <button className="quick-add" onClick={() => add(product)}>Quick add <span>＋</span></button>
+        <div className="product-commerce-note"><span>Free delivery</span>{product.stock > 0 && product.stock <= 5 ? <b>Only {product.stock} left</b> : <b>{product.stock > 0 ? "In stock" : "Unavailable"}</b>}</div>
+        <button className="quick-add" onClick={() => add(product)} disabled={product.stock <= 0} aria-label={`Add ${product.name} to bag`}><span>＋</span><b>Add to bag</b></button>
         <ShopperTools product={product}/>
       </div>
     </article>

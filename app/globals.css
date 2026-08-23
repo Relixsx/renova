@@ -570,3 +570,21 @@ html,body,main,.section,.product-section,.product-card,.product-card-body,.produ
 .checkout-summary{background:#fff;color:#17191c;border:1px solid #e3e5e7}.checkout-summary article,.summary-lines .total{border-color:#e3e5e7}.checkout-summary article small,.summary-lines p{color:#666d75}.summary-lines .total{color:#17191c}.checkout-assurance{background:#f7f8f9}.checkout-assurance b{color:#ff5a1f}.checkout-assurance span{color:#666d75}
 .collection-motion-hero{background:#fff}.catalogue-motion-hero{background:#fff}
 .world-phoenix-feature{display:none!important}
+
+/* Familiar high-density marketplace cards on a genuinely white canvas. */
+.product-section,.product-grid,.product-card,.product-card-body,.product-image-wrap{background:#fff!important}
+.product-grid{gap:30px 14px!important}
+.product-card{border:0!important;border-radius:4px;overflow:hidden;transition:box-shadow .2s ease,transform .2s ease}
+.product-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.13)!important}
+.product-image-wrap{aspect-ratio:1/1!important;border:0!important}
+.product-image-wrap img{width:100%;height:100%;padding:0!important;object-fit:contain!important;background:#fff!important;mix-blend-mode:normal!important;filter:brightness(1.075) contrast(1.035)}
+.product-card-body{position:relative;padding:10px 10px 12px!important}
+.product-card h3{display:-webkit-box;min-height:40px;margin:0 0 7px!important;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-family:var(--sans)!important;font-size:15px!important;font-weight:500!important;line-height:1.32!important;letter-spacing:0!important;color:#313133}
+.price-row{margin:0!important;line-height:1}.price-row strong{font-size:20px!important;font-weight:700!important;color:#313133}
+.compare-row{display:flex;min-height:22px;align-items:center;gap:8px;margin-top:4px}.compare-row s{color:#75757a;font-size:13px}.compare-row b{padding:3px 5px;border-radius:3px;background:#fff0e6;color:#f68b1e;font-size:12px;font-weight:500}
+.rating{min-height:20px!important;margin:1px 0 0}.rating span{color:#f6a700!important;font-size:14px!important}.rating small{color:#75757a;font-size:12px!important}.rating.unrated small{display:block;color:#9a9a9e}
+.product-commerce-note{min-height:20px;margin-top:3px!important;font-size:11px!important}.product-commerce-note span{color:#f68b1e!important}.product-commerce-note b{color:#75757a!important;font-weight:500!important}
+.product-badge{background:#f68b1e!important}.discount-badge{background:#fff0e6!important;color:#f68b1e!important}
+.quick-add{position:absolute;right:8px;bottom:8px;width:38px;min-height:38px!important;margin:0!important;padding:0!important;border:1px solid #f68b1e!important;border-radius:50%;background:#fff!important;color:#f68b1e!important;box-shadow:0 2px 7px rgba(0,0,0,.08)}.quick-add>b{display:none}.quick-add>span{font-size:22px}.quick-add:hover{background:#f68b1e!important;color:#fff!important}.quick-add:disabled{opacity:.4;cursor:not-allowed}
+.admin-media-grid video{width:100%;height:132px;object-fit:contain;background:#111;border-radius:2px}
+@media(max-width:600px){.product-grid{gap:22px 6px!important}.product-card-body{padding:8px 7px 10px!important}.product-card h3{min-height:38px;font-size:14px!important}.price-row strong{font-size:18px!important}.compare-row s{font-size:11px}.compare-row b{font-size:10px}.quick-add{right:6px;bottom:6px;width:34px;min-height:34px!important}.product-commerce-note{padding-right:38px}}

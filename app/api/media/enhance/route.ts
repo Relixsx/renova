@@ -16,9 +16,9 @@ function decodeBase64(value: string) {
 }
 
 const MODE_PROMPTS: Record<string, string> = {
-  studio: "Place the product in a clean premium ecommerce studio with a warm off-white background, balanced soft lighting, a natural contact shadow, accurate white balance and crisp detail.",
+  studio: "Place the product in a clean premium ecommerce studio with a pure white (#FFFFFF) background, balanced soft lighting, a natural contact shadow, accurate white balance and crisp detail.",
   natural: "Improve the lighting and clarity while keeping the original natural setting believable, tidy and premium.",
-  background: "Remove visual clutter and use a clean neutral ecommerce background with a subtle realistic contact shadow.",
+  background: "Remove the existing background completely and replace it with a uniform pure white (#FFFFFF) ecommerce background with a subtle realistic contact shadow.",
 };
 
 export async function POST(request: Request) {

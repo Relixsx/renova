@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "../../db";
 import { categories as categoryTable, orders as orderTable, products as productTable, reviews as reviewTable } from "../../db/schema";
 import {
@@ -29,6 +29,17 @@ export async function ensureSeedData() {
       })),
     )
     .onConflictDoNothing();
+
+  // Upgrade only untouched built-in cover images. Owner-uploaded replacements are preserved.
+  const whiteBackgroundCovers = [
+    ["aura-quietmax-wireless-headphones", "/products/aura-headphones.webp", "/products/aura-headphones-white.webp"],
+    ["embergo-portable-blender", "/products/ember-blender.webp", "/products/ember-blender-white.webp"],
+    ["atelier-structured-everyday-handbag", "/products/atelier-handbag.webp", "/products/atelier-handbag-white.webp"],
+    ["nova-x1-5g-smartphone", "/products/nova-smartphone.webp", "/products/nova-smartphone-white.webp"],
+  ] as const;
+  for (const [slug, previousUrl, nextUrl] of whiteBackgroundCovers) {
+    await db.update(productTable).set({ imageUrl: nextUrl, galleryJson: JSON.stringify([nextUrl]), updatedAt: new Date().toISOString() }).where(and(eq(productTable.slug, slug), eq(productTable.imageUrl, previousUrl)));
+  }
 
   await db
     .insert(productTable)
