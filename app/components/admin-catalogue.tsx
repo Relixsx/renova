@@ -10,6 +10,17 @@ const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "",
 
 function parseList(value: unknown) { if (Array.isArray(value)) return value.map(String); try { return JSON.parse(String(value ?? "[]")) as string[]; } catch { return []; } }
 function fileKey(file: File) { return `${file.name}:${file.size}:${file.lastModified}`; }
+async function responsePayload<T extends Record<string, unknown>>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) return {} as T;
+  try { return JSON.parse(text) as T; }
+  catch {
+    if (response.status === 413 || /payload too large/i.test(text)) {
+      throw new Error("This file is too large for the upload service. Use an image under 15 MB or a video under 50 MB.");
+    }
+    throw new Error(response.ok ? "The server returned an unreadable response." : text.slice(0, 240));
+  }
+}
 async function optimizeProductImage(file: File) {
   const bitmap = await createImageBitmap(file);
   const maximumEdge = 1800;
@@ -78,8 +89,25 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
     setReviewMessage("");
     setReviewModalOpen(true);
   }
-  async function upload(file: File) { const body = new FormData(); body.set("file", file); const response = await fetch("/api/media", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "Media upload failed."); return payload.url; }
-  async function enhance(file: File) { const body = new FormData(); body.set("file", file); body.set("mode", enhancementMode); const response = await fetch("/api/media/enhance", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "AI enhancement failed."); return payload.url; }
+  async function upload(file: File) {
+    const isVideo = file.type.startsWith("video/");
+    const maximum = isVideo ? 50 * 1024 * 1024 : 15 * 1024 * 1024;
+    if (file.size > maximum) throw new Error(isVideo ? "Videos must be 50 MB or smaller." : "Images must be 15 MB or smaller.");
+    const signatureResponse = await fetch("/api/media/signature", { method: "POST" });
+    const signed = await responsePayload<{ cloudName?: string; apiKey?: string; timestamp?: number; folder?: string; signature?: string; error?: string }>(signatureResponse);
+    if (!signatureResponse.ok || !signed.cloudName || !signed.apiKey || !signed.timestamp || !signed.folder || !signed.signature) throw new Error(signed.error || "Could not authorize the media upload.");
+    const body = new FormData();
+    body.set("file", file);
+    body.set("api_key", signed.apiKey);
+    body.set("timestamp", String(signed.timestamp));
+    body.set("folder", signed.folder);
+    body.set("signature", signed.signature);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signed.cloudName)}/auto/upload`, { method: "POST", body });
+    const payload = await responsePayload<{ secure_url?: string; error?: { message?: string } }>(response);
+    if (!response.ok || !payload.secure_url) throw new Error(payload.error?.message || "Cloudinary could not store this media file.");
+    return payload.secure_url;
+  }
+  async function enhance(file: File) { const body = new FormData(); body.set("file", file); body.set("mode", enhancementMode); const response = await fetch("/api/media/enhance", { method: "POST", body }); const payload = await responsePayload<{ url?: string; error?: string }>(response); if (!response.ok || !payload.url) throw new Error(payload.error || "AI enhancement failed."); return payload.url; }
   async function prepareCover(file: File | null) {
     if (!file) { setPrimaryFile(null); setOriginalCoverPreview(""); setEnhancedCoverUrl(""); setLocalPreview(form.imageUrl); return; }
     const original = URL.createObjectURL(file); setOriginalCoverPreview(original); setLocalPreview(original); setStudioStatus("Optimizing cover image for fast loading…");
@@ -123,7 +151,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
       const gallery = Array.from(new Set([imageUrl, ...existingGallery, ...uploadedGallery]));
       setMessage(editingId ? "Saving product changes…" : "Publishing to catalogue…");
       const response = await fetch("/api/products", { method: editingId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, id: editingId, imageUrl, gallery, variants: form.variants.split(",").map((item) => item.trim()).filter(Boolean) }) });
-      const payload = await response.json() as { product?: Record<string, unknown>; error?: string };
+      const payload = await responsePayload<{ product?: Record<string, unknown>; error?: string }>(response);
       if (!response.ok || !payload.product) throw new Error(payload.error || "Product save failed.");
       const saved = rawProduct(payload.product); saved.gallery = gallery;
       setProducts((current) => editingId ? current.map((item) => item.id === editingId ? saved : item) : [saved, ...current]);
