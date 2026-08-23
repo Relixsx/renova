@@ -49,7 +49,6 @@ export function CinematicHomeHero() {
         <div className="world-depth world-depth-near" />
         <div className="world-light-trail trail-one" />
         <div className="world-light-trail trail-two" />
-        <div className="world-phoenix-feature"><span className="phoenix-aura"/><img src="/renova-phoenix-3d-v2.webp" alt="" fetchPriority="high"/><i/><i/><i/></div>
         <div className="world-products">
           {products.map((product, index) => (
             <figure className={`world-product ${product.className}`} key={product.label}>
