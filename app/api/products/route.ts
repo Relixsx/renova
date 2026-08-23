@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { products } from "../../../db/schema";
+import { products, reviews } from "../../../db/schema";
 import { requireOwnerRequest } from "../../lib/admin-auth";
 import { ensureSeedData } from "../../lib/server-catalog";
 
@@ -128,5 +128,24 @@ export async function PATCH(request: Request) {
     return Response.json({ product: updated });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Could not update the product." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const denied = await requireOwnerRequest(request);
+  if (denied) return denied;
+  try {
+    const id = Number(new URL(request.url).searchParams.get("id"));
+    if (!Number.isInteger(id) || id <= 0) return Response.json({ error: "A valid product id is required." }, { status: 400 });
+    const db = getDb();
+    const [existing] = await db.select({ id: products.id, slug: products.slug, name: products.name }).from(products).where(eq(products.id, id)).limit(1);
+    if (!existing) return Response.json({ error: "Product not found." }, { status: 404 });
+    await db.transaction(async (transaction) => {
+      await transaction.delete(reviews).where(eq(reviews.productSlug, existing.slug));
+      await transaction.delete(products).where(eq(products.id, existing.id));
+    });
+    return Response.json({ deleted: existing });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Could not delete the product." }, { status: 500 });
   }
 }

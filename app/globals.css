@@ -782,3 +782,11 @@ html,body,main,.section,.product-section,.product-card,.product-card-body,.produ
     min-height: 36px !important;
   }
 }
+/* Admin catalogue navigation and destructive-action affordances. */
+.table-actions .delete-action { color:#b42318; font-weight:750; }
+.table-actions button:disabled { opacity:.5; cursor:wait; }
+.catalogue-action-message { margin:0; padding:11px 18px; border-top:1px solid var(--line); background:#fff8f4; color:var(--brown); font-size:9px; }
+.review-product-picker { align-items:end; }
+.review-product-picker label { margin-top:0 !important; }
+.review-product-picker select:disabled { background:#f2efeb; color:var(--muted); }
+.review-category-empty { margin:8px 0 0; color:#a44735; font-size:9px; }

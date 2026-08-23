@@ -41,10 +41,12 @@ export async function ensureSeedData() {
     await db.update(productTable).set({ imageUrl: nextUrl, galleryJson: JSON.stringify([nextUrl]), updatedAt: new Date().toISOString() }).where(and(eq(productTable.slug, slug), eq(productTable.imageUrl, previousUrl)));
   }
 
-  await db
-    .insert(productTable)
-    .values(
-      seedProducts.map((product) => ({
+  const existingProducts = await db.select({ id: productTable.id }).from(productTable).limit(1);
+  if (!existingProducts.length) {
+    await db
+      .insert(productTable)
+      .values(
+        seedProducts.map((product) => ({
         name: product.name,
         slug: product.slug,
         sku: product.sku,
@@ -64,11 +66,13 @@ export async function ensureSeedData() {
         isFeatured: product.isFeatured,
         isPublished: product.isPublished,
         isTestData: product.isTestData,
-      })),
-    )
-    .onConflictDoNothing();
+        })),
+      )
+      .onConflictDoNothing();
+  }
 
-  if (seedReviews.length) {
+  const existingReviews = await db.select({ id: reviewTable.id }).from(reviewTable).limit(1);
+  if (seedReviews.length && !existingReviews.length && !existingProducts.length) {
     await db
       .insert(reviewTable)
       .values(

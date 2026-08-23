@@ -40,6 +40,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [reviews, setReviews] = useState(initialReviews);
   const [form, setForm] = useState(emptyForm);
   const [reviewForm, setReviewForm] = useState({ ...emptyReview, productSlug: initialProducts[0]?.slug ?? "" });
+  const [reviewCategory, setReviewCategory] = useState(initialProducts[0]?.categorySlug ?? categories[0]?.slug ?? "");
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
@@ -52,19 +53,31 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [studioStatus, setStudioStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [catalogueMessage, setCatalogueMessage] = useState("");
   const [reviewMessage, setReviewMessage] = useState("");
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
   const visibleProducts = useMemo(() => products.filter((product) => { const needle = search.trim().toLowerCase(); return (filter === "all" || product.categorySlug === filter) && (!needle || product.name.toLowerCase().includes(needle) || product.sku.toLowerCase().includes(needle)); }), [products, filter, search]);
+  const reviewProducts = useMemo(() => products.filter((product) => product.categorySlug === reviewCategory), [products, reviewCategory]);
   const revenueEstimate = products.reduce((sum, product) => sum + product.priceKobo * Math.min(product.stock, 2), 0);
   function updateField(name: keyof typeof emptyForm, value: string | boolean) { setForm((current) => ({ ...current, [name]: value })); }
   function resetStudio() { setOriginalCoverPreview(""); setEnhancedCoverUrl(""); setEnhancedGalleryUrls({}); setStudioStatus(""); }
   function openNew(categorySlug = "phones-tablets") { setEditingId(null); setForm({ ...emptyForm, categorySlug }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery([]); setLocalPreview(""); resetStudio(); setMessage(""); setProductModalOpen(true); }
   function openEdit(product: Product) { setEditingId(product.id ?? null); setForm({ ...emptyForm, name: product.name, categorySlug: product.categorySlug, sku: product.sku, shortDescription: product.shortDescription, description: product.description, priceNaira: String(product.priceKobo / 100), compareAtNaira: product.compareAtKobo ? String(product.compareAtKobo / 100) : "", supplierCostNaira: product.supplierCostKobo ? String(product.supplierCostKobo / 100) : "", stock: String(product.stock), variants: product.variants.join(", "), badge: product.badge ?? "", imageUrl: product.imageUrl, brand: product.brand ?? "", model: product.model ?? "", materials: product.materials ?? "", dimensions: product.dimensions ?? "", weight: product.weight ?? "", colour: product.colour ?? "", size: product.size ?? "", warranty: product.warranty ?? "", packageContents: product.packageContents ?? "", countryOfOrigin: product.countryOfOrigin ?? "", careInstructions: product.careInstructions ?? "", compatibility: product.compatibility ?? "", specifications: Object.entries(product.specifications ?? {}).map(([key, value]) => `${key}: ${value}`).join("\n"), chatbotKnowledge: product.chatbotKnowledge ?? "", chatbotFaq: (product.chatbotFaq ?? []).map((item) => `${item.question} | ${item.answer}`).join("\n"), isFeatured: product.isFeatured, isPublished: product.isPublished }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery(product.gallery?.length ? product.gallery : [product.imageUrl]); setLocalPreview(product.imageUrl); resetStudio(); setMessage(""); setProductModalOpen(true); }
+  function openReviewManager() {
+    const selected = products.find((product) => product.slug === reviewForm.productSlug) ?? products[0];
+    const categorySlug = selected?.categorySlug ?? categories[0]?.slug ?? "";
+    const firstProduct = products.find((product) => product.categorySlug === categorySlug);
+    setReviewCategory(categorySlug);
+    setReviewForm((current) => ({ ...current, productSlug: selected?.slug ?? firstProduct?.slug ?? "" }));
+    setReviewMessage("");
+    setReviewModalOpen(true);
+  }
   async function upload(file: File) { const body = new FormData(); body.set("file", file); const response = await fetch("/api/media", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "Media upload failed."); return payload.url; }
   async function enhance(file: File) { const body = new FormData(); body.set("file", file); body.set("mode", enhancementMode); const response = await fetch("/api/media/enhance", { method: "POST", body }); const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "AI enhancement failed."); return payload.url; }
   async function prepareCover(file: File | null) {
@@ -123,6 +136,31 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
     try { const response = await fetch("/api/reviews", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(reviewForm) }); const payload = await response.json() as { review?: Review; error?: string }; if (!response.ok || !payload.review) throw new Error(payload.error || "Review save failed."); setReviews((current) => [payload.review!, ...current]); setReviewMessage("Review added successfully."); setReviewForm({ ...emptyReview, productSlug: reviewForm.productSlug }); window.setTimeout(() => setReviewModalOpen(false), 700); } catch (error) { setReviewMessage(error instanceof Error ? error.message : "Review save failed."); } finally { setSaving(false); }
   }
   async function removeReview(review: Review) { if (!review.id) return; const response = await fetch(`/api/reviews?id=${review.id}`, { method: "DELETE" }); if (response.ok) setReviews((current) => current.filter((item) => item.id !== review.id)); }
+  async function removeProduct(product: Product) {
+    if (!product.id || deletingId !== null) return;
+    const confirmed = window.confirm(`Delete “${product.name}”?\n\nThis permanently removes the product listing and its reviews. Historical order records will remain available.`);
+    if (!confirmed) return;
+    setDeletingId(product.id);
+    setCatalogueMessage(`Deleting “${product.name}”…`);
+    try {
+      const response = await fetch(`/api/products?id=${product.id}`, { method: "DELETE" });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Product deletion failed.");
+      const remaining = products.filter((item) => item.id !== product.id);
+      setProducts(remaining);
+      setReviews((current) => current.filter((review) => review.productSlug !== product.slug));
+      if (reviewForm.productSlug === product.slug) {
+        const replacement = remaining.find((item) => item.categorySlug === reviewCategory) ?? remaining[0];
+        setReviewCategory(replacement?.categorySlug ?? categories[0]?.slug ?? "");
+        setReviewForm((current) => ({ ...current, productSlug: replacement?.slug ?? "" }));
+      }
+      setCatalogueMessage(`“${product.name}” was deleted.`);
+    } catch (error) {
+      setCatalogueMessage(error instanceof Error ? error.message : "Product deletion failed.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return <div className="admin-shell">
     <aside className="admin-sidebar">
@@ -243,8 +281,10 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="table-actions">
 <button onClick={() => openEdit(product)}>Edit</button>
 <Link href={`/products/${product.slug}`}>Preview ↗</Link>
+<button type="button" className="delete-action" disabled={deletingId === product.id} onClick={() => void removeProduct(product)}>{deletingId === product.id ? "Deleting…" : "Delete"}</button>
 </span>
 </div>)}</div>
+{catalogueMessage && <p className="catalogue-action-message" role="status">{catalogueMessage}</p>}
 </section>
 
       <section className="admin-panel" id="reviews">
@@ -253,7 +293,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Trust & feedback</span>
 <h2>Product reviews</h2>
 </div>
-<button className="button espresso" onClick={() => setReviewModalOpen(true)}>＋ Add review</button>
+<button className="button espresso" onClick={openReviewManager}>＋ Add review</button>
 </div>
 <div className="admin-review-list">{reviews.slice(0, 30).map((review) => <article key={review.id ?? `${review.productSlug}-${review.reviewerName}`}>
 <div>
@@ -434,8 +474,13 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <button type="button" onClick={() => setReviewModalOpen(false)}>×</button>
 </header>
 <div>
-<label>Product<select required value={reviewForm.productSlug} onChange={(e) => setReviewForm((current) => ({ ...current, productSlug: e.target.value }))}>{products.map((product) => <option value={product.slug} key={product.slug}>{product.name}</option>)}</select>
+<div className="form-two review-product-picker">
+<label>Category<select required value={reviewCategory} onChange={(e) => { const categorySlug = e.target.value; const firstProduct = products.find((product) => product.categorySlug === categorySlug); setReviewCategory(categorySlug); setReviewForm((current) => ({ ...current, productSlug: firstProduct?.slug ?? "" })); }}>{categories.map((category) => <option value={category.slug} key={category.slug}>{category.name} ({products.filter((product) => product.categorySlug === category.slug).length})</option>)}</select>
 </label>
+<label>Product<select required disabled={!reviewProducts.length} value={reviewForm.productSlug} onChange={(e) => setReviewForm((current) => ({ ...current, productSlug: e.target.value }))}>{reviewProducts.map((product) => <option value={product.slug} key={product.slug}>{product.name} · {product.sku}</option>)}</select>
+</label>
+</div>
+{!reviewProducts.length && <p className="review-category-empty">No products are currently available in this category.</p>}
 <div className="form-two">
 <label>Reviewer name<input required value={reviewForm.reviewerName} onChange={(e) => setReviewForm((current) => ({ ...current, reviewerName: e.target.value }))}/>
 </label>
