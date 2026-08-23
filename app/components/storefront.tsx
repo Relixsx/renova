@@ -8,6 +8,7 @@ import { PrivacyChoicesButton } from "./cookie-consent";
 import { CartDrawer, useCart } from "./cart-provider";
 import { ProductAssistant } from "./product-assistant";
 import { ShopperTools } from "./shopper-tools";
+import { trackMetaEvent } from "../lib/meta-pixel";
 
 export function StoreHeader() {
   const { count, setCartOpen } = useCart();
@@ -87,7 +88,7 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="product-commerce-note"><span>Free delivery</span>{product.stock > 0 && product.stock <= 5 ? <b>Only {product.stock} left</b> : <b>{product.stock > 0 ? "In stock" : "Unavailable"}</b>}</div>
         <div className="product-card-actions">
           <ShopperTools product={product}/>
-          <button className="quick-add" onClick={() => add(product)} disabled={product.stock <= 0} aria-label={`Add ${product.name} to bag`}><span>＋</span><b>Add to bag</b></button>
+          <button className="quick-add" onClick={() => { trackMetaEvent("AddToCart", { content_ids: [product.slug], content_name: product.name, content_type: "product", contents: [{ id: product.slug, quantity: 1, item_price: product.priceKobo / 100 }], value: product.priceKobo / 100, currency: "NGN", num_items: 1 }); add(product); }} disabled={product.stock <= 0} aria-label={`Add ${product.name} to bag`}><span>＋</span><b>Add to bag</b></button>
         </div>
       </div>
     </article>
@@ -142,12 +143,13 @@ export function ProductPurchase({ product }: { product: Product }) {
   const { add } = useCart();
   const [variant, setVariant] = useState(product.variants[0] ?? "Standard");
   const [quantity, setQuantity] = useState(1);
+  const trackAdd = () => trackMetaEvent("AddToCart", { content_ids: [product.slug], content_name: product.name, content_type: "product", contents: [{ id: product.slug, quantity, item_price: product.priceKobo / 100 }], value: product.priceKobo * quantity / 100, currency: "NGN", num_items: quantity });
   return (
     <div className="purchase-panel">
       <div className="variant-block"><div className="field-head"><label>Choose option</label><span>{variant}</span></div><div className="variant-pills">{product.variants.map((item) => <button key={item} className={variant === item ? "is-selected" : ""} onClick={() => setVariant(item)}>{item}</button>)}</div></div>
       <div className="quantity-block"><label htmlFor="quantity">Quantity</label><div><button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><input id="quantity" value={quantity} readOnly/><button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button></div></div>
-      <button className="button primary wide purchase-button" onClick={() => add(product, variant, quantity)}>Add to bag</button>
-      <button className="button espresso wide" onClick={() => { add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
+      <button className="button primary wide purchase-button" onClick={() => { trackAdd(); add(product, variant, quantity); }}>Add to bag</button>
+      <button className="button espresso wide" onClick={() => { trackAdd(); add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
       <ShopperTools product={product} recordView/>
       <div className="purchase-trust"><span>✓ Prepaid secure checkout</span><span>✓ 3–5 working days</span><span>✓ Order tracking included</span></div>
     </div>

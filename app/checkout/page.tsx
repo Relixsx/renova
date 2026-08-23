@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getAllStates, getLGAsByState } from "ng-geo-data";
 import { useCart } from "../components/cart-provider";
 import { OrderMotionVisual } from "../components/order-motion-visual";
 import { formatNaira } from "../lib/catalog";
 import { deliveryOptions } from "../lib/checkout";
+import { onMetaPixelReady, trackMetaEvent } from "../lib/meta-pixel";
 
 const nigeriaStates = getAllStates();
 
@@ -51,6 +52,13 @@ export default function CheckoutPage() {
   const selectedState = nigeriaStates.find((state) => state.code === details.stateCode);
   const selectedDelivery = deliveryOptions.find((option) => option.id === delivery)!;
   const total = subtotalKobo + selectedDelivery.priceKobo;
+  const checkoutTracked = useRef(false);
+
+  useEffect(() => onMetaPixelReady(() => {
+    if (checkoutTracked.current || !lines.length) return;
+    checkoutTracked.current = true;
+    trackMetaEvent("InitiateCheckout", { contents: lines.map((line) => ({ id: line.slug, quantity: line.quantity, item_price: line.priceKobo / 100 })), content_ids: lines.map((line) => line.slug), content_type: "product", value: subtotalKobo / 100, currency: "NGN", num_items: lines.reduce((sum, line) => sum + line.quantity, 0) });
+  }), [lines, subtotalKobo]);
 
   function updateDetail<K extends keyof CheckoutDetails>(field: K, value: CheckoutDetails[K]) {
     setDetails((current) => ({ ...current, [field]: value }));
@@ -73,6 +81,7 @@ export default function CheckoutPage() {
       const response = await fetch("/api/checkout/initialize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines: lines.map((line) => ({ slug: line.slug, quantity: line.quantity, variant: line.variant })), details, deliveryId: delivery }) });
       const payload = await response.json() as { authorizationUrl?: string; error?: string };
       if (!response.ok || !payload.authorizationUrl) throw new Error(payload.error || "Payment could not be started.");
+      trackMetaEvent("AddPaymentInfo", { contents: lines.map((line) => ({ id: line.slug, quantity: line.quantity, item_price: line.priceKobo / 100 })), content_ids: lines.map((line) => line.slug), content_type: "product", value: total / 100, currency: "NGN", num_items: lines.reduce((sum, line) => sum + line.quantity, 0) });
       window.location.href = payload.authorizationUrl;
     } catch (error) { setNotice(error instanceof Error ? error.message : "Payment could not be started."); setPaying(false); }
   }

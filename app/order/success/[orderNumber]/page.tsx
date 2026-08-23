@@ -10,9 +10,10 @@ export default async function SuccessPage({ params }: { params: Promise<{ orderN
   const { orderNumber } = await params;
   const [order] = await getDb().select().from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
   const paid = order?.paymentStatus === "paid";
+  const paidItems = order ? (JSON.parse(order.itemsJson || "[]") as Array<{ slug?: string; sku?: string; quantity?: number; unitPriceKobo?: number }>).map((item) => ({ id: item.slug || item.sku || "product", quantity: item.quantity || 1, itemPrice: (item.unitPriceKobo || 0) / 100 })) : [];
 
   return <main className="order-result order-result-signature">
-    {paid && <PaidOrderCompletion orderNumber={orderNumber}/>} 
+    {paid && order && <PaidOrderCompletion orderNumber={orderNumber} total={order.totalKobo / 100} items={paidItems}/>} 
     <OrderMotionVisual />
     <span className="eyebrow">{paid ? "Payment verified" : "Payment status"}</span>
     <h1>{paid ? <>Thank you.<br/><em>Your order is in motion.</em></> : "We are confirming your payment."}</h1>

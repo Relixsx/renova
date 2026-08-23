@@ -12,7 +12,11 @@ declare global {
 
 function activateMetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  if (!pixelId || window.fbq) return;
+  if (!pixelId) return;
+  if (window.fbq) {
+    window.dispatchEvent(new Event("renova-meta-ready"));
+    return;
+  }
   const fbq = function (...args: unknown[]) {
     if (fbq.callMethod) fbq.callMethod(...args); else fbq.queue?.push(args);
   } as Window["fbq"];
@@ -23,6 +27,7 @@ function activateMetaPixel() {
   script.async = true; script.src = "https://connect.facebook.net/en_US/fbevents.js";
   document.head.appendChild(script);
   fbq("consent", "grant"); fbq("init", pixelId); fbq("track", "PageView");
+  window.dispatchEvent(new Event("renova-meta-ready"));
 }
 
 export function CookieConsent() {

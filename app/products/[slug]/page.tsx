@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductCard, ProductGallery, ProductPurchase, ReviewSubmission, StoreFrame } from "../../components/storefront";
 import { ProductDeliveryCard } from "../../components/product-confidence";
+import { ProductMetaTracker } from "../../components/product-meta-tracker";
 import { categoryName, formatNaira } from "../../lib/catalog";
 import { getProduct, getProducts, getReviews } from "../../lib/server-catalog";
 import { absoluteUrl, SUPPORT_EMAIL } from "../../lib/site";
@@ -33,6 +34,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const jsonLd = { "@context": "https://schema.org", "@type": "Product", name: product.name, image: (product.gallery?.length ? product.gallery : [product.imageUrl]).map(absoluteUrl), description: product.shortDescription, sku: product.sku, brand: { "@type": "Brand", name: product.brand || "Renova Select" }, offers: { "@type": "Offer", priceCurrency: "NGN", price: (product.priceKobo / 100).toFixed(2), availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", itemCondition: "https://schema.org/NewCondition", url: absoluteUrl(`/products/${product.slug}`), seller: { "@type": "Organization", name: "Renova Store", url: absoluteUrl() } }, ...(genuineReviews.length ? { aggregateRating: { "@type": "AggregateRating", ratingValue: (genuineReviews.reduce((sum, review) => sum + review.rating, 0) / genuineReviews.length).toFixed(1), reviewCount: genuineReviews.length } } : {}) };
   const details = [["Brand", product.brand], ["Model", product.model], ["Materials", product.materials], ["Dimensions", product.dimensions], ["Weight", product.weight], ["Colour", product.colour], ["Size", product.size], ["Warranty", product.warranty], ["Country of origin", product.countryOfOrigin], ["Compatibility", product.compatibility], ...Object.entries(product.specifications ?? {})].filter((item) => item[1]);
   return <StoreFrame>
+    <ProductMetaTracker slug={product.slug} name={product.name} value={product.priceKobo / 100}/>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}/>
     <nav className="breadcrumbs"><Link href="/">Home</Link><span>›</span><Link href={`/collections/${product.categorySlug}`}>{categoryName(product.categorySlug)}</Link><span>›</span><b>{product.name}</b></nav>
     <section className="product-detail">
