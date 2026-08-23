@@ -85,8 +85,10 @@ export function ProductCard({ product }: { product: Product }) {
           <div className="rating unrated" aria-label="No reviews yet"><small>No reviews yet</small></div>
         )}
         <div className="product-commerce-note"><span>Free delivery</span>{product.stock > 0 && product.stock <= 5 ? <b>Only {product.stock} left</b> : <b>{product.stock > 0 ? "In stock" : "Unavailable"}</b>}</div>
-        <button className="quick-add" onClick={() => add(product)} disabled={product.stock <= 0} aria-label={`Add ${product.name} to bag`}><span>＋</span><b>Add to bag</b></button>
-        <ShopperTools product={product}/>
+        <div className="product-card-actions">
+          <ShopperTools product={product}/>
+          <button className="quick-add" onClick={() => add(product)} disabled={product.stock <= 0} aria-label={`Add ${product.name} to bag`}><span>＋</span><b>Add to bag</b></button>
+        </div>
       </div>
     </article>
   );

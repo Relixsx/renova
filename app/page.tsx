@@ -22,11 +22,10 @@ export default async function Home() {
       <section className="section categories-section">
         <div className="section-head"><div><span className="eyebrow">Browse your way</span><h2>Everything, beautifully organised.</h2></div><Link href="/shop" className="text-link">View all categories →</Link></div>
         <div className="category-grid">
-          {categories.map((category, index) => (
+          {categories.map((category) => (
             <Link href={`/collections/${category.slug}`} className={`category-tile ${category.accent}`} key={category.slug}>
               <img className="category-image" src={category.imageUrl} alt={`${category.name} collection`} width="1200" height="900" loading="lazy" decoding="async" />
               <span className="category-overlay" />
-              <span className="category-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="category-copy"><h3>{category.name}</h3><p>{category.description}</p></span>
               <i aria-hidden="true">↗</i>
             </Link>
