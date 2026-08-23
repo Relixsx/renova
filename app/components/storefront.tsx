@@ -99,7 +99,6 @@ function isVideo(url: string) {
 export function ProductGallery({ product }: { product: Product }) {
   const media = Array.from(new Set(product.gallery?.length ? product.gallery : [product.imageUrl]));
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [expanded, setExpanded] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const selected = media[selectedIndex] ?? media[0] ?? product.imageUrl;
   const showPrevious = () => setSelectedIndex((current) => (current - 1 + media.length) % media.length);
@@ -115,12 +114,10 @@ export function ProductGallery({ product }: { product: Product }) {
     <div className="product-main-image" onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => finishSwipe(event.changedTouches[0]?.clientX ?? 0)}>
       {isVideo(selected) ? <video src={selected} controls playsInline preload="metadata"/> : <img src={selected} alt={`${product.name}, view ${selectedIndex + 1} of ${media.length}`} width="900" height="900" decoding="async"/>} 
       {product.badge && <span>{product.badge}</span>}
-      {!isVideo(selected) && <button type="button" className="gallery-expand" onClick={() => setExpanded(true)} aria-label="Open larger product image">⤢</button>}
       {media.length > 1 && <><button type="button" className="gallery-arrow gallery-previous" onClick={showPrevious} aria-label="View previous product image">‹</button><button type="button" className="gallery-arrow gallery-next" onClick={showNext} aria-label="View next product image">›</button><small className="gallery-count" aria-live="polite">{selectedIndex + 1} / {media.length}</small></>}
     </div>
     <div className="gallery-thumbs" aria-label={`${media.length} product images and videos`}>{media.map((url, index) => <button key={url} className={selectedIndex === index ? "active" : ""} onClick={() => setSelectedIndex(index)} aria-label={`View product media ${index + 1} of ${media.length}`} aria-current={selectedIndex === index ? "true" : undefined}>{isVideo(url) ? <span className="video-thumb">▶<small>Video</small></span> : <img src={url} alt={`${product.name} thumbnail ${index + 1}`}/>}<i>{index + 1}</i></button>)}</div>
     {media.length > 1 && <div className="gallery-dots" aria-hidden="true">{media.map((url, index) => <button type="button" key={url} className={selectedIndex === index ? "active" : ""} tabIndex={-1} onClick={() => setSelectedIndex(index)}/>)}</div>}
-    {expanded && <div className="gallery-lightbox" role="dialog" aria-modal="true" aria-label={`${product.name} enlarged image`} onClick={() => setExpanded(false)}><button type="button" onClick={() => setExpanded(false)} aria-label="Close enlarged image">×</button><img src={selected} alt={`${product.name}, enlarged view`} onClick={(event) => event.stopPropagation()}/></div>}
   </div>;
 }
 
@@ -143,18 +140,14 @@ export function ProductPurchase({ product }: { product: Product }) {
   const { add } = useCart();
   const [variant, setVariant] = useState(product.variants[0] ?? "Standard");
   const [quantity, setQuantity] = useState(1);
-  const buyNow = () => { add(product, variant, quantity); window.location.href = "/checkout"; };
   return (
-    <>
     <div className="purchase-panel">
       <div className="variant-block"><div className="field-head"><label>Choose option</label><span>{variant}</span></div><div className="variant-pills">{product.variants.map((item) => <button key={item} className={variant === item ? "is-selected" : ""} onClick={() => setVariant(item)}>{item}</button>)}</div></div>
       <div className="quantity-block"><label htmlFor="quantity">Quantity</label><div><button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><input id="quantity" value={quantity} readOnly/><button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button></div></div>
       <button className="button primary wide purchase-button" onClick={() => add(product, variant, quantity)}>Add to bag</button>
-      <button className="button espresso wide" onClick={buyNow}>Buy now</button>
+      <button className="button espresso wide" onClick={() => { add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
       <ShopperTools product={product} recordView/>
       <div className="purchase-trust"><span>✓ Prepaid secure checkout</span><span>✓ 3–5 working days</span><span>✓ Order tracking included</span></div>
     </div>
-    <div className="mobile-purchase-dock" aria-label="Quick purchase"><span><small>Total</small><strong>{formatNaira(product.priceKobo * quantity)}</strong></span><button type="button" onClick={buyNow} disabled={product.stock <= 0}>{product.stock > 0 ? "Buy now" : "Unavailable"}</button></div>
-    </>
   );
 }
