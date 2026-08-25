@@ -49,6 +49,8 @@ export async function POST(request: Request) {
     const supplierCostKobo = payload.supplierCostNaira ? asKobo(payload.supplierCostNaira) : null;
     const imageUrl = String(payload.imageUrl ?? "").trim();
     const stock = Math.max(0, Math.floor(Number(payload.stock ?? 0)));
+    const soldCount = Math.max(0, Math.floor(Number(payload.soldCount ?? 0)));
+    const paymentMode = payload.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid";
     const variants = Array.isArray(payload.variants) ? payload.variants.map(String).map((item) => item.trim()).filter(Boolean) : [];
 
     if (!name || !categorySlug || priceKobo === null || !imageUrl) {
@@ -77,6 +79,8 @@ export async function POST(request: Request) {
       chatbotFaqJson: JSON.stringify(parseFaq(payload.chatbotFaq)),
       ...Object.fromEntries(detailFields.map((key) => [key, textValue(payload, key)])),
       stock,
+      soldCount,
+      paymentMode,
       badge: String(payload.badge ?? "").trim() || null,
       isFeatured: Boolean(payload.isFeatured),
       isPublished: Boolean(payload.isPublished),
@@ -118,6 +122,8 @@ export async function PATCH(request: Request) {
     if (payload.chatbotFaq !== undefined) updates.chatbotFaqJson = JSON.stringify(parseFaq(payload.chatbotFaq));
     for (const key of detailFields) if (payload[key] !== undefined) updates[key] = textValue(payload, key);
     if (payload.stock !== undefined) updates.stock = Math.max(0, Math.floor(Number(payload.stock)));
+    if (payload.soldCount !== undefined) updates.soldCount = Math.max(0, Math.floor(Number(payload.soldCount)));
+    if (payload.paymentMode !== undefined) updates.paymentMode = payload.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid";
     if (payload.badge !== undefined) updates.badge = String(payload.badge).trim() || null;
     if (payload.supplierName !== undefined) updates.supplierName = String(payload.supplierName).trim() || null;
     if (payload.supplierUrl !== undefined) updates.supplierUrl = String(payload.supplierUrl).trim() || null;

@@ -149,9 +149,9 @@ export function ProductPurchase({ product }: { product: Product }) {
       <div className="variant-block"><div className="field-head"><label>Choose option</label><span>{variant}</span></div><div className="variant-pills">{product.variants.map((item) => <button key={item} className={variant === item ? "is-selected" : ""} onClick={() => setVariant(item)}>{item}</button>)}</div></div>
       <div className="quantity-block"><label htmlFor="quantity">Quantity</label><div><button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><input id="quantity" value={quantity} readOnly/><button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button></div></div>
       <button className="button primary wide purchase-button" onClick={() => { trackAdd(); add(product, variant, quantity); }}>Add to bag</button>
-      <button className="button espresso wide" onClick={() => { trackAdd(); add(product, variant, quantity); window.location.href = "/checkout"; }}>Buy now</button>
+      <button className="button espresso wide" onClick={() => { trackAdd(); add(product, variant, quantity); window.location.href = "/checkout"; }}>{product.paymentMode === "cash_on_delivery" ? "Order now" : "Buy now"}</button>
       <ShopperTools product={product} recordView/>
-      <div className="purchase-trust"><span>✓ Prepaid secure checkout</span><span>✓ 3–5 working days</span><span>✓ Order tracking included</span></div>
+      <div className="purchase-trust"><span>✓ {product.paymentMode === "cash_on_delivery" ? "Payment on delivery" : "Prepaid secure checkout"}</span><span>✓ 7-day return request policy</span><span>✓ Order tracking included</span></div>
     </div>
   );
 }

@@ -1,4 +1,9 @@
 import { createNeonAuth } from "@neondatabase/auth/next/server";
+import {
+  extractNeonAuthCookies,
+  parseSessionData,
+} from "@neondatabase/auth/server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 function requiredSetting(name: "NEON_AUTH_BASE_URL" | "NEON_AUTH_COOKIE_SECRET") {
@@ -7,10 +12,28 @@ function requiredSetting(name: "NEON_AUTH_BASE_URL" | "NEON_AUTH_COOKIE_SECRET")
   return value;
 }
 
-export const auth = createNeonAuth({
-  baseUrl: requiredSetting("NEON_AUTH_BASE_URL"),
-  cookies: { secret: requiredSetting("NEON_AUTH_COOKIE_SECRET"), sessionDataTtl: 300 },
-});
+type NeonAuth = ReturnType<typeof createNeonAuth>;
+
+let authInstance: NeonAuth | null = null;
+
+/**
+ * Initialise Neon Auth only when an auth route is actually used. Keeping this
+ * lazy allows public pages and production-render tests to run without loading
+ * private authentication configuration.
+ */
+export function getAuth() {
+  if (!authInstance) {
+    authInstance = createNeonAuth({
+      baseUrl: requiredSetting("NEON_AUTH_BASE_URL"),
+      cookies: {
+        secret: requiredSetting("NEON_AUTH_COOKIE_SECRET"),
+        sessionDataTtl: 300,
+      },
+    });
+  }
+
+  return authInstance;
+}
 
 function ownerEmails() {
   const configured = process.env.ADMIN_EMAILS || "relixsx@gmail.com,airebirth5@gmail.com";
@@ -22,8 +45,30 @@ export function isOwnerEmail(email: string | null | undefined) {
 }
 
 export async function currentUser() {
-  const { data: session } = await auth.getSession();
-  return session?.user ?? null;
+  const headerStore = await headers();
+  const authCookies = extractNeonAuthCookies(headerStore);
+
+  if (!authCookies.includes("session_token=")) return null;
+
+  try {
+    const baseUrl = requiredSetting("NEON_AUTH_BASE_URL").replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/get-session`, {
+      headers: {
+        cookie: authCookies,
+        "x-neon-auth-proxy": "nextjs",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (!response.ok) return null;
+
+    const session = parseSessionData(await response.json());
+    return session.user;
+  } catch (error) {
+    console.error("Unable to validate the Neon Auth session.", error);
+    return null;
+  }
 }
 
 export async function requireOwnerPage() {

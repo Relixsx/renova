@@ -24,6 +24,8 @@ export type Product = {
   imageUrl: string;
   gallery?: string[];
   stock: number;
+  soldCount?: number;
+  paymentMode?: "prepaid" | "cash_on_delivery";
   badge?: string | null;
   rating: number;
   reviewCount: number;

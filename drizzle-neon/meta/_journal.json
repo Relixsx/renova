@@ -8,6 +8,13 @@
       "when": 1787357809529,
       "tag": "0000_workable_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787644321890,
+      "tag": "0001_daily_hulk",
+      "breakpoints": true
     }
   ]
 }

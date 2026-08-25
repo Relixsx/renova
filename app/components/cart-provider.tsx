@@ -11,6 +11,7 @@ export type CartLine = {
   priceKobo: number;
   variant: string;
   quantity: number;
+  paymentMode: "prepaid" | "cash_on_delivery";
 };
 
 type CartContextValue = {
@@ -36,7 +37,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setLines(JSON.parse(stored) as CartLine[]);
+      if (stored) setLines((JSON.parse(stored) as CartLine[]).map((line) => ({ ...line, paymentMode: line.paymentMode ?? "prepaid" })));
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -49,6 +50,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const add = useCallback((product: Product, variant = product.variants[0] ?? "Standard", quantity = 1) => {
     setLines((current) => {
+      const paymentMode = product.paymentMode ?? "prepaid";
+      if (current.length && current.some((line) => line.paymentMode !== paymentMode)) {
+        window.alert("Prepaid and payment-on-delivery products must be checked out separately. Please complete or clear your current bag first.");
+        return current;
+      }
       const found = current.find((line) => line.slug === product.slug && line.variant === variant);
       if (found) {
         return current.map((line) =>
@@ -57,7 +63,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             : line,
         );
       }
-      return [...current, { slug: product.slug, name: product.name, imageUrl: product.imageUrl, priceKobo: product.priceKobo, variant, quantity }];
+      return [...current, { slug: product.slug, name: product.name, imageUrl: product.imageUrl, priceKobo: product.priceKobo, variant, quantity, paymentMode }];
     });
     setCartOpen(true);
   }, []);

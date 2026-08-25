@@ -4,8 +4,8 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { categoryName, formatNaira, type Category, type Product, type Review } from "../lib/catalog";
 
-type AdminOrder = { id: number; orderNumber: string; customerName: string; paymentStatus: string; status: string; totalKobo: number; createdAt: string };
-const emptyForm = { name: "", categorySlug: "phones-tablets", sku: "", shortDescription: "", description: "", priceNaira: "", compareAtNaira: "", supplierCostNaira: "", stock: "10", variants: "Standard", badge: "", supplierName: "", supplierUrl: "", imageUrl: "", brand: "", model: "", materials: "", dimensions: "", weight: "", colour: "", size: "", warranty: "", packageContents: "", countryOfOrigin: "", careInstructions: "", compatibility: "", specifications: "", chatbotKnowledge: "", chatbotFaq: "", isFeatured: false, isPublished: true };
+type AdminOrder = { id: number; orderNumber: string; customerName: string; paymentStatus: string; paymentMethod?: string; status: string; totalKobo: number; createdAt: string };
+const emptyForm = { name: "", categorySlug: "phones-tablets", sku: "", shortDescription: "", description: "", priceNaira: "", compareAtNaira: "", supplierCostNaira: "", stock: "10", soldCount: "0", paymentMode: "prepaid", variants: "Standard", badge: "", supplierName: "", supplierUrl: "", imageUrl: "", brand: "", model: "", materials: "", dimensions: "", weight: "", colour: "", size: "", warranty: "", packageContents: "", countryOfOrigin: "", careInstructions: "", compatibility: "", specifications: "", chatbotKnowledge: "", chatbotFaq: "", isFeatured: false, isPublished: true };
 const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "", body: "", isTestData: false };
 
 function parseList(value: unknown) { if (Array.isArray(value)) return value.map(String); try { return JSON.parse(String(value ?? "[]")) as string[]; } catch { return []; } }
@@ -43,12 +43,13 @@ async function optimizeProductImage(file: File) {
 function rawProduct(raw: Record<string, unknown>): Product {
   let specifications = {}; try { specifications = JSON.parse(String(raw.specificationsJson ?? "{}")); } catch {}
   let chatbotFaq = []; try { chatbotFaq = JSON.parse(String(raw.chatbotFaqJson ?? "[]")); } catch {}
-  return { id: Number(raw.id), name: String(raw.name), slug: String(raw.slug), sku: String(raw.sku), categorySlug: String(raw.categorySlug), shortDescription: String(raw.shortDescription ?? ""), description: String(raw.description ?? ""), priceKobo: Number(raw.priceKobo), compareAtKobo: raw.compareAtKobo ? Number(raw.compareAtKobo) : null, supplierCostKobo: raw.supplierCostKobo ? Number(raw.supplierCostKobo) : null, imageUrl: String(raw.imageUrl), gallery: parseList(raw.gallery ?? raw.galleryJson), stock: Number(raw.stock), badge: raw.badge ? String(raw.badge) : null, rating: Number(raw.rating ?? 0), reviewCount: Number(raw.reviewCount ?? 0), isFeatured: Boolean(raw.isFeatured), isPublished: Boolean(raw.isPublished), isTestData: Boolean(raw.isTestData), variants: parseList(raw.variants ?? raw.variantsJson), specifications, chatbotFaq, brand: String(raw.brand ?? ""), model: String(raw.model ?? ""), materials: String(raw.materials ?? ""), dimensions: String(raw.dimensions ?? ""), weight: String(raw.weight ?? ""), colour: String(raw.colour ?? ""), size: String(raw.size ?? ""), warranty: String(raw.warranty ?? ""), packageContents: String(raw.packageContents ?? ""), countryOfOrigin: String(raw.countryOfOrigin ?? ""), careInstructions: String(raw.careInstructions ?? ""), compatibility: String(raw.compatibility ?? ""), chatbotKnowledge: String(raw.chatbotKnowledge ?? "") };
+  return { id: Number(raw.id), name: String(raw.name), slug: String(raw.slug), sku: String(raw.sku), categorySlug: String(raw.categorySlug), shortDescription: String(raw.shortDescription ?? ""), description: String(raw.description ?? ""), priceKobo: Number(raw.priceKobo), compareAtKobo: raw.compareAtKobo ? Number(raw.compareAtKobo) : null, supplierCostKobo: raw.supplierCostKobo ? Number(raw.supplierCostKobo) : null, imageUrl: String(raw.imageUrl), gallery: parseList(raw.gallery ?? raw.galleryJson), stock: Number(raw.stock), soldCount: Number(raw.soldCount ?? 0), paymentMode: raw.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid", badge: raw.badge ? String(raw.badge) : null, rating: Number(raw.rating ?? 0), reviewCount: Number(raw.reviewCount ?? 0), isFeatured: Boolean(raw.isFeatured), isPublished: Boolean(raw.isPublished), isTestData: Boolean(raw.isTestData), variants: parseList(raw.variants ?? raw.variantsJson), specifications, chatbotFaq, brand: String(raw.brand ?? ""), model: String(raw.model ?? ""), materials: String(raw.materials ?? ""), dimensions: String(raw.dimensions ?? ""), weight: String(raw.weight ?? ""), colour: String(raw.colour ?? ""), size: String(raw.size ?? ""), warranty: String(raw.warranty ?? ""), packageContents: String(raw.packageContents ?? ""), countryOfOrigin: String(raw.countryOfOrigin ?? ""), careInstructions: String(raw.careInstructions ?? ""), compatibility: String(raw.compatibility ?? ""), chatbotKnowledge: String(raw.chatbotKnowledge ?? "") };
 }
 
 export function AdminCatalogue({ initialProducts, initialReviews, initialOrders, categories, ownerName }: { initialProducts: Product[]; initialReviews: Review[]; initialOrders: AdminOrder[]; categories: Category[]; ownerName: string }) {
   const [products, setProducts] = useState(initialProducts);
   const [reviews, setReviews] = useState(initialReviews);
+  const [orderRows, setOrderRows] = useState(initialOrders);
   const [form, setForm] = useState(emptyForm);
   const [reviewForm, setReviewForm] = useState({ ...emptyReview, productSlug: initialProducts[0]?.slug ?? "" });
   const [reviewCategory, setReviewCategory] = useState(initialProducts[0]?.categorySlug ?? categories[0]?.slug ?? "");
@@ -66,6 +67,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [message, setMessage] = useState("");
   const [catalogueMessage, setCatalogueMessage] = useState("");
   const [reviewMessage, setReviewMessage] = useState("");
+  const [orderMessage, setOrderMessage] = useState("");
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -73,13 +75,24 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
+  async function updateOrderStatus(order: AdminOrder, status: string) {
+    setOrderMessage(`Updating ${order.orderNumber}…`);
+    try {
+      const response = await fetch("/api/orders/admin", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderNumber: order.orderNumber, status }) });
+      const payload = await responsePayload<{ order?: AdminOrder; error?: string }>(response);
+      if (!response.ok || !payload.order) throw new Error(payload.error || "The order could not be updated.");
+      setOrderRows((current) => current.map((item) => item.id === payload.order!.id ? payload.order! : item));
+      setOrderMessage(`${order.orderNumber} is now ${status}.`);
+    } catch (error) { setOrderMessage(error instanceof Error ? error.message : "The order could not be updated."); }
+  }
+
   const visibleProducts = useMemo(() => products.filter((product) => { const needle = search.trim().toLowerCase(); return (filter === "all" || product.categorySlug === filter) && (!needle || product.name.toLowerCase().includes(needle) || product.sku.toLowerCase().includes(needle)); }), [products, filter, search]);
   const reviewProducts = useMemo(() => products.filter((product) => product.categorySlug === reviewCategory), [products, reviewCategory]);
   const revenueEstimate = products.reduce((sum, product) => sum + product.priceKobo * Math.min(product.stock, 2), 0);
   function updateField(name: keyof typeof emptyForm, value: string | boolean) { setForm((current) => ({ ...current, [name]: value })); }
   function resetStudio() { setOriginalCoverPreview(""); setEnhancedCoverUrl(""); setEnhancedGalleryUrls({}); setStudioStatus(""); }
   function openNew(categorySlug = "phones-tablets") { setEditingId(null); setForm({ ...emptyForm, categorySlug }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery([]); setLocalPreview(""); resetStudio(); setMessage(""); setProductModalOpen(true); }
-  function openEdit(product: Product) { setEditingId(product.id ?? null); setForm({ ...emptyForm, name: product.name, categorySlug: product.categorySlug, sku: product.sku, shortDescription: product.shortDescription, description: product.description, priceNaira: String(product.priceKobo / 100), compareAtNaira: product.compareAtKobo ? String(product.compareAtKobo / 100) : "", supplierCostNaira: product.supplierCostKobo ? String(product.supplierCostKobo / 100) : "", stock: String(product.stock), variants: product.variants.join(", "), badge: product.badge ?? "", imageUrl: product.imageUrl, brand: product.brand ?? "", model: product.model ?? "", materials: product.materials ?? "", dimensions: product.dimensions ?? "", weight: product.weight ?? "", colour: product.colour ?? "", size: product.size ?? "", warranty: product.warranty ?? "", packageContents: product.packageContents ?? "", countryOfOrigin: product.countryOfOrigin ?? "", careInstructions: product.careInstructions ?? "", compatibility: product.compatibility ?? "", specifications: Object.entries(product.specifications ?? {}).map(([key, value]) => `${key}: ${value}`).join("\n"), chatbotKnowledge: product.chatbotKnowledge ?? "", chatbotFaq: (product.chatbotFaq ?? []).map((item) => `${item.question} | ${item.answer}`).join("\n"), isFeatured: product.isFeatured, isPublished: product.isPublished }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery(product.gallery?.length ? product.gallery : [product.imageUrl]); setLocalPreview(product.imageUrl); resetStudio(); setMessage(""); setProductModalOpen(true); }
+  function openEdit(product: Product) { setEditingId(product.id ?? null); setForm({ ...emptyForm, name: product.name, categorySlug: product.categorySlug, sku: product.sku, shortDescription: product.shortDescription, description: product.description, priceNaira: String(product.priceKobo / 100), compareAtNaira: product.compareAtKobo ? String(product.compareAtKobo / 100) : "", supplierCostNaira: product.supplierCostKobo ? String(product.supplierCostKobo / 100) : "", stock: String(product.stock), soldCount: String(product.soldCount ?? 0), paymentMode: product.paymentMode ?? "prepaid", variants: product.variants.join(", "), badge: product.badge ?? "", imageUrl: product.imageUrl, brand: product.brand ?? "", model: product.model ?? "", materials: product.materials ?? "", dimensions: product.dimensions ?? "", weight: product.weight ?? "", colour: product.colour ?? "", size: product.size ?? "", warranty: product.warranty ?? "", packageContents: product.packageContents ?? "", countryOfOrigin: product.countryOfOrigin ?? "", careInstructions: product.careInstructions ?? "", compatibility: product.compatibility ?? "", specifications: Object.entries(product.specifications ?? {}).map(([key, value]) => `${key}: ${value}`).join("\n"), chatbotKnowledge: product.chatbotKnowledge ?? "", chatbotFaq: (product.chatbotFaq ?? []).map((item) => `${item.question} | ${item.answer}`).join("\n"), isFeatured: product.isFeatured, isPublished: product.isPublished }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery(product.gallery?.length ? product.gallery : [product.imageUrl]); setLocalPreview(product.imageUrl); resetStudio(); setMessage(""); setProductModalOpen(true); }
   function openReviewManager() {
     const selected = products.find((product) => product.slug === reviewForm.productSlug) ?? products[0];
     const categorySlug = selected?.categorySlug ?? categories[0]?.slug ?? "";
@@ -207,7 +220,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <a href="#catalogue">
 <span>□</span>Products</a>
 <a href="#orders">
-<span>▤</span>Orders <i>{initialOrders.length}</i>
+<span>▤</span>Orders <i>{orderRows.length}</i>
 </a>
 <a href="#reviews">
 <span>☆</span>Reviews <i>{reviews.length}</i>
@@ -242,8 +255,8 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 </article>
 <article>
 <span>Paid orders</span>
-<strong>{initialOrders.filter((order) => order.paymentStatus === "paid").length}</strong>
-<small>Verified Paystack orders</small>
+<strong>{orderRows.filter((order) => order.paymentStatus === "paid").length}</strong>
+<small>Verified prepaid orders</small>
 </article>
 <article>
 <span>Needs attention</span>
@@ -343,15 +356,18 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Fulfilment</span>
 <h2>Recent orders</h2>
 </div>
-</div>{initialOrders.length ? <div className="admin-order-list">{initialOrders.slice(0, 20).map((order) => <article key={order.id}>
+</div>{orderMessage && <p className="admin-order-message">{orderMessage}</p>}{orderRows.length ? <div className="admin-order-list">{orderRows.slice(0, 20).map((order) => <article key={order.id}>
 <b>{order.orderNumber}</b>
 <span>{order.customerName}</span>
 <span>{formatNaira(order.totalKobo)}</span>
-<i>{order.paymentStatus}</i>
+<i>{order.paymentMethod === "cash_on_delivery" ? "Pay on delivery" : order.paymentStatus}</i>
 <small>{new Date(order.createdAt).toLocaleDateString("en-NG")}</small>
+<select aria-label={`Status for ${order.orderNumber}`} value={order.status} onChange={(event) => updateOrderStatus(order, event.target.value)}>
+{["confirmed", "processing", "packaged", "dispatched", "delivered", "refunded"].map((status) => <option value={status} key={status}>{status.replace(/^./, (character) => character.toUpperCase())}</option>)}
+</select>
 </article>)}</div> : <div className="admin-empty">
 <h3>No orders yet</h3>
-<p>Verified Paystack orders will appear here automatically.</p>
+<p>Prepaid and payment-on-delivery orders will appear here automatically.</p>
 </div>}</section>
     </main>
 
@@ -405,6 +421,16 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <small>Shown with a strike-through when higher.</small>
 </label>
 <label>Stock quantity<input required type="number" min="0" value={form.stock} onChange={(e) => updateField("stock", e.target.value)}/>
+</label>
+</div>
+<div className="form-two">
+<label>Number sold<input required type="number" min="0" value={form.soldCount} onChange={(e) => updateField("soldCount", e.target.value)}/>
+<small>You can set an existing verified sales total. New completed sales are added automatically.</small>
+</label>
+<label>Customer payment option<select value={form.paymentMode} onChange={(e) => updateField("paymentMode", e.target.value)}>
+<option value="prepaid">Prepaid securely with Paystack</option>
+<option value="cash_on_delivery">Payment on delivery</option>
+</select><small>This determines the checkout used for this product.</small>
 </label>
 </div>
 <label>Variants <small>Separate with commas</small>

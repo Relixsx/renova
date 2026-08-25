@@ -22,12 +22,13 @@ export async function POST(request: Request) {
       const product = await getProduct(line.slug);
       const quantity = Math.max(1, Math.min(10, Math.floor(Number(line.quantity))));
       if (!product || !product.isPublished || product.stock < quantity) return Response.json({ error: `${product?.name ?? "A product"} is no longer available in the requested quantity.` }, { status: 409 });
+      if (product.paymentMode === "cash_on_delivery") return Response.json({ error: `${product.name} is available through payment on delivery, not Paystack checkout.` }, { status: 409 });
       subtotalKobo += product.priceKobo * quantity;
       verifiedItems.push({ slug: product.slug, name: product.name, sku: product.sku, variant: String(line.variant ?? product.variants[0] ?? "Standard"), quantity, unitPriceKobo: product.priceKobo, imageUrl: product.imageUrl });
     }
     const totalKobo = subtotalKobo + delivery.priceKobo;
     const orderNumber = `REN-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
-    await getDb().insert(orders).values({ orderNumber, customerName: details.fullName, customerEmail: details.email, customerPhone: details.phone, totalKobo, itemsJson: JSON.stringify(verifiedItems), addressJson: JSON.stringify(details), shippingJson: JSON.stringify(delivery) });
+    await getDb().insert(orders).values({ orderNumber, customerName: details.fullName, customerEmail: details.email, customerPhone: details.phone, paymentMethod: "paystack", totalKobo, itemsJson: JSON.stringify(verifiedItems), addressJson: JSON.stringify(details), shippingJson: JSON.stringify(delivery) });
 
     const requestOrigin = new URL(request.url).origin;
     const origin = (process.env.APP_URL?.trim() || requestOrigin).replace(/\/$/, "");

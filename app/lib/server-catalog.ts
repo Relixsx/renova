@@ -60,6 +60,8 @@ export async function ensureSeedData() {
         galleryJson: JSON.stringify(product.gallery?.length ? product.gallery : [product.imageUrl]),
         variantsJson: JSON.stringify(product.variants),
         stock: product.stock,
+        soldCount: product.soldCount ?? 0,
+        paymentMode: product.paymentMode ?? "prepaid",
         badge: product.badge,
         rating: product.rating,
         reviewCount: product.reviewCount,
@@ -124,6 +126,8 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     imageUrl: row.imageUrl,
     gallery: gallery.length ? gallery : [row.imageUrl],
     stock: row.stock,
+    soldCount: row.soldCount,
+    paymentMode: row.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid",
     badge: row.badge,
     rating: row.rating,
     reviewCount: row.reviewCount,
@@ -179,7 +183,7 @@ export async function getProducts(options?: {
       );
   } catch {
     const query = options?.query?.trim().toLowerCase();
-    return seedProducts.map((product) => ({ ...product, rating: 0, reviewCount: 0 }))
+    return seedProducts.map((product) => ({ ...product, rating: 0, reviewCount: 0, soldCount: product.soldCount ?? 0, paymentMode: product.paymentMode ?? "prepaid" }))
       .filter((product) => options?.includeDrafts || product.isPublished)
       .filter((product) => !options?.categorySlug || product.categorySlug === options.categorySlug)
       .filter(
