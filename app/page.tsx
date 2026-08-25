@@ -3,6 +3,7 @@ import { categories } from "./lib/catalog";
 import { getProducts, getPublicReviews } from "./lib/server-catalog";
 import { ProductCard, StoreFrame } from "./components/storefront";
 import { CinematicHomeHero } from "./components/cinematic-home-hero";
+import { formatReviewDate } from "./lib/review-display";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,10 @@ export default async function Home() {
       {reviews.length > 0 && <section className="section review-section">
         <div className="section-head"><div><span className="eyebrow">Customer experiences</span><h2>Thoughtful details, noticed.</h2></div></div>
         <div className="review-grid">
-          {reviews.map((review) => (
-            <article key={`${review.productSlug}-${review.reviewerName}`}><span className="stars">{"★".repeat(review.rating)}</span><h3>{review.title}</h3><p>“{review.body}”</p><footer><b>{review.reviewerName}</b><span>Renova customer</span></footer></article>
-          ))}
+          {reviews.map((review) => {
+            const reviewDate = formatReviewDate(review);
+            return <article key={`${review.productSlug}-${review.reviewerName}`}><span className="stars">{"★".repeat(review.rating)}</span><h3>{review.title}</h3><p>“{review.body}”</p><footer><b>{review.reviewerName}</b><span className="review-meta">{review.isVerifiedPurchase && <em className="verified-purchase">✓ Verified purchase</em>}{reviewDate && <time dateTime={review.reviewedAt ?? review.createdAt}>{reviewDate}</time>}</span></footer></article>;
+          })}
         </div>
       </section>}
 

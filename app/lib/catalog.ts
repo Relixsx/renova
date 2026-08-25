@@ -48,6 +48,9 @@ export type Review = {
   title: string;
   body: string;
   isTestData: boolean;
+  isVerifiedPurchase?: boolean;
+  reviewedAt?: string | null;
+  createdAt?: string;
   status?: string;
 };
 

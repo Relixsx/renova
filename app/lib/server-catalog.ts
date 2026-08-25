@@ -233,6 +233,9 @@ export async function getReviews(slug: string): Promise<Review[]> {
         title: review.title,
         body: review.body,
         isTestData: review.isTestData,
+        isVerifiedPurchase: review.isVerifiedPurchase,
+        reviewedAt: review.reviewedAt,
+        createdAt: review.createdAt,
         status: review.status,
       }));
   } catch {
@@ -247,7 +250,7 @@ export async function getPublicReviews(limit = 3): Promise<Review[]> {
     return rows
       .filter((review) => review.status === "approved" && !review.isTestData)
       .slice(0, limit)
-      .map((review) => ({ id: review.id, productSlug: review.productSlug, reviewerName: review.reviewerName, rating: review.rating, title: review.title, body: review.body, status: review.status, isTestData: false }));
+      .map((review) => ({ id: review.id, productSlug: review.productSlug, reviewerName: review.reviewerName, rating: review.rating, title: review.title, body: review.body, status: review.status, isTestData: false, isVerifiedPurchase: review.isVerifiedPurchase, reviewedAt: review.reviewedAt, createdAt: review.createdAt }));
   } catch {
     return [];
   }
@@ -265,6 +268,9 @@ export async function getAdminReviews(): Promise<Review[]> {
     body: review.body,
     status: review.status,
     isTestData: review.isTestData,
+    isVerifiedPurchase: review.isVerifiedPurchase,
+    reviewedAt: review.reviewedAt,
+    createdAt: review.createdAt,
   }));
 }
 

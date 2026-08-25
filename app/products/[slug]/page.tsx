@@ -13,8 +13,25 @@ import { ProductMetaTracker } from "../../components/product-meta-tracker";
 import { categoryName, formatNaira } from "../../lib/catalog";
 import { getProduct, getProducts, getReviews } from "../../lib/server-catalog";
 import { absoluteUrl, SUPPORT_EMAIL } from "../../lib/site";
+import { formatReviewDate } from "../../lib/review-display";
 
 export const dynamic = "force-dynamic";
+
+function formatSoldCount(value: number) {
+  const count = Math.max(0, Math.floor(value));
+
+  if (count >= 1_000_000) {
+    const amount = count / 1_000_000;
+    return `${amount.toFixed(amount >= 10 ? 0 : 1).replace(/\.0$/, "")}M+ sold`;
+  }
+
+  if (count >= 1_000) {
+    const amount = count / 1_000;
+    return `${amount.toFixed(amount >= 10 ? 0 : 1).replace(/\.0$/, "")}K+ sold`;
+  }
+
+  return `${count.toLocaleString("en-NG")} sold`;
+}
 
 export async function generateMetadata({
   params,
@@ -154,30 +171,39 @@ export default async function ProductPage({
           <h1>{product.name}</h1>
           {product.reviewCount > 0 ? (
             <div className="product-rating">
-              <span>★★★★★</span>
+              <span className="product-rating-stars" aria-hidden="true">★★★★★</span>
               <a href="#reviews">
-                {(product.rating / 10).toFixed(1)} · {product.reviewCount}{" "}
-                reviews
+                <b>{(product.rating / 10).toFixed(1)}</b>
+                <span>· {product.reviewCount} reviews</span>
               </a>
+              {Number(product.soldCount) > 0 && (
+                <strong className="product-sold-count">
+                  {formatSoldCount(Number(product.soldCount))}
+                </strong>
+              )}
             </div>
           ) : (
             <div className="product-rating unrated">
               <span>New arrival</span>
               <a href="#reviews">No reviews yet</a>
+              {Number(product.soldCount) > 0 && (
+                <strong className="product-sold-count">
+                  {formatSoldCount(Number(product.soldCount))}
+                </strong>
+              )}
             </div>
           )}
-          {Number(product.soldCount) > 0 && (
-            <div className="product-sold-count">
-              <b>{Number(product.soldCount).toLocaleString("en-NG")} sold</b>
-              <span>Ordered by Renova customers</span>
+          <div className="product-price-block">
+            <div className="detail-price">
+              <strong>{formatNaira(product.priceKobo)}</strong>
+              {product.compareAtKobo && (
+                <s>{formatNaira(product.compareAtKobo)}</s>
+              )}
+              {discount > 0 && <span>Save {discount}%</span>}
             </div>
-          )}
-          <div className="detail-price">
-            <strong>{formatNaira(product.priceKobo)}</strong>
-            {product.compareAtKobo && (
-              <s>{formatNaira(product.compareAtKobo)}</s>
-            )}
-            {discount > 0 && <span>Save {discount}%</span>}
+            <div className="product-free-delivery-pill" role="note">
+              Free delivery
+            </div>
           </div>
           <p className="product-lead">{product.shortDescription}</p>
           <div className="stock-line">
@@ -377,19 +403,21 @@ export default async function ProductPage({
         </div>
         {reviews.length ? (
           <div className="review-grid">
-            {reviews.map((review) => (
-              <article
-                key={`${review.id ?? review.reviewerName}-${review.productSlug}`}
-              >
+            {reviews.map((review) => {
+              const reviewDate = formatReviewDate(review);
+              return <article key={`${review.id ?? review.reviewerName}-${review.productSlug}`}>
                 <span className="stars">{"★".repeat(review.rating)}</span>
                 <h3>{review.title}</h3>
                 <p>“{review.body}”</p>
                 <footer>
                   <b>{review.reviewerName}</b>
-                  <span>Renova customer</span>
+                  <span className="review-meta">
+                    {review.isVerifiedPurchase && <em className="verified-purchase">✓ Verified purchase</em>}
+                    {reviewDate && <time dateTime={review.reviewedAt ?? review.createdAt}>{reviewDate}</time>}
+                  </span>
                 </footer>
-              </article>
-            ))}
+              </article>;
+            })}
           </div>
         ) : (
           <div className="empty-state catalogue-empty">

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { CartProvider } from "./components/cart-provider";
-import { CookieConsent } from "./components/cookie-consent";
+import { MetaPixelLoader } from "./components/meta-pixel-loader";
 import { MetaPageTracker } from "./components/meta-page-tracker";
 import { SITE_URL } from "./lib/site";
 
@@ -41,7 +41,7 @@ export default function RootLayout({
   const organizationJsonLd = { "@context": "https://schema.org", "@type": "OnlineStore", name: "Renova Store", url: SITE_URL, logo: `${SITE_URL}/renova-mark.svg`, image: `${SITE_URL}/og.png`, email: "support@shoprenova.com.ng", address: { "@type": "PostalAddress", addressLocality: "Lagos", addressCountry: "NG" }, paymentAccepted: "Paystack", areaServed: { "@type": "Country", name: "Nigeria" } };
   return (
     <html lang="en">
-      <body><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c") }}/><CartProvider>{children}<MetaPageTracker/><CookieConsent /></CartProvider></body>
+      <body><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c") }}/><CartProvider>{children}<MetaPixelLoader/><MetaPageTracker/></CartProvider></body>
     </html>
   );
 }

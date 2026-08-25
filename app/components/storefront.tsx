@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { categories, categoryName, formatNaira, type Product } from "../lib/catalog";
 import { BUSINESS_IDENTITY, SUPPORT_EMAIL } from "../lib/site";
-import { PrivacyChoicesButton } from "./cookie-consent";
 import { CartDrawer, useCart } from "./cart-provider";
 import { ProductAssistant } from "./product-assistant";
 import { ShopperTools } from "./shopper-tools";
@@ -54,7 +53,7 @@ export function StoreFooter() {
       <div className="footer-grid">
         <div><h3>Shop</h3><Link href="/shop">All products</Link><Link href="/collections/fashion">Fashion</Link><Link href="/collections/electronics">Electronics</Link><Link href="/collections/home-office">Home & office</Link></div>
         <div><h3>Help</h3><Link href="/track-order">Track an order</Link><Link href="/delivery">Delivery</Link><Link href="/returns">Returns & refunds</Link><a href={`mailto:${SUPPORT_EMAIL}`}>Email support</a></div>
-        <div><h3>Renova</h3><Link href="/about">Our story</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><PrivacyChoicesButton /></div>
+        <div><h3>Renova</h3><Link href="/about">Our story</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div>
         <div className="newsletter"><h3>Business information</h3><p>{BUSINESS_IDENTITY.name} is an {BUSINESS_IDENTITY.legalDescription.toLowerCase()} serving customers across Nigeria.</p><span>{BUSINESS_IDENTITY.location}</span><a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></div>
       </div>
       <div className="footer-bottom"><span>© 2026 Renova. Lagos, Nigeria.</span><span>Secure prepaid checkout powered by Paystack.</span></div>

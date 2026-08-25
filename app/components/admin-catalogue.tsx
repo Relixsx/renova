@@ -6,7 +6,7 @@ import { categoryName, formatNaira, type Category, type Product, type Review } f
 
 type AdminOrder = { id: number; orderNumber: string; customerName: string; paymentStatus: string; paymentMethod?: string; status: string; totalKobo: number; createdAt: string };
 const emptyForm = { name: "", categorySlug: "phones-tablets", sku: "", shortDescription: "", description: "", priceNaira: "", compareAtNaira: "", supplierCostNaira: "", stock: "10", soldCount: "0", paymentMode: "prepaid", variants: "Standard", badge: "", supplierName: "", supplierUrl: "", imageUrl: "", brand: "", model: "", materials: "", dimensions: "", weight: "", colour: "", size: "", warranty: "", packageContents: "", countryOfOrigin: "", careInstructions: "", compatibility: "", specifications: "", chatbotKnowledge: "", chatbotFaq: "", isFeatured: false, isPublished: true };
-const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "", body: "", isTestData: false };
+const emptyReview = { productSlug: "", reviewerName: "", rating: "5", title: "", body: "", isVerifiedPurchase: false, reviewedAt: "" };
 
 function parseList(value: unknown) { if (Array.isArray(value)) return value.map(String); try { return JSON.parse(String(value ?? "[]")) as string[]; } catch { return []; } }
 function fileKey(file: File) { return `${file.name}:${file.size}:${file.lastModified}`; }
@@ -71,6 +71,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -93,12 +94,21 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
   function resetStudio() { setOriginalCoverPreview(""); setEnhancedCoverUrl(""); setEnhancedGalleryUrls({}); setStudioStatus(""); }
   function openNew(categorySlug = "phones-tablets") { setEditingId(null); setForm({ ...emptyForm, categorySlug }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery([]); setLocalPreview(""); resetStudio(); setMessage(""); setProductModalOpen(true); }
   function openEdit(product: Product) { setEditingId(product.id ?? null); setForm({ ...emptyForm, name: product.name, categorySlug: product.categorySlug, sku: product.sku, shortDescription: product.shortDescription, description: product.description, priceNaira: String(product.priceKobo / 100), compareAtNaira: product.compareAtKobo ? String(product.compareAtKobo / 100) : "", supplierCostNaira: product.supplierCostKobo ? String(product.supplierCostKobo / 100) : "", stock: String(product.stock), soldCount: String(product.soldCount ?? 0), paymentMode: product.paymentMode ?? "prepaid", variants: product.variants.join(", "), badge: product.badge ?? "", imageUrl: product.imageUrl, brand: product.brand ?? "", model: product.model ?? "", materials: product.materials ?? "", dimensions: product.dimensions ?? "", weight: product.weight ?? "", colour: product.colour ?? "", size: product.size ?? "", warranty: product.warranty ?? "", packageContents: product.packageContents ?? "", countryOfOrigin: product.countryOfOrigin ?? "", careInstructions: product.careInstructions ?? "", compatibility: product.compatibility ?? "", specifications: Object.entries(product.specifications ?? {}).map(([key, value]) => `${key}: ${value}`).join("\n"), chatbotKnowledge: product.chatbotKnowledge ?? "", chatbotFaq: (product.chatbotFaq ?? []).map((item) => `${item.question} | ${item.answer}`).join("\n"), isFeatured: product.isFeatured, isPublished: product.isPublished }); setPrimaryFile(null); setGalleryFiles([]); setExistingGallery(product.gallery?.length ? product.gallery : [product.imageUrl]); setLocalPreview(product.imageUrl); resetStudio(); setMessage(""); setProductModalOpen(true); }
-  function openReviewManager() {
-    const selected = products.find((product) => product.slug === reviewForm.productSlug) ?? products[0];
+  function openReviewManager(review?: Review) {
+    const selected = products.find((product) => product.slug === (review?.productSlug ?? reviewForm.productSlug)) ?? products[0];
     const categorySlug = selected?.categorySlug ?? categories[0]?.slug ?? "";
     const firstProduct = products.find((product) => product.categorySlug === categorySlug);
     setReviewCategory(categorySlug);
-    setReviewForm((current) => ({ ...current, productSlug: selected?.slug ?? firstProduct?.slug ?? "" }));
+    setEditingReviewId(review?.id ?? null);
+    setReviewForm(review ? {
+      productSlug: review.productSlug,
+      reviewerName: review.reviewerName,
+      rating: String(review.rating),
+      title: review.title,
+      body: review.body,
+      isVerifiedPurchase: Boolean(review.isVerifiedPurchase),
+      reviewedAt: (review.reviewedAt ?? review.createdAt ?? "").slice(0, 10),
+    } : { ...emptyReview, productSlug: selected?.slug ?? firstProduct?.slug ?? "" });
     setReviewMessage("");
     setReviewModalOpen(true);
   }
@@ -174,7 +184,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 
   async function submitReview(event: FormEvent) {
     event.preventDefault(); setSaving(true); setReviewMessage("Saving review…");
-    try { const response = await fetch("/api/reviews", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(reviewForm) }); const payload = await response.json() as { review?: Review; error?: string }; if (!response.ok || !payload.review) throw new Error(payload.error || "Review save failed."); setReviews((current) => [payload.review!, ...current]); setReviewMessage("Review added successfully."); setReviewForm({ ...emptyReview, productSlug: reviewForm.productSlug }); window.setTimeout(() => setReviewModalOpen(false), 700); } catch (error) { setReviewMessage(error instanceof Error ? error.message : "Review save failed."); } finally { setSaving(false); }
+    try { const response = await fetch("/api/reviews", { method: editingReviewId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...reviewForm, id: editingReviewId }) }); const payload = await response.json() as { review?: Review; error?: string }; if (!response.ok || !payload.review) throw new Error(payload.error || "Review save failed."); setReviews((current) => editingReviewId ? current.map((item) => item.id === editingReviewId ? payload.review! : item) : [payload.review!, ...current]); setReviewMessage(editingReviewId ? "Review updated successfully." : "Review added successfully."); setReviewForm({ ...emptyReview, productSlug: reviewForm.productSlug }); setEditingReviewId(null); window.setTimeout(() => setReviewModalOpen(false), 700); } catch (error) { setReviewMessage(error instanceof Error ? error.message : "Review save failed."); } finally { setSaving(false); }
   }
   async function removeReview(review: Review) { if (!review.id) return; const response = await fetch(`/api/reviews?id=${review.id}`, { method: "DELETE" }); if (response.ok) setReviews((current) => current.filter((item) => item.id !== review.id)); }
   async function removeProduct(product: Product) {
@@ -334,19 +344,20 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <span className="eyebrow">Trust & feedback</span>
 <h2>Product reviews</h2>
 </div>
-<button className="button espresso" onClick={openReviewManager}>＋ Add review</button>
+<button className="button espresso" onClick={() => openReviewManager()}>＋ Add review</button>
 </div>
 <div className="admin-review-list">{reviews.slice(0, 30).map((review) => <article key={review.id ?? `${review.productSlug}-${review.reviewerName}`}>
 <div>
 <span>{"★".repeat(review.rating)}</span>
-<i>{review.isTestData ? "Internal review" : "Customer review"}</i>
+<i className={review.isVerifiedPurchase ? "verified" : "unverified"}>{review.isVerifiedPurchase ? "Verified purchase" : "Not verified"}</i>
 </div>
 <h3>{review.title}</h3>
 <p>{review.body}</p>
 <footer>
 <b>{review.reviewerName}</b>
 <small>{products.find((product) => product.slug === review.productSlug)?.name ?? review.productSlug}</small>
-<button onClick={() => removeReview(review)}>Remove</button>
+<small>{review.reviewedAt || review.createdAt ? new Date(review.reviewedAt ?? review.createdAt!).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "Date not set"}</small>
+<span className="admin-review-actions"><button type="button" onClick={() => openReviewManager(review)}>Edit</button><button type="button" onClick={() => removeReview(review)}>Remove</button></span>
 </footer>
 </article>)}</div>
 </section>
@@ -522,7 +533,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <header>
 <div>
 <span className="eyebrow">Review manager</span>
-<h2>Add a product review</h2>
+<h2>{editingReviewId ? "Edit product review" : "Add a product review"}</h2>
 <p>Add genuine customer feedback only when you have permission to publish it.</p>
 </div>
 <button type="button" onClick={() => setReviewModalOpen(false)}>×</button>
@@ -541,6 +552,10 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 <label>Rating<select value={reviewForm.rating} onChange={(e) => setReviewForm((current) => ({ ...current, rating: e.target.value }))}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} star{rating === 1 ? "" : "s"}</option>)}</select>
 </label>
 </div>
+<div className="form-two review-metadata-fields">
+<label>Review date <small>Optional</small><input type="date" value={reviewForm.reviewedAt} onChange={(e) => setReviewForm((current) => ({ ...current, reviewedAt: e.target.value }))}/></label>
+<label className="review-verification-control"><input type="checkbox" checked={reviewForm.isVerifiedPurchase} onChange={(e) => setReviewForm((current) => ({ ...current, isVerifiedPurchase: e.target.checked }))}/><span><b>Verified purchase</b><small>Use only when this review belongs to a confirmed paid order.</small></span></label>
+</div>
 <label>Review title<input required value={reviewForm.title} onChange={(e) => setReviewForm((current) => ({ ...current, title: e.target.value }))}/>
 </label>
 <label>Review text<textarea required rows={5} value={reviewForm.body} onChange={(e) => setReviewForm((current) => ({ ...current, body: e.target.value }))}/>
@@ -548,7 +563,7 @@ export function AdminCatalogue({ initialProducts, initialReviews, initialOrders,
 {reviewMessage && <p className="save-message">{reviewMessage}</p>}</div>
 <footer>
 <button type="button" className="button quiet" onClick={() => setReviewModalOpen(false)}>Cancel</button>
-<button className="button primary" disabled={saving}>Add review</button>
+<button className="button primary" disabled={saving}>{saving ? "Saving…" : editingReviewId ? "Save changes" : "Add review"}</button>
 </footer>
 </form>
 </div>}

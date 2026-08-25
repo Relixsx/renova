@@ -67,6 +67,8 @@ export const reviews = pgTable(
     body: text("body").notNull(),
     status: text("status").notNull().default("pending"),
     isTestData: boolean("is_test_data").notNull().default(true),
+    isVerifiedPurchase: boolean("is_verified_purchase").notNull().default(false),
+    reviewedAt: text("reviewed_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [uniqueIndex("reviews_seed_unique").on(table.productSlug, table.reviewerName)],
