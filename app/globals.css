@@ -4479,32 +4479,111 @@ img {
 .comparison-table {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 20px;
+  align-items: start;
 }
-.comparison-table article {
-  padding: 18px;
+.comparison-section h2 {
+  margin: 10px 0 8px;
+}
+.comparison-intro {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.comparison-table .comparison-card {
+  overflow: hidden;
+  padding: 0;
   border: 1px solid var(--line);
+  border-radius: 12px;
   background: white;
+  box-shadow: 0 12px 34px rgba(40, 23, 16, 0.06);
 }
-.comparison-table img {
+.comparison-image {
+  padding: 18px;
+  background: #faf9f7;
+  border-bottom: 1px solid var(--line);
+}
+.comparison-table .comparison-image img {
+  display: block;
   width: 100%;
-  aspect-ratio: 1.4;
-  object-fit: cover;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  border-radius: 7px;
 }
-.comparison-table h3 {
-  font-family: var(--serif);
+.comparison-card-body {
+  padding: 20px;
+}
+.comparison-card-body > small {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--coral);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.comparison-table .comparison-card h3 {
+  min-height: 52px;
+  margin: 0 0 12px;
+  font-family: var(--sans);
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.comparison-price {
+  display: block;
+  margin-bottom: 18px;
+  color: var(--ink);
   font-size: 22px;
-  font-weight: 400;
+  line-height: 1;
+}
+.comparison-table dl {
+  margin: 0;
+  border-top: 1px solid var(--line);
 }
 .comparison-table dl div {
-  padding: 8px 0;
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid var(--line);
-  font-size: 9px;
+  display: grid;
+  grid-template-columns: minmax(88px, 0.75fr) minmax(0, 1.25fr);
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.comparison-table dt {
+  color: var(--muted);
+  font-weight: 650;
 }
 .comparison-table dd {
   margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 650;
+  text-align: right;
+}
+.comparison-table dd.is-available {
+  color: #26763a;
+}
+.comparison-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 13px 15px;
+  border-radius: 7px;
+  background: var(--coral);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.comparison-view:hover {
+  filter: brightness(0.94);
+}
+@media (max-width: 1050px) and (min-width: 761px) {
+  .comparison-table {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .success-facts {
   margin: 22px auto;
@@ -4535,6 +4614,31 @@ img {
   }
   .comparison-table {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .saved-collections {
+    padding: 48px 20px 90px;
+  }
+  .saved-collections > section + section {
+    margin-top: 52px;
+  }
+  .saved-collections h2 {
+    font-size: clamp(32px, 10vw, 42px);
+    line-height: 1.08;
+  }
+  .comparison-intro {
+    margin-bottom: 20px;
+  }
+  .comparison-card-body {
+    padding: 18px;
+  }
+  .comparison-table .comparison-card h3 {
+    min-height: 0;
+    font-size: 18px;
+  }
+  .comparison-table dl div {
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 12px;
   }
   .product-assistant {
     right: 12px;
@@ -8260,29 +8364,66 @@ main,
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(18, 12, 10, 0.65);
+  isolation: isolate;
 }
-.cod-confirmation > div {
-  width: min(540px, 100%);
-  padding: 30px;
+.cod-confirmation > .modal-scrim {
+  z-index: -1;
+  background: rgba(18, 12, 10, 0.76);
+  backdrop-filter: blur(5px);
+}
+.cod-confirmation > section {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 34px;
   background: #fff;
-  border-top: 6px solid #ff5a2f;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  border: 1px solid #eadfd9;
+  border-top: 7px solid #ff5a2f;
+  border-radius: 4px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
 }
 .cod-confirmation h2 {
-  margin: 0 0 12px;
+  margin: 8px 0 14px;
   font-family: var(--font-display, serif);
-  font-size: 30px;
+  font-size: clamp(30px, 4vw, 42px);
+  line-height: 1.05;
+  color: #171312;
 }
 .cod-confirmation p {
+  margin: 0;
   color: #554945;
-  line-height: 1.65;
+  line-height: 1.6;
 }
-.cod-confirmation footer {
+.cod-confirmation-lead {
+  font-size: 17px;
+}
+.cod-confirmation-summary {
+  margin-top: 22px;
+  padding: 18px 20px;
+  background: #fff7f2;
+  border: 1px solid #ffc9b7;
+  border-left: 5px solid #ff5a2f;
+}
+.cod-confirmation-summary strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #271713;
+  font-size: 16px;
+}
+.cod-confirmation-agreement {
+  margin-top: 16px !important;
+  color: #746660 !important;
+  font-size: 14px;
+}
+.cod-confirmation-actions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
   margin-top: 24px;
+}
+.cod-confirmation-actions .button {
+  min-height: 54px;
+  padding-inline: 22px;
 }
 .admin-order-message {
   margin: 0 0 12px;
@@ -8318,13 +8459,26 @@ main,
   .checkout-whatsapp-support > strong {
     grid-column: 2;
   }
-  .cod-confirmation > div {
-    padding: 24px 20px;
+  .cod-confirmation {
+    align-items: end;
+    padding: 12px;
   }
-  .cod-confirmation footer {
+  .cod-confirmation > section {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 26px 20px 20px;
+    border-radius: 14px 14px 4px 4px;
+  }
+  .cod-confirmation h2 {
+    font-size: 32px;
+  }
+  .cod-confirmation-lead {
+    font-size: 16px;
+  }
+  .cod-confirmation-actions {
     flex-direction: column-reverse;
   }
-  .cod-confirmation footer button {
+  .cod-confirmation-actions button {
     width: 100%;
   }
   .admin-order-list article select {

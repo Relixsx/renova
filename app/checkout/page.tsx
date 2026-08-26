@@ -756,28 +756,41 @@ export default function CheckoutPage() {
             onClick={() => !paying && setDeliveryConfirmationOpen(false)}
           />
           <section>
-            <span className="eyebrow">Please confirm</span>
-            <h2 id="cod-title">Do you intend to receive this order?</h2>
-            <p>
-              Renova reserves carrier capacity and prepares this order for you.
-              Payment on delivery is not a free reservation. Continue only if
-              your delivery details are correct and you intend to receive and
-              pay <b>{formatNaira(total)}</b> when the order arrives.
+            <span className="eyebrow">Payment on delivery</span>
+            <h2 id="cod-title">Please confirm you can receive this order</h2>
+            <p className="cod-confirmation-lead">
+              Renova is covering the delivery cost for this promotional order
+              and pays the courier assigned to bring it to you. When a
+              dispatched order is not received, that delivery cost is not
+              recoverable and affects our ability to keep offering free
+              delivery.
             </p>
-            <div>
+            <div className="cod-confirmation-summary">
+              <strong>Before you continue</strong>
+              <p>
+                Please confirm that your delivery details are correct, that you
+                will be available to receive the parcel, and that you intend to
+                pay <b>{formatNaira(total)}</b> when the courier arrives.
+              </p>
+            </div>
+            <p className="cod-confirmation-agreement">
+              By placing the order, you confirm that you requested it and
+              intend to receive and pay for it on delivery.
+            </p>
+            <div className="cod-confirmation-actions">
               <button
                 className="button quiet"
                 disabled={paying}
                 onClick={() => setDeliveryConfirmationOpen(false)}
               >
-                No, not yet
+                Go back and review
               </button>
               <button
                 className="button primary"
                 disabled={paying}
                 onClick={placeDeliveryPaymentOrder}
               >
-                {paying ? "Placing order…" : "Yes, place my order"}
+                {paying ? "Placing order…" : "Yes, I’ll receive this order"}
               </button>
             </div>
           </section>
