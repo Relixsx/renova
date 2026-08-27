@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { boolean, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  pgTable,
+  serial,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
@@ -9,7 +16,9 @@ export const categories = pgTable("categories", {
   accent: text("accent").notNull().default("ember"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
 });
 
 export const products = pgTable("products", {
@@ -52,8 +61,14 @@ export const products = pgTable("products", {
   isTestData: boolean("is_test_data").notNull().default(true),
   supplierName: text("supplier_name"),
   supplierUrl: text("supplier_url"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  pageTemplate: text("page_template").notNull().default("standard"),
+  landingPageJson: text("landing_page_json").notNull().default("{}"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
 });
 
 export const reviews = pgTable(
@@ -67,11 +82,20 @@ export const reviews = pgTable(
     body: text("body").notNull(),
     status: text("status").notNull().default("pending"),
     isTestData: boolean("is_test_data").notNull().default(true),
-    isVerifiedPurchase: boolean("is_verified_purchase").notNull().default(false),
+    isVerifiedPurchase: boolean("is_verified_purchase")
+      .notNull()
+      .default(false),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
-  (table) => [uniqueIndex("reviews_seed_unique").on(table.productSlug, table.reviewerName)],
+  (table) => [
+    uniqueIndex("reviews_seed_unique").on(
+      table.productSlug,
+      table.reviewerName,
+    ),
+  ],
 );
 
 export const orders = pgTable("orders", {
@@ -91,6 +115,10 @@ export const orders = pgTable("orders", {
   estimatedDelivery: text("estimated_delivery"),
   customerNotifiedAt: text("customer_notified_at"),
   salesRecordedAt: text("sales_recorded_at"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
 });

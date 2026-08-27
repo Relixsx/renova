@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ProductCard,
   ProductGallery,
@@ -10,7 +10,7 @@ import {
 } from "../../components/storefront";
 import { ProductDeliveryCard } from "../../components/product-confidence";
 import { ProductMetaTracker } from "../../components/product-meta-tracker";
-import { categoryName, formatNaira } from "../../lib/catalog";
+import { categoryName, formatNaira, productHref } from "../../lib/catalog";
 import { getProduct, getProducts, getReviews } from "../../lib/server-catalog";
 import { absoluteUrl, SUPPORT_EMAIL } from "../../lib/site";
 import { formatReviewDate } from "../../lib/review-display";
@@ -48,11 +48,11 @@ export async function generateMetadata({
   return {
     title: product.name,
     description: product.shortDescription,
-    alternates: { canonical: `/products/${product.slug}` },
+    alternates: { canonical: productHref(product) },
     openGraph: {
       title: product.name,
       description: product.shortDescription,
-      url: `/products/${product.slug}`,
+      url: productHref(product),
       type: "website",
       images: [{ url: absoluteUrl(product.imageUrl), alt: product.name }],
     },
@@ -73,6 +73,7 @@ export default async function ProductPage({
   const { slug } = await params;
   const product = await getProduct(slug);
   if (!product) notFound();
+  if (product.pageTemplate === "flexible") redirect(`/offers/${product.slug}`);
   const [reviews, allProducts] = await Promise.all([
     getReviews(slug),
     getProducts(),
@@ -107,7 +108,7 @@ export default async function ProductPage({
           ? "https://schema.org/InStock"
           : "https://schema.org/OutOfStock",
       itemCondition: "https://schema.org/NewCondition",
-      url: absoluteUrl(`/products/${product.slug}`),
+      url: absoluteUrl(productHref(product)),
       seller: {
         "@type": "Organization",
         name: "Renova Store",
@@ -171,7 +172,9 @@ export default async function ProductPage({
           <h1>{product.name}</h1>
           {product.reviewCount > 0 ? (
             <div className="product-rating">
-              <span className="product-rating-stars" aria-hidden="true">★★★★★</span>
+              <span className="product-rating-stars" aria-hidden="true">
+                ★★★★★
+              </span>
               <a href="#reviews">
                 <b>{(product.rating / 10).toFixed(1)}</b>
                 <span>· {product.reviewCount} reviews</span>
@@ -405,18 +408,30 @@ export default async function ProductPage({
           <div className="review-grid">
             {reviews.map((review) => {
               const reviewDate = formatReviewDate(review);
-              return <article key={`${review.id ?? review.reviewerName}-${review.productSlug}`}>
-                <span className="stars">{"★".repeat(review.rating)}</span>
-                <h3>{review.title}</h3>
-                <p>“{review.body}”</p>
-                <footer>
-                  <b>{review.reviewerName}</b>
-                  <span className="review-meta">
-                    {review.isVerifiedPurchase && <em className="verified-purchase">✓ Verified purchase</em>}
-                    {reviewDate && <time dateTime={review.reviewedAt ?? review.createdAt}>{reviewDate}</time>}
-                  </span>
-                </footer>
-              </article>;
+              return (
+                <article
+                  key={`${review.id ?? review.reviewerName}-${review.productSlug}`}
+                >
+                  <span className="stars">{"★".repeat(review.rating)}</span>
+                  <h3>{review.title}</h3>
+                  <p>“{review.body}”</p>
+                  <footer>
+                    <b>{review.reviewerName}</b>
+                    <span className="review-meta">
+                      {review.isVerifiedPurchase && (
+                        <em className="verified-purchase">
+                          ✓ Verified purchase
+                        </em>
+                      )}
+                      {reviewDate && (
+                        <time dateTime={review.reviewedAt ?? review.createdAt}>
+                          {reviewDate}
+                        </time>
+                      )}
+                    </span>
+                  </footer>
+                </article>
+              );
             })}
           </div>
         ) : (

@@ -1,8 +1,15 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "../../db";
-import { categories as categoryTable, orders as orderTable, products as productTable, reviews as reviewTable } from "../../db/schema";
+import {
+  categories as categoryTable,
+  orders as orderTable,
+  products as productTable,
+  reviews as reviewTable,
+} from "../../db/schema";
 import {
   categories,
+  defaultFlexibleProductPage,
+  normalizeFlexibleProductPage,
   seedProducts,
   seedReviews,
   type Category,
@@ -32,49 +39,89 @@ export async function ensureSeedData() {
 
   // Upgrade only untouched built-in cover images. Owner-uploaded replacements are preserved.
   const whiteBackgroundCovers = [
-    ["aura-quietmax-wireless-headphones", "/products/aura-headphones.webp", "/products/aura-headphones-white.webp"],
-    ["embergo-portable-blender", "/products/ember-blender.webp", "/products/ember-blender-white.webp"],
-    ["atelier-structured-everyday-handbag", "/products/atelier-handbag.webp", "/products/atelier-handbag-white.webp"],
-    ["nova-x1-5g-smartphone", "/products/nova-smartphone.webp", "/products/nova-smartphone-white.webp"],
+    [
+      "aura-quietmax-wireless-headphones",
+      "/products/aura-headphones.webp",
+      "/products/aura-headphones-white.webp",
+    ],
+    [
+      "embergo-portable-blender",
+      "/products/ember-blender.webp",
+      "/products/ember-blender-white.webp",
+    ],
+    [
+      "atelier-structured-everyday-handbag",
+      "/products/atelier-handbag.webp",
+      "/products/atelier-handbag-white.webp",
+    ],
+    [
+      "nova-x1-5g-smartphone",
+      "/products/nova-smartphone.webp",
+      "/products/nova-smartphone-white.webp",
+    ],
   ] as const;
   for (const [slug, previousUrl, nextUrl] of whiteBackgroundCovers) {
-    await db.update(productTable).set({ imageUrl: nextUrl, galleryJson: JSON.stringify([nextUrl]), updatedAt: new Date().toISOString() }).where(and(eq(productTable.slug, slug), eq(productTable.imageUrl, previousUrl)));
+    await db
+      .update(productTable)
+      .set({
+        imageUrl: nextUrl,
+        galleryJson: JSON.stringify([nextUrl]),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(
+        and(
+          eq(productTable.slug, slug),
+          eq(productTable.imageUrl, previousUrl),
+        ),
+      );
   }
 
-  const existingProducts = await db.select({ id: productTable.id }).from(productTable).limit(1);
+  const existingProducts = await db
+    .select({ id: productTable.id })
+    .from(productTable)
+    .limit(1);
   if (!existingProducts.length) {
     await db
       .insert(productTable)
       .values(
         seedProducts.map((product) => ({
-        name: product.name,
-        slug: product.slug,
-        sku: product.sku,
-        categorySlug: product.categorySlug,
-        shortDescription: product.shortDescription,
-        description: product.description,
-        priceKobo: product.priceKobo,
-        compareAtKobo: product.compareAtKobo,
-        supplierCostKobo: product.supplierCostKobo,
-        imageUrl: product.imageUrl,
-        galleryJson: JSON.stringify(product.gallery?.length ? product.gallery : [product.imageUrl]),
-        variantsJson: JSON.stringify(product.variants),
-        stock: product.stock,
-        soldCount: product.soldCount ?? 0,
-        paymentMode: product.paymentMode ?? "prepaid",
-        badge: product.badge,
-        rating: product.rating,
-        reviewCount: product.reviewCount,
-        isFeatured: product.isFeatured,
-        isPublished: product.isPublished,
-        isTestData: product.isTestData,
+          name: product.name,
+          slug: product.slug,
+          sku: product.sku,
+          categorySlug: product.categorySlug,
+          shortDescription: product.shortDescription,
+          description: product.description,
+          priceKobo: product.priceKobo,
+          compareAtKobo: product.compareAtKobo,
+          supplierCostKobo: product.supplierCostKobo,
+          imageUrl: product.imageUrl,
+          galleryJson: JSON.stringify(
+            product.gallery?.length ? product.gallery : [product.imageUrl],
+          ),
+          variantsJson: JSON.stringify(product.variants),
+          stock: product.stock,
+          soldCount: product.soldCount ?? 0,
+          paymentMode: product.paymentMode ?? "prepaid",
+          badge: product.badge,
+          rating: product.rating,
+          reviewCount: product.reviewCount,
+          isFeatured: product.isFeatured,
+          isPublished: product.isPublished,
+          isTestData: product.isTestData,
         })),
       )
       .onConflictDoNothing();
   }
 
-  const existingReviews = await db.select({ id: reviewTable.id }).from(reviewTable).limit(1);
-  if (seedReviews.length && !existingReviews.length && !existingProducts.length) {
+  const existingReviews = await db
+    .select({ id: reviewTable.id })
+    .from(reviewTable)
+    .limit(1);
+  if (
+    seedReviews.length &&
+    !existingReviews.length &&
+    !existingProducts.length
+  ) {
     await db
       .insert(reviewTable)
       .values(
@@ -99,6 +146,7 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
   let gallery: string[] = [];
   let specifications: Record<string, string> = {};
   let chatbotFaq: Array<{ question: string; answer: string }> = [];
+  let landingPage: Product["landingPage"];
   try {
     variants = JSON.parse(row.variantsJson) as string[];
   } catch {
@@ -109,8 +157,35 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
   } catch {
     gallery = [];
   }
-  try { specifications = JSON.parse(row.specificationsJson) as Record<string, string>; } catch { specifications = {}; }
-  try { chatbotFaq = JSON.parse(row.chatbotFaqJson) as Array<{ question: string; answer: string }>; } catch { chatbotFaq = []; }
+  try {
+    specifications = JSON.parse(row.specificationsJson) as Record<
+      string,
+      string
+    >;
+  } catch {
+    specifications = {};
+  }
+  try {
+    chatbotFaq = JSON.parse(row.chatbotFaqJson) as Array<{
+      question: string;
+      answer: string;
+    }>;
+  } catch {
+    chatbotFaq = [];
+  }
+  const flexibleDefaults: Partial<Product> = {
+    name: row.name,
+    shortDescription: row.shortDescription,
+    imageUrl: row.imageUrl,
+  };
+  try {
+    landingPage = normalizeFlexibleProductPage(
+      flexibleDefaults,
+      JSON.parse(row.landingPageJson),
+    );
+  } catch {
+    landingPage = defaultFlexibleProductPage(flexibleDefaults);
+  }
 
   return {
     id: row.id,
@@ -127,7 +202,8 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     gallery: gallery.length ? gallery : [row.imageUrl],
     stock: row.stock,
     soldCount: row.soldCount,
-    paymentMode: row.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid",
+    paymentMode:
+      row.paymentMode === "cash_on_delivery" ? "cash_on_delivery" : "prepaid",
     badge: row.badge,
     rating: row.rating,
     reviewCount: row.reviewCount,
@@ -136,11 +212,22 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     isTestData: row.isTestData,
     variants,
     specifications,
-    brand: row.brand, model: row.model, materials: row.materials, dimensions: row.dimensions,
-    weight: row.weight, colour: row.colour, size: row.size, warranty: row.warranty,
-    packageContents: row.packageContents, countryOfOrigin: row.countryOfOrigin,
-    careInstructions: row.careInstructions, compatibility: row.compatibility,
-    chatbotKnowledge: row.chatbotKnowledge, chatbotFaq,
+    brand: row.brand,
+    model: row.model,
+    materials: row.materials,
+    dimensions: row.dimensions,
+    weight: row.weight,
+    colour: row.colour,
+    size: row.size,
+    warranty: row.warranty,
+    packageContents: row.packageContents,
+    countryOfOrigin: row.countryOfOrigin,
+    careInstructions: row.careInstructions,
+    compatibility: row.compatibility,
+    chatbotKnowledge: row.chatbotKnowledge,
+    chatbotFaq,
+    pageTemplate: row.pageTemplate === "flexible" ? "flexible" : "standard",
+    landingPage,
   };
 }
 
@@ -149,9 +236,51 @@ export async function getProducts(options?: {
   query?: string;
   includeDrafts?: boolean;
 }): Promise<Product[]> {
-  const normalize = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  const aliases: Record<string, string> = { phone: "smartphone mobile", phones: "smartphone mobile", laptop: "computer computing", cream: "skincare beauty", sneakers: "shoes footwear", fridge: "refrigerator appliance", tv: "television electronics" };
-  const matches = (product: Product, raw: string) => { const words = normalize(raw).split(" ").filter(Boolean).flatMap((word) => [word, ...(aliases[word]?.split(" ") ?? [])]); const haystack = normalize([product.name, product.shortDescription, product.description, product.sku, product.categorySlug, product.brand, product.model, product.colour, product.size].filter(Boolean).join(" ")); return words.every((word) => haystack.includes(word) || (word.length > 4 && haystack.split(" ").some((candidate) => candidate.startsWith(word.slice(0, -1))))); };
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const aliases: Record<string, string> = {
+    phone: "smartphone mobile",
+    phones: "smartphone mobile",
+    laptop: "computer computing",
+    cream: "skincare beauty",
+    sneakers: "shoes footwear",
+    fridge: "refrigerator appliance",
+    tv: "television electronics",
+  };
+  const matches = (product: Product, raw: string) => {
+    const words = normalize(raw)
+      .split(" ")
+      .filter(Boolean)
+      .flatMap((word) => [word, ...(aliases[word]?.split(" ") ?? [])]);
+    const haystack = normalize(
+      [
+        product.name,
+        product.shortDescription,
+        product.description,
+        product.sku,
+        product.categorySlug,
+        product.brand,
+        product.model,
+        product.colour,
+        product.size,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+    return words.every(
+      (word) =>
+        haystack.includes(word) ||
+        (word.length > 4 &&
+          haystack
+            .split(" ")
+            .some((candidate) => candidate.startsWith(word.slice(0, -1)))),
+    );
+  };
   try {
     await ensureSeedData();
     const db = getDb();
@@ -162,36 +291,63 @@ export async function getProducts(options?: {
     const reviewStats = new Map<string, { count: number; total: number }>();
     for (const review of publicReviews) {
       if (review.status !== "approved" || review.isTestData) continue;
-      const current = reviewStats.get(review.productSlug) ?? { count: 0, total: 0 };
-      reviewStats.set(review.productSlug, { count: current.count + 1, total: current.total + review.rating });
+      const current = reviewStats.get(review.productSlug) ?? {
+        count: 0,
+        total: 0,
+      };
+      reviewStats.set(review.productSlug, {
+        count: current.count + 1,
+        total: current.total + review.rating,
+      });
     }
     const query = options?.query?.trim().toLowerCase();
     return rows
       .map((row) => {
         const product = mapProduct(row);
         const stats = reviewStats.get(product.slug);
-        return { ...product, reviewCount: stats?.count ?? 0, rating: stats ? Math.round(stats.total / stats.count * 10) : 0 };
+        return {
+          ...product,
+          reviewCount: stats?.count ?? 0,
+          rating: stats ? Math.round((stats.total / stats.count) * 10) : 0,
+        };
       })
       .filter((product) => options?.includeDrafts || product.isPublished)
-      .filter((product) => !options?.categorySlug || product.categorySlug === options.categorySlug)
+      .filter(
+        (product) =>
+          !options?.categorySlug ||
+          product.categorySlug === options.categorySlug,
+      )
       .filter(
         (product) =>
           !query ||
           product.name.toLowerCase().includes(query) ||
           product.shortDescription.toLowerCase().includes(query) ||
-          product.sku.toLowerCase().includes(query) || matches(product, query),
+          product.sku.toLowerCase().includes(query) ||
+          matches(product, query),
       );
   } catch {
     const query = options?.query?.trim().toLowerCase();
-    return seedProducts.map((product) => ({ ...product, rating: 0, reviewCount: 0, soldCount: product.soldCount ?? 0, paymentMode: product.paymentMode ?? "prepaid" }))
+    return seedProducts
+      .map((product) => ({
+        ...product,
+        rating: 0,
+        reviewCount: 0,
+        soldCount: product.soldCount ?? 0,
+        paymentMode: product.paymentMode ?? "prepaid",
+      }))
       .filter((product) => options?.includeDrafts || product.isPublished)
-      .filter((product) => !options?.categorySlug || product.categorySlug === options.categorySlug)
+      .filter(
+        (product) =>
+          !options?.categorySlug ||
+          product.categorySlug === options.categorySlug,
+      )
       .filter(
         (product) =>
           !query ||
           product.name.toLowerCase().includes(query) ||
           product.shortDescription.toLowerCase().includes(query) ||
-          product.sku.toLowerCase().includes(query) || matches(product, query),
+          product.sku.toLowerCase().includes(query) ||
+          matches(product, query),
       );
   }
 }
@@ -201,13 +357,29 @@ export async function getProduct(slug: string): Promise<Product | null> {
     await ensureSeedData();
     const db = getDb();
     const [[row], productReviews] = await Promise.all([
-      db.select().from(productTable).where(eq(productTable.slug, slug)).limit(1),
+      db
+        .select()
+        .from(productTable)
+        .where(eq(productTable.slug, slug))
+        .limit(1),
       db.select().from(reviewTable).where(eq(reviewTable.productSlug, slug)),
     ]);
     if (!row) return null;
-    const publicReviews = productReviews.filter((review) => review.status === "approved" && !review.isTestData);
+    const publicReviews = productReviews.filter(
+      (review) => review.status === "approved" && !review.isTestData,
+    );
     const product = mapProduct(row);
-    return { ...product, reviewCount: publicReviews.length, rating: publicReviews.length ? Math.round(publicReviews.reduce((sum, review) => sum + review.rating, 0) / publicReviews.length * 10) : 0 };
+    return {
+      ...product,
+      reviewCount: publicReviews.length,
+      rating: publicReviews.length
+        ? Math.round(
+            (publicReviews.reduce((sum, review) => sum + review.rating, 0) /
+              publicReviews.length) *
+              10,
+          )
+        : 0,
+    };
   } catch {
     const product = seedProducts.find((item) => item.slug === slug);
     return product ? { ...product, rating: 0, reviewCount: 0 } : null;
@@ -246,11 +418,26 @@ export async function getReviews(slug: string): Promise<Review[]> {
 export async function getPublicReviews(limit = 3): Promise<Review[]> {
   try {
     await ensureSeedData();
-    const rows = await getDb().select().from(reviewTable).orderBy(desc(reviewTable.id));
+    const rows = await getDb()
+      .select()
+      .from(reviewTable)
+      .orderBy(desc(reviewTable.id));
     return rows
       .filter((review) => review.status === "approved" && !review.isTestData)
       .slice(0, limit)
-      .map((review) => ({ id: review.id, productSlug: review.productSlug, reviewerName: review.reviewerName, rating: review.rating, title: review.title, body: review.body, status: review.status, isTestData: false, isVerifiedPurchase: review.isVerifiedPurchase, reviewedAt: review.reviewedAt, createdAt: review.createdAt }));
+      .map((review) => ({
+        id: review.id,
+        productSlug: review.productSlug,
+        reviewerName: review.reviewerName,
+        rating: review.rating,
+        title: review.title,
+        body: review.body,
+        status: review.status,
+        isTestData: false,
+        isVerifiedPurchase: review.isVerifiedPurchase,
+        reviewedAt: review.reviewedAt,
+        createdAt: review.createdAt,
+      }));
   } catch {
     return [];
   }
@@ -258,20 +445,25 @@ export async function getPublicReviews(limit = 3): Promise<Review[]> {
 
 export async function getAdminReviews(): Promise<Review[]> {
   await ensureSeedData();
-  const rows = await getDb().select().from(reviewTable).orderBy(desc(reviewTable.id));
-  return rows.filter((review) => !review.isTestData).map((review) => ({
-    id: review.id,
-    productSlug: review.productSlug,
-    reviewerName: review.reviewerName,
-    rating: review.rating,
-    title: review.title,
-    body: review.body,
-    status: review.status,
-    isTestData: review.isTestData,
-    isVerifiedPurchase: review.isVerifiedPurchase,
-    reviewedAt: review.reviewedAt,
-    createdAt: review.createdAt,
-  }));
+  const rows = await getDb()
+    .select()
+    .from(reviewTable)
+    .orderBy(desc(reviewTable.id));
+  return rows
+    .filter((review) => !review.isTestData)
+    .map((review) => ({
+      id: review.id,
+      productSlug: review.productSlug,
+      reviewerName: review.reviewerName,
+      rating: review.rating,
+      title: review.title,
+      body: review.body,
+      status: review.status,
+      isTestData: review.isTestData,
+      isVerifiedPurchase: review.isVerifiedPurchase,
+      reviewedAt: review.reviewedAt,
+      createdAt: review.createdAt,
+    }));
 }
 
 export async function getAdminOrders() {
