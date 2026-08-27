@@ -167,11 +167,6 @@ export default async function ProductPage({
       <section className="product-detail">
         <ProductGallery product={product} />
         <div className="product-info">
-          <ProductPromoBanner
-            enabled={product.promoEnabled}
-            label={product.promoLabel}
-            endsAt={product.promoEndsAt}
-          />
           <span className="product-category">
             {categoryName(product.categorySlug)} · {product.sku}
           </span>
@@ -214,6 +209,11 @@ export default async function ProductPage({
               Free delivery
             </div>
           </div>
+          <ProductPromoBanner
+            enabled={product.promoEnabled}
+            label={product.promoLabel}
+            endsAt={product.promoEndsAt}
+          />
           <p className="product-lead">{product.shortDescription}</p>
           <div className="stock-line">
             <span className={product.stock > 0 ? "in-stock" : "out-stock"} />
