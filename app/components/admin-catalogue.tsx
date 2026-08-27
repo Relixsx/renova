@@ -58,6 +58,9 @@ const emptyForm = {
   specifications: "",
   chatbotKnowledge: "",
   chatbotFaq: "",
+  promoEnabled: false,
+  promoLabel: "PROMO",
+  promoEndsAt: "",
   isFeatured: false,
   isPublished: true,
 };
@@ -192,6 +195,9 @@ function rawProduct(raw: Record<string, unknown>): Product {
     compatibility: String(raw.compatibility ?? ""),
     chatbotKnowledge: String(raw.chatbotKnowledge ?? ""),
     pageTemplate: raw.pageTemplate === "flexible" ? "flexible" : "standard",
+    promoEnabled: Boolean(raw.promoEnabled),
+    promoLabel: String(raw.promoLabel ?? "PROMO"),
+    promoEndsAt: String(raw.promoEndsAt ?? ""),
   };
   product.landingPage = normalizeFlexibleProductPage(product, landingPage);
   return product;
@@ -362,6 +368,9 @@ export function AdminCatalogue({
       chatbotFaq: (product.chatbotFaq ?? [])
         .map((item) => `${item.question} | ${item.answer}`)
         .join("\n"),
+      promoEnabled: Boolean(product.promoEnabled),
+      promoLabel: product.promoLabel || "PROMO",
+      promoEndsAt: product.promoEndsAt || "",
       isFeatured: product.isFeatured,
       isPublished: product.isPublished,
     });
@@ -1186,8 +1195,75 @@ export function AdminCatalogue({
                     />
                   )}
                 </fieldset>
+                <fieldset className="promo-admin-fields">
+                  <legend>3. Optional product promotion</legend>
+                  <p>
+                    Add a prominent promotional banner and a real two-hour
+                    countdown to this product page. Products remain unchanged
+                    when this is switched off.
+                  </p>
+                  <label className="check-row promo-admin-toggle">
+                    <input
+                      type="checkbox"
+                      checked={form.promoEnabled}
+                      onChange={(event) => {
+                        const enabled = event.target.checked;
+                        setForm((current) => ({
+                          ...current,
+                          promoEnabled: enabled,
+                          promoEndsAt: enabled
+                            ? new Date(
+                                Date.now() + 2 * 60 * 60 * 1000,
+                              ).toISOString()
+                            : "",
+                        }));
+                      }}
+                    />
+                    <span>
+                      <b>Show animated promo</b>
+                      <small>
+                        Displays only on this product while its timer is active.
+                      </small>
+                    </span>
+                  </label>
+                  {form.promoEnabled && (
+                    <div className="promo-admin-active">
+                      <label>
+                        Promo wording
+                        <input
+                          value={form.promoLabel}
+                          maxLength={28}
+                          onChange={(event) =>
+                            updateField("promoLabel", event.target.value)
+                          }
+                          placeholder="PROMO"
+                        />
+                      </label>
+                      <div>
+                        <b>Fixed two-hour countdown</b>
+                        <span>
+                          Ends {new Date(form.promoEndsAt).toLocaleString("en-NG")}
+                        </span>
+                        <button
+                          type="button"
+                          className="button quiet"
+                          onClick={() =>
+                            updateField(
+                              "promoEndsAt",
+                              new Date(
+                                Date.now() + 2 * 60 * 60 * 1000,
+                              ).toISOString(),
+                            )
+                          }
+                        >
+                          Restart two-hour timer
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </fieldset>
                 <fieldset>
-                  <legend>3. Specifications customers can trust</legend>
+                  <legend>4. Specifications customers can trust</legend>
                   <div className="form-two">
                     <label>
                       Brand
@@ -1304,7 +1380,7 @@ export function AdminCatalogue({
                   </label>
                 </fieldset>
                 <fieldset className="assistant-fields">
-                  <legend>3. Product assistant knowledge</legend>
+                  <legend>5. Product assistant knowledge</legend>
                   <p>
                     Only add approved customer-facing facts. Private supplier
                     details are never sent to the AI provider.
@@ -1336,7 +1412,7 @@ export function AdminCatalogue({
                   </label>
                 </fieldset>
                 <fieldset>
-                  <legend>4. Pricing, discount and stock</legend>
+                  <legend>6. Pricing, discount and stock</legend>
                   <div className="form-three">
                     <label>
                       Current selling price (₦)
@@ -1426,7 +1502,7 @@ export function AdminCatalogue({
                   </label>
                 </fieldset>
                 <fieldset className="private-fields">
-                  <legend>5. Private supplier information</legend>
+                  <legend>7. Private supplier information</legend>
                   <p>
                     These fields stay in the owner database and never appear on
                     the storefront.

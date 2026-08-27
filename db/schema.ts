@@ -63,6 +63,9 @@ export const products = pgTable("products", {
   supplierUrl: text("supplier_url"),
   pageTemplate: text("page_template").notNull().default("standard"),
   landingPageJson: text("landing_page_json").notNull().default("{}"),
+  promoEnabled: boolean("promo_enabled").notNull().default(false),
+  promoLabel: text("promo_label").notNull().default("PROMO"),
+  promoEndsAt: text("promo_ends_at").notNull().default(""),
   createdAt: text("created_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP::text`),

@@ -228,6 +228,9 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     chatbotFaq,
     pageTemplate: row.pageTemplate === "flexible" ? "flexible" : "standard",
     landingPage,
+    promoEnabled: row.promoEnabled,
+    promoLabel: row.promoLabel || "PROMO",
+    promoEndsAt: row.promoEndsAt,
   };
 }
 

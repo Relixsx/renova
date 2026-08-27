@@ -10,6 +10,7 @@ import {
 } from "../../components/storefront";
 import { ProductDeliveryCard } from "../../components/product-confidence";
 import { ProductMetaTracker } from "../../components/product-meta-tracker";
+import { ProductPromoBanner } from "../../components/product-promo-banner";
 import { categoryName, formatNaira, productHref } from "../../lib/catalog";
 import { getProduct, getProducts, getReviews } from "../../lib/server-catalog";
 import { absoluteUrl, SUPPORT_EMAIL } from "../../lib/site";
@@ -166,6 +167,11 @@ export default async function ProductPage({
       <section className="product-detail">
         <ProductGallery product={product} />
         <div className="product-info">
+          <ProductPromoBanner
+            enabled={product.promoEnabled}
+            label={product.promoLabel}
+            endsAt={product.promoEndsAt}
+          />
           <span className="product-category">
             {categoryName(product.categorySlug)} · {product.sku}
           </span>

@@ -10,6 +10,7 @@ import {
   type Review,
 } from "../lib/catalog";
 import { ProductGallery, ProductPurchase, StoreFooter } from "./storefront";
+import { ProductPromoBanner } from "./product-promo-banner";
 
 function Countdown({ endsAt }: { endsAt: string }) {
   const deadline = useMemo(() => new Date(endsAt).getTime(), [endsAt]);
@@ -93,6 +94,11 @@ export function FlexibleProductPage({
 
   return (
     <div className="flex-product-page" style={style}>
+      <ProductPromoBanner
+        enabled={product.promoEnabled}
+        label={product.promoLabel}
+        endsAt={product.promoEndsAt}
+      />
       {config.announcement.enabled && (
         <div className="flex-announcement">
           <b>{config.announcement.text}</b>

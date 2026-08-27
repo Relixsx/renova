@@ -354,6 +354,9 @@ export type Product = {
   chatbotFaq?: Array<{ question: string; answer: string }>;
   pageTemplate?: "standard" | "flexible";
   landingPage?: FlexibleProductPageConfig;
+  promoEnabled?: boolean;
+  promoLabel?: string;
+  promoEndsAt?: string;
 };
 
 export function productHref(product: Pick<Product, "slug" | "pageTemplate">) {

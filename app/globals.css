@@ -8511,6 +8511,190 @@ main,
   line-height: 1.2;
 }
 
+/* Product-level promotions: opt-in, time-bound and intentionally prominent. */
+.product-promo-banner {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  overflow: hidden;
+  border: 1px solid #ffb18f;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #fff8f3 0%, #fff0e7 55%, #fff8f3 100%);
+  box-shadow:
+    0 12px 30px rgba(224, 65, 25, 0.12),
+    0 0 0 1px rgba(255, 111, 56, 0.04);
+}
+.product-promo-banner::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -70% 45% -70% -20%;
+  background: radial-gradient(circle, rgba(255, 111, 56, 0.28), transparent 66%);
+  animation: promoGlow 2.4s ease-in-out infinite;
+}
+.product-promo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #e8441f;
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(198, 44, 16, 0.28);
+  letter-spacing: 0.075em;
+}
+.product-promo-badge span {
+  font-size: 17px;
+  animation: promoSpark 1.5s ease-in-out infinite;
+}
+.product-promo-badge strong {
+  font-size: 13px;
+  line-height: 1;
+}
+.product-promo-message b,
+.product-promo-message span {
+  display: block;
+}
+.product-promo-message b {
+  color: #78250f;
+  font-size: 14px;
+}
+.product-promo-message span {
+  margin-top: 2px;
+  color: #9a4e37;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.product-promo-timer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.product-promo-timer > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.product-promo-timer i {
+  color: #b33b1d;
+  font-size: 17px;
+  font-style: normal;
+  font-weight: 900;
+}
+.product-promo-timer span {
+  display: grid;
+  min-width: 42px;
+  min-height: 46px;
+  place-items: center;
+  padding: 5px 6px;
+  border: 1px solid #ffd1bf;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(120, 37, 15, 0.08);
+}
+.product-promo-timer b {
+  color: #762008;
+  font-size: 17px;
+  line-height: 1;
+}
+.product-promo-timer small {
+  margin-top: 4px;
+  color: #a45942;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.promo-admin-fields > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+.promo-admin-toggle {
+  padding: 14px;
+  border: 1px solid #ffc5ae;
+  border-radius: 10px;
+  background: #fff7f2;
+}
+.promo-admin-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.promo-admin-active > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.promo-admin-active > div span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.promo-admin-active .button {
+  min-height: 38px;
+  margin-top: 4px;
+}
+@keyframes promoGlow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-4%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(18%);
+  }
+}
+@keyframes promoSpark {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.88) rotate(-8deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12) rotate(8deg);
+  }
+}
+@media (max-width: 700px) {
+  .product-promo-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 12px;
+  }
+  .product-promo-message span {
+    display: none;
+  }
+  .product-promo-timer {
+    grid-column: 1 / -1;
+    justify-content: center;
+    padding-top: 2px;
+  }
+  .product-promo-timer span {
+    min-width: 54px;
+  }
+  .promo-admin-active {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-promo-banner::before,
+  .product-promo-badge span {
+    animation: none;
+  }
+}
+
 /* Flexible, campaign-focused product pages */
 .flex-product-page {
   --flex-bg: #fff;

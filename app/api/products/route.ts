@@ -65,6 +65,14 @@ function parseFaq(value: unknown) {
     .filter((item) => item.question && item.answer);
 }
 
+function promoDeadline(enabled: boolean, value: unknown) {
+  if (!enabled) return "";
+  const parsed = new Date(String(value ?? "")).getTime();
+  return Number.isFinite(parsed) && parsed > Date.now()
+    ? new Date(parsed).toISOString()
+    : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+}
+
 export async function GET(request: Request) {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
@@ -105,6 +113,7 @@ export async function POST(request: Request) {
       payload.paymentMode === "cash_on_delivery"
         ? "cash_on_delivery"
         : "prepaid";
+    const promoEnabled = Boolean(payload.promoEnabled);
     const variants = Array.isArray(payload.variants)
       ? payload.variants
           .map(String)
@@ -171,6 +180,9 @@ export async function POST(request: Request) {
             ? payload.landingPage
             : {},
         ),
+        promoEnabled,
+        promoLabel: String(payload.promoLabel ?? "PROMO").trim() || "PROMO",
+        promoEndsAt: promoDeadline(promoEnabled, payload.promoEndsAt),
       })
       .returning();
 
@@ -271,6 +283,18 @@ export async function PATCH(request: Request) {
           ? payload.landingPage
           : {},
       );
+    if (payload.promoEnabled !== undefined) {
+      updates.promoEnabled = Boolean(payload.promoEnabled);
+      updates.promoEndsAt = promoDeadline(
+        updates.promoEnabled,
+        payload.promoEndsAt,
+      );
+    } else if (payload.promoEndsAt !== undefined) {
+      updates.promoEndsAt = String(payload.promoEndsAt ?? "");
+    }
+    if (payload.promoLabel !== undefined)
+      updates.promoLabel =
+        String(payload.promoLabel ?? "PROMO").trim() || "PROMO";
     if (typeof payload.isPublished === "boolean")
       updates.isPublished = payload.isPublished;
     if (typeof payload.isFeatured === "boolean")
