@@ -40,10 +40,8 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
       className="product-promo-banner"
       aria-label={`${label || "Promo"}. Offer ends in ${hours} hours, ${minutes} minutes.`}
     >
-      <span className="product-promo-glitters" aria-hidden="true">
-        {Array.from({ length: 8 }, (_, index) => (
-          <i key={index}>✦</i>
-        ))}
+      <span className="product-promo-glitter" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, index) => <i key={index}>✦</i>)}
       </span>
       <div className="product-promo-badge">
         <span aria-hidden="true">✦</span>
