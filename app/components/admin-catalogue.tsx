@@ -1198,9 +1198,8 @@ export function AdminCatalogue({
                 <fieldset className="promo-admin-fields">
                   <legend>3. Optional product promotion</legend>
                   <p>
-                    Add a prominent promotional banner and a real two-hour
-                    countdown to this product page. Products remain unchanged
-                    when this is switched off.
+                    Add a prominent promotional banner with a recurring
+                    two-hour cycle. It continues until you switch it off.
                   </p>
                   <label className="check-row promo-admin-toggle">
                     <input
@@ -1222,7 +1221,7 @@ export function AdminCatalogue({
                     <span>
                       <b>Show animated promo</b>
                       <small>
-                        Displays only on this product while its timer is active.
+                        Displays only on this product and refreshes every two hours.
                       </small>
                     </span>
                   </label>
@@ -1240,7 +1239,7 @@ export function AdminCatalogue({
                         />
                       </label>
                       <div>
-                        <b>Fixed two-hour countdown</b>
+                        <b>Recurring two-hour promo cycle</b>
                         <span>
                           Ends {new Date(form.promoEndsAt).toLocaleString("en-NG")}
                         </span>
@@ -1256,7 +1255,7 @@ export function AdminCatalogue({
                             )
                           }
                         >
-                          Restart two-hour timer
+                          Restart current two-hour cycle
                         </button>
                       </div>
                     </div>

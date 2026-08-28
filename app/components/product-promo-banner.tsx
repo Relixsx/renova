@@ -14,7 +14,18 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
 
   useEffect(() => {
     if (!enabled || !Number.isFinite(deadline)) return;
-    const update = () => setRemaining(Math.max(0, deadline - Date.now()));
+    const cycleLength = 2 * 60 * 60 * 1000;
+    const update = () => {
+      const untilFirstDeadline = deadline - Date.now();
+      if (untilFirstDeadline > 0) {
+        setRemaining(untilFirstDeadline);
+        return;
+      }
+
+      const elapsedSinceDeadline = Math.abs(untilFirstDeadline);
+      const elapsedInCycle = elapsedSinceDeadline % cycleLength;
+      setRemaining(elapsedInCycle === 0 ? cycleLength : cycleLength - elapsedInCycle);
+    };
     const initialTimer = window.setTimeout(update, 0);
     const timer = window.setInterval(update, 1000);
     return () => {
@@ -23,7 +34,7 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
     };
   }, [deadline, enabled]);
 
-  if (!enabled || !Number.isFinite(deadline) || remaining === 0) return null;
+  if (!enabled || !Number.isFinite(deadline)) return null;
 
   const total = Math.max(0, Math.floor((remaining ?? 0) / 1000));
   const hours = Math.floor(total / 3600);
@@ -38,7 +49,7 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
   return (
     <aside
       className="product-promo-banner"
-      aria-label={`${label || "Promo"}. Offer ends in ${hours} hours, ${minutes} minutes.`}
+      aria-label={`${label || "Promo"}. ${hours} hours and ${minutes} minutes remain in the current promotion cycle.`}
     >
       <span className="product-promo-glitter" aria-hidden="true">
         {Array.from({ length: 8 }, (_, index) => <i key={index}>✦</i>)}
@@ -46,10 +57,6 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
       <div className="product-promo-badge">
         <span aria-hidden="true">✦</span>
         <strong>{label || "PROMO"}</strong>
-      </div>
-      <div className="product-promo-message">
-        <b>Limited-time offer</b>
-        <span>Offer closes when the timer reaches zero</span>
       </div>
       <div className="product-promo-timer" aria-hidden="true">
         {units.map(([value, unit], index) => (
@@ -61,6 +68,9 @@ export function ProductPromoBanner({ enabled, label, endsAt }: Props) {
             </span>
           </div>
         ))}
+      </div>
+      <div className="product-promo-message">
+        <b>Limited-time offer</b>
       </div>
     </aside>
   );

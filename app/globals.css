@@ -8161,7 +8161,7 @@ main,
 }
 .product-return-highlight {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   margin: 15px 0;
@@ -8584,6 +8584,9 @@ main,
 .product-promo-message span {
   display: block;
 }
+.product-promo-message {
+  text-align: center;
+}
 .product-promo-message b {
   color: #78250f;
   font-size: 14px;
@@ -8695,18 +8698,22 @@ main,
 }
 @media (max-width: 700px) {
   .product-promo-banner {
-    grid-template-columns: minmax(104px, 0.85fr) minmax(0, 1.15fr);
-    gap: 8px 10px;
-    width: calc(100% - 20px);
-    padding: 10px 12px;
+    grid-template-columns: 82px minmax(116px, auto) minmax(82px, 1fr);
+    gap: 6px;
+    width: calc(100% - 28px);
+    padding: 8px;
     margin-top: 2px;
     margin-bottom: 14px;
-    border-radius: 12px;
+    border-radius: 11px;
+    box-shadow:
+      0 7px 18px rgba(199, 126, 0, 0.14),
+      0 0 11px rgba(255, 190, 44, 0.2);
   }
   .product-promo-badge {
     justify-self: center;
-    min-height: 36px;
-    padding: 7px 10px;
+    min-height: 34px;
+    padding: 6px 8px;
+    gap: 5px;
   }
   .product-promo-badge span {
     font-size: 15px;
@@ -8719,39 +8726,62 @@ main,
     text-align: center;
   }
   .product-promo-message b {
-    font-size: 13px;
+    font-size: 11px;
+    line-height: 1.15;
   }
   .product-promo-message span {
     display: block;
-    max-width: 170px;
+    max-width: 102px;
     margin-top: 1px;
-    font-size: 9.5px;
-    line-height: 1.25;
+    font-size: 7.5px;
+    line-height: 1.2;
   }
   .product-promo-timer {
-    grid-column: 1 / -1;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
     padding-top: 0;
   }
+  .product-promo-timer > div {
+    gap: 1px;
+  }
   .product-promo-timer span {
-    min-width: 46px;
-    min-height: 40px;
-    padding: 4px 5px;
-    border-radius: 8px;
+    min-width: 34px;
+    min-height: 38px;
+    padding: 4px 3px;
+    border-radius: 7px;
   }
   .product-promo-timer b {
-    font-size: 15px;
+    font-size: 14px;
   }
   .product-promo-timer small {
     margin-top: 3px;
     font-size: 7px;
   }
   .product-promo-timer i {
-    font-size: 15px;
+    font-size: 12px;
   }
   .promo-admin-active {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 370px) {
+  .product-promo-banner {
+    grid-template-columns: 74px minmax(106px, auto) minmax(72px, 1fr);
+    width: calc(100% - 20px);
+    gap: 4px;
+    padding: 7px 6px;
+  }
+  .product-promo-badge {
+    padding-inline: 6px;
+  }
+  .product-promo-badge strong {
+    font-size: 11px;
+  }
+  .product-promo-message span {
+    font-size: 7px;
+  }
+  .product-promo-timer span {
+    min-width: 31px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
