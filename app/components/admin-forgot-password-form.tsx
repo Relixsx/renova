@@ -2,9 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { createAuthClient } from "@neondatabase/auth/next";
-
-const authClient = createAuthClient();
 
 export function AdminForgotPasswordForm() {
   const [message, setMessage] = useState("");
@@ -19,17 +16,28 @@ export function AdminForgotPasswordForm() {
 
     const data = new FormData(event.currentTarget);
     const email = String(data.get("email") || "").trim().toLowerCase();
-    const result = await authClient.requestPasswordReset({
-      email,
-      redirectTo: `${window.location.origin}/admin/reset-password`,
-    });
-
-    setBusy(false);
-    if (result.error) {
-      setError(result.error.message || "We could not send the recovery email. Please try again.");
+    try {
+      const response = await fetch("/api/admin/password-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request",
+          email,
+          redirectTo: `${window.location.origin}/admin/reset-password`,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "The recovery service did not respond.");
+    } catch (requestError) {
+      setError(requestError instanceof Error && requestError.name !== "TimeoutError"
+        ? requestError.message
+        : "The recovery request timed out. Please try again in a moment.");
+      setBusy(false);
       return;
     }
 
+    setBusy(false);
     // Use the same response whether or not an account exists so the form does
     // not disclose which email addresses have administrative access.
     setMessage("If this email belongs to your Renova account, a secure reset link has been sent. Check your inbox and spam folder.");

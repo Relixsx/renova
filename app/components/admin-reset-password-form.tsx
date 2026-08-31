@@ -2,9 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { createAuthClient } from "@neondatabase/auth/next";
-
-const authClient = createAuthClient();
 
 export function AdminResetPasswordForm() {
   const [token, setToken] = useState("");
@@ -33,13 +30,24 @@ export function AdminResetPasswordForm() {
       return;
     }
 
-    const result = await authClient.resetPassword({ newPassword: password, token });
-    setBusy(false);
-    if (result.error) {
-      setError(result.error.message || "This reset link is invalid or has expired. Request a new link.");
+    try {
+      const response = await fetch("/api/admin/password-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset", newPassword: password, token }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "This reset link is invalid or has expired.");
+    } catch (requestError) {
+      setError(requestError instanceof Error && requestError.name !== "TimeoutError"
+        ? requestError.message
+        : "The password update timed out. Please request a new link and try again.");
+      setBusy(false);
       return;
     }
 
+    setBusy(false);
     window.location.assign("/admin/login?passwordReset=success");
   }
 
