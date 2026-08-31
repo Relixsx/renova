@@ -33,8 +33,34 @@ export async function POST(request: Request) {
     if (body.action === "request") {
       const email = String(body.email || "").trim().toLowerCase();
       const redirectTo = String(body.redirectTo || "");
+      let redirectUrl: URL;
 
-      if (!email || !redirectTo.startsWith(`${origin}/admin/reset-password`)) {
+      try {
+        redirectUrl = new URL(redirectTo);
+      } catch {
+        return Response.json({ error: "The recovery request is invalid." }, { status: 400 });
+      }
+
+      // Render receives the request behind Cloudflare, so request.url may use
+      // Render's internal origin while redirectTo correctly uses ShopRenova.
+      // Validate the public hostname forwarded by the proxies and the exact
+      // recovery path instead of requiring both origins to be identical.
+      const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+      const requestHost = request.headers.get("host")?.trim();
+      const configuredSiteHost = process.env.NEXT_PUBLIC_SITE_URL
+        ? new URL(process.env.NEXT_PUBLIC_SITE_URL).host
+        : "";
+      const allowedHosts = new Set([
+        new URL(request.url).host,
+        forwardedHost,
+        requestHost,
+        configuredSiteHost,
+        "shoprenova.com.ng",
+        "www.shoprenova.com.ng",
+        "localhost:5173",
+      ].filter(Boolean));
+
+      if (!email || redirectUrl.pathname !== "/admin/reset-password" || !allowedHosts.has(redirectUrl.host)) {
         return Response.json({ error: "The recovery request is invalid." }, { status: 400 });
       }
 
@@ -42,7 +68,7 @@ export async function POST(request: Request) {
       // recovery form from revealing which addresses have owner access.
       if (!ownerEmails().has(email)) return Response.json({ ok: true });
 
-      const response = await forwardToNeon("request-password-reset", { email, redirectTo }, origin);
+      const response = await forwardToNeon("request-password-reset", { email, redirectTo }, redirectUrl.origin);
       if (!response.ok) {
         const message = await response.text();
         console.error("Neon password-reset request failed.", response.status, message);
