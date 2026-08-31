@@ -22,13 +22,22 @@ export function AdminLoginForm() {
     setBusy(true);
     setError("");
     const data = new FormData(event.currentTarget);
-    const result = await authClient.signIn.email({
-      email: String(data.get("email") || "").trim(),
-      password: String(data.get("password") || ""),
-      callbackURL: "/admin",
-    });
-    if (result.error) {
-      setError(result.error.message || "The email or password is incorrect.");
+    try {
+      const result = await authClient.signIn.email({
+        email: String(data.get("email") || "").trim(),
+        password: String(data.get("password") || ""),
+        callbackURL: "/admin",
+        fetchOptions: { signal: AbortSignal.timeout(20_000) },
+      });
+      if (result.error) {
+        setError(result.error.message || "The email or password is incorrect.");
+        setBusy(false);
+        return;
+      }
+    } catch (signInError) {
+      setError(signInError instanceof Error && signInError.name !== "TimeoutError"
+        ? signInError.message
+        : "The sign-in request timed out. Please try again in a moment.");
       setBusy(false);
       return;
     }

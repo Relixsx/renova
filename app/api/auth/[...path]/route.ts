@@ -3,11 +3,12 @@ import { getAuth } from "../../../lib/admin-auth";
 export const dynamic = "force-dynamic";
 
 type AuthHandlerName = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+type AuthRouteContext = { params: Promise<{ path: string[] }> };
 
 function handle(method: AuthHandlerName) {
-  return async (request: Request) => {
+  return async (request: Request, context: AuthRouteContext) => {
     const handler = getAuth().handler()[method];
-    return handler(request);
+    return handler(request, context);
   };
 }
 
