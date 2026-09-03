@@ -14,6 +14,7 @@ import {
   type Review,
 } from "../lib/catalog";
 import { FlexiblePageEditor } from "./flexible-page-editor";
+import exportStyles from "./order-export-controls.module.css";
 
 type AdminOrder = {
   id: number;
@@ -1007,6 +1008,19 @@ export function AdminCatalogue({
               <span className="eyebrow">Fulfilment</span>
               <h2>Recent orders</h2>
             </div>
+            <form className={exportStyles.controls} action="/api/orders/export" method="get">
+              <label className={exportStyles.field}>
+                <span>Start date</span>
+                <input name="startDate" type="date" required />
+              </label>
+              <label className={exportStyles.field}>
+                <span>End date</span>
+                <input name="endDate" type="date" required />
+              </label>
+              <button className="button espresso" type="submit">
+                Download Excel
+              </button>
+            </form>
           </div>
           {orderMessage && (
             <p className="admin-order-message">{orderMessage}</p>
