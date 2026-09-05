@@ -125,3 +125,39 @@ export const orders = pgTable("orders", {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP::text`),
 });
+
+export const orderReminders = pgTable(
+  "order_reminders",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id").notNull(),
+    active: boolean("active").notNull().default(false),
+    consentConfirmed: boolean("consent_confirmed").notNull().default(false),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),
+    smsEnabled: boolean("sms_enabled").notNull().default(false),
+    currentCheckpoint: text("current_checkpoint").notNull().default("Shipped and in transit"),
+    deliveryEstimate: text("delivery_estimate").notNull().default(""),
+    customerNote: text("customer_note").notNull().default(""),
+    intervalHours: integer("interval_hours").notNull().default(24),
+    startedAt: text("started_at"),
+    lastSentAt: text("last_sent_at"),
+    nextSendAt: text("next_send_at"),
+    stoppedAt: text("stopped_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [uniqueIndex("order_reminders_order_unique").on(table.orderId)],
+);
+
+export const orderReminderLogs = pgTable("order_reminder_logs", {
+  id: serial("id").primaryKey(),
+  reminderId: integer("reminder_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  channel: text("channel").notNull(),
+  status: text("status").notNull(),
+  providerMessageId: text("provider_message_id"),
+  errorMessage: text("error_message"),
+  checkpoint: text("checkpoint").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+});

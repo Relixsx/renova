@@ -15,15 +15,19 @@ import {
 } from "../lib/catalog";
 import { FlexiblePageEditor } from "./flexible-page-editor";
 import exportStyles from "./order-export-controls.module.css";
+import { CustomerReminderBot } from "./customer-reminder-bot";
 
 type AdminOrder = {
   id: number;
   orderNumber: string;
   customerName: string;
+  customerEmail: string;
+  customerPhone: string;
   paymentStatus: string;
   paymentMethod?: string;
   status: string;
   totalKobo: number;
+  estimatedDelivery?: string | null;
   createdAt: string;
 };
 const emptyForm = {
@@ -754,6 +758,9 @@ export function AdminCatalogue({
           <a href="#orders">
             <span>▤</span>Orders <i>{orderRows.length}</i>
           </a>
+          <a href="#reminders">
+            <span>◷</span>Reminders
+          </a>
           <a href="#reviews">
             <span>☆</span>Reviews <i>{reviews.length}</i>
           </a>
@@ -1075,6 +1082,7 @@ export function AdminCatalogue({
             </div>
           )}
         </section>
+        <CustomerReminderBot orders={orderRows} />
       </main>
 
       {productModalOpen && (
