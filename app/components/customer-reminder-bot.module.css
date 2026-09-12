@@ -1,7 +1,10 @@
 .panel {
   margin-top: 28px;
+  overflow: hidden;
   border: 1px solid var(--line);
+  border-radius: 14px;
   background: #fff;
+  box-shadow: 0 10px 30px rgba(50, 28, 19, 0.04);
 }
 
 .head {

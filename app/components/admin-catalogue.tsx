@@ -16,6 +16,11 @@ import {
 import { FlexiblePageEditor } from "./flexible-page-editor";
 import exportStyles from "./order-export-controls.module.css";
 import { CustomerReminderBot } from "./customer-reminder-bot";
+import { AIProductAssistant } from "./ai-product-assistant";
+import type {
+  AIProductAssistantValues,
+  AIProductListing,
+} from "../lib/ai-product-listing";
 
 type AdminOrder = {
   id: number;
@@ -208,18 +213,110 @@ function rawProduct(raw: Record<string, unknown>): Product {
   return product;
 }
 
+export type AdminSection =
+  | "overview"
+  | "products"
+  | "ai-listing"
+  | "categories"
+  | "orders"
+  | "reminders"
+  | "reviews";
+
+const adminNavigation: Array<{
+  label: string;
+  items: Array<{
+    section: AdminSection;
+    href: string;
+    icon: string;
+    label: string;
+  }>;
+}> = [
+  {
+    label: "Workspace",
+    items: [
+      { section: "overview", href: "/admin", icon: "⌂", label: "Overview" },
+    ],
+  },
+  {
+    label: "Commerce",
+    items: [
+      { section: "products", href: "/admin/products", icon: "□", label: "Products" },
+      { section: "categories", href: "/admin/categories", icon: "⌘", label: "Categories" },
+      { section: "orders", href: "/admin/orders", icon: "▤", label: "Orders" },
+    ],
+  },
+  {
+    label: "Automation",
+    items: [
+      { section: "ai-listing", href: "/admin/ai-listing", icon: "✦", label: "AI listing" },
+      { section: "reminders", href: "/admin/reminders", icon: "◷", label: "Reminders" },
+    ],
+  },
+  {
+    label: "Customer trust",
+    items: [
+      { section: "reviews", href: "/admin/reviews", icon: "☆", label: "Reviews" },
+    ],
+  },
+];
+
+const sectionDetails: Record<
+  AdminSection,
+  { eyebrow: string; title: string; description: string }
+> = {
+  overview: {
+    eyebrow: "Owner workspace",
+    title: "Overview",
+    description: "A clear view of your store and the work that needs attention.",
+  },
+  products: {
+    eyebrow: "Catalogue",
+    title: "Products",
+    description: "Search, edit, preview and publish products from one focused page.",
+  },
+  "ai-listing": {
+    eyebrow: "Listing automation",
+    title: "AI Product Assistant",
+    description: "Prepare a draft from one to three images, then review it in the normal product form.",
+  },
+  categories: {
+    eyebrow: "Catalogue structure",
+    title: "Categories",
+    description: "Choose a department, add a product there or open its filtered catalogue.",
+  },
+  orders: {
+    eyebrow: "Fulfilment",
+    title: "Orders",
+    description: "Review incoming orders, update fulfilment status and export a selected date range.",
+  },
+  reminders: {
+    eyebrow: "Customer communication",
+    title: "Delivery reminders",
+    description: "Manage verified daily delivery updates without mixing them into the order list.",
+  },
+  reviews: {
+    eyebrow: "Trust and feedback",
+    title: "Product reviews",
+    description: "Add, edit and remove customer reviews from a dedicated workspace.",
+  },
+};
+
 export function AdminCatalogue({
   initialProducts,
   initialReviews,
   initialOrders,
   categories,
   ownerName,
+  activeSection = "overview",
+  initialCategory = "all",
 }: {
   initialProducts: Product[];
   initialReviews: Review[];
   initialOrders: AdminOrder[];
   categories: Category[];
   ownerName: string;
+  activeSection?: AdminSection;
+  initialCategory?: string;
 }) {
   const [products, setProducts] = useState(initialProducts);
   const [reviews, setReviews] = useState(initialReviews);
@@ -257,8 +354,14 @@ export function AdminCatalogue({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(
+    initialCategory === "all" ||
+      categories.some((category) => category.slug === initialCategory)
+      ? initialCategory
+      : "all",
+  );
   const [search, setSearch] = useState("");
+  const pageDetails = sectionDetails[activeSection];
 
   async function updateOrderStatus(order: AdminOrder, status: string) {
     setOrderMessage(`Updating ${order.orderNumber}…`);
@@ -329,6 +432,115 @@ export function AdminCatalogue({
     setLocalPreview("");
     resetStudio();
     setMessage("");
+    setProductModalOpen(true);
+  }
+  async function applyAiListing({
+    listing,
+    images,
+    primaryImageIndex,
+    values,
+  }: {
+    listing: AIProductListing;
+    images: File[];
+    primaryImageIndex: number;
+    values: AIProductAssistantValues;
+  }) {
+    if (!images.length) {
+      throw new Error("Choose at least one product image before opening the form.");
+    }
+    const specifications = listing.specifications
+      .map((item) => `${item.name}: ${item.value}`)
+      .join("\n");
+    const chatbotFaq = listing.chatbotFaq
+      .map((item) => `${item.question} | ${item.answer}`)
+      .join("\n");
+    const safePrimaryIndex = Math.min(
+      Math.max(primaryImageIndex, 0),
+      images.length - 1,
+    );
+    const selectedCover = images[safePrimaryIndex];
+    const selectedGallery = images.filter(
+      (_image, index) => index !== safePrimaryIndex,
+    );
+    const preparedImages: File[] = [];
+    let usedOriginal = false;
+    for (const image of images) {
+      try {
+        preparedImages.push(await optimizeProductImage(image));
+      } catch {
+        preparedImages.push(image);
+        usedOriginal = true;
+      }
+    }
+    const preparedCover = preparedImages[safePrimaryIndex] ?? selectedCover;
+    const preparedGallery = preparedImages.length
+      ? preparedImages.filter((_image, index) => index !== safePrimaryIndex)
+      : selectedGallery;
+
+    setEditingId(null);
+    setForm({
+      ...emptyForm,
+      name: listing.name,
+      categorySlug: listing.categorySlug,
+      shortDescription: listing.shortDescription,
+      description: listing.description,
+      priceNaira: values.sellingPrice,
+      compareAtNaira: values.promoEnabled ? values.compareAtPrice : "",
+      supplierCostNaira: values.costPrice,
+      stock: values.stock || "0",
+      paymentMode: values.paymentMode,
+      variants: listing.variants.join(", ") || "Standard",
+      badge: listing.badge,
+      supplierName: listing.supplierName,
+      supplierUrl: values.supplierUrl,
+      brand: listing.brand,
+      model: listing.model,
+      materials: listing.materials,
+      dimensions: listing.dimensions,
+      weight: listing.weight,
+      colour: listing.colour,
+      size: listing.size,
+      warranty: listing.warranty,
+      packageContents: listing.packageContents,
+      countryOfOrigin: listing.countryOfOrigin,
+      careInstructions: listing.careInstructions,
+      compatibility: listing.compatibility,
+      specifications,
+      chatbotKnowledge: listing.chatbotKnowledge,
+      chatbotFaq,
+      promoEnabled: values.promoEnabled,
+      promoLabel: values.promoLabel.trim() || "PROMO",
+      promoEndsAt: values.promoEnabled
+        ? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+        : "",
+      isPublished: false,
+    });
+    setLandingPage(
+      defaultFlexibleProductPage({
+        name: listing.name,
+        categorySlug: listing.categorySlug,
+        shortDescription: listing.shortDescription,
+        description: listing.description,
+      }),
+    );
+    setPrimaryFile(preparedCover);
+    setGalleryFiles(preparedGallery);
+    setExistingGallery([]);
+    setOriginalCoverPreview(
+      selectedCover ? URL.createObjectURL(selectedCover) : "",
+    );
+    setLocalPreview(preparedCover ? URL.createObjectURL(preparedCover) : "");
+    setEnhancedCoverUrl("");
+    setEnhancedGalleryUrls({});
+    setAiStudioEnabled(false);
+    setMessage(
+      "AI draft prepared. Verify every field, set any missing price or stock, then save as a draft or publish.",
+    );
+    setStudioStatus(
+      usedOriginal
+        ? "Draft images are ready. One image could not be optimized, so its original will be used."
+        : "Draft images are optimized and ready. AI photo enhancement remains optional.",
+    );
     setProductModalOpen(true);
   }
   function openEdit(product: Product) {
@@ -745,25 +957,34 @@ export function AdminCatalogue({
             <small>OWNER CONSOLE</small>
           </span>
         </Link>
-        <nav>
-          <a className="active" href="#overview">
-            <span>⌂</span>Overview
-          </a>
-          <a href="#categories">
-            <span>⌘</span>Categories
-          </a>
-          <a href="#catalogue">
-            <span>□</span>Products
-          </a>
-          <a href="#orders">
-            <span>▤</span>Orders <i>{orderRows.length}</i>
-          </a>
-          <a href="#reminders">
-            <span>◷</span>Reminders
-          </a>
-          <a href="#reviews">
-            <span>☆</span>Reviews <i>{reviews.length}</i>
-          </a>
+        <nav aria-label="Owner console">
+          {adminNavigation.map((group) => (
+            <div className="admin-nav-group" key={group.label}>
+              <small>{group.label}</small>
+              {group.items.map((item) => {
+                const count =
+                  item.section === "orders"
+                    ? orderRows.length
+                    : item.section === "reviews"
+                      ? reviews.length
+                      : null;
+                return (
+                  <Link
+                    className={activeSection === item.section ? "active" : ""}
+                    href={item.href}
+                    aria-current={
+                      activeSection === item.section ? "page" : undefined
+                    }
+                    key={item.section}
+                  >
+                    <span aria-hidden="true">{item.icon}</span>
+                    {item.label}
+                    {count !== null && <i>{count}</i>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="admin-sidebar-foot">
           <span className="status-dot" />
@@ -773,50 +994,91 @@ export function AdminCatalogue({
       <main className="admin-main">
         <header className="admin-topbar">
           <div>
-            <span className="eyebrow">Owner workspace</span>
-            <h1>Good day, {ownerName.split(" ")[0]}.</h1>
+            <span className="eyebrow">{pageDetails.eyebrow}</span>
+            <h1>
+              {activeSection === "overview"
+                ? `Good day, ${ownerName.split(" ")[0]}.`
+                : pageDetails.title}
+            </h1>
+            <p>{pageDetails.description}</p>
           </div>
-          <button className="button primary" onClick={() => openNew()}>
-            ＋ New product
-          </button>
+          {(activeSection === "overview" ||
+            activeSection === "products" ||
+            activeSection === "categories" ||
+            activeSection === "ai-listing") && (
+            <button className="button primary" onClick={() => openNew()}>
+              ＋ New product
+            </button>
+          )}
         </header>
-        <section className="admin-notice">
-          <b>Owner-only catalogue control</b>
-          <span>
-            Add or edit products by department, upload product images or videos,
-            control stock and pricing, and manage approved customer reviews.
-          </span>
-        </section>
-        <section id="overview" className="admin-metrics">
-          <article>
-            <span>Published products</span>
-            <strong>
-              {products.filter((item) => item.isPublished).length}
-            </strong>
-            <small>Across {categories.length} departments</small>
-          </article>
-          <article>
-            <span>Catalogue value</span>
-            <strong>{formatNaira(revenueEstimate)}</strong>
-            <small>Current inventory estimate</small>
-          </article>
-          <article>
-            <span>Paid orders</span>
-            <strong>
-              {
-                orderRows.filter((order) => order.paymentStatus === "paid")
-                  .length
-              }
-            </strong>
-            <small>Verified prepaid orders</small>
-          </article>
-          <article>
-            <span>Needs attention</span>
-            <strong>{products.filter((item) => item.stock < 10).length}</strong>
-            <small>Low-stock products</small>
-          </article>
-        </section>
+        {activeSection === "overview" && (
+          <>
+            <section className="admin-notice">
+              <b>Owner-only workspace</b>
+              <span>
+                Each business function now has its own focused page. Your
+                existing catalogue, orders and publishing workflow remain the
+                source of truth.
+              </span>
+            </section>
+            <section id="overview" className="admin-metrics">
+              <article>
+                <span>Published products</span>
+                <strong>
+                  {products.filter((item) => item.isPublished).length}
+                </strong>
+                <small>Across {categories.length} departments</small>
+              </article>
+              <article>
+                <span>Catalogue value</span>
+                <strong>{formatNaira(revenueEstimate)}</strong>
+                <small>Current inventory estimate</small>
+              </article>
+              <article>
+                <span>Paid orders</span>
+                <strong>
+                  {
+                    orderRows.filter((order) => order.paymentStatus === "paid")
+                      .length
+                  }
+                </strong>
+                <small>Verified prepaid orders</small>
+              </article>
+              <article>
+                <span>Needs attention</span>
+                <strong>
+                  {products.filter((item) => item.stock < 10).length}
+                </strong>
+                <small>Low-stock products</small>
+              </article>
+            </section>
+            <section className="admin-dashboard-grid" aria-label="Admin areas">
+              {adminNavigation
+                .flatMap((group) => group.items)
+                .filter((item) => item.section !== "overview")
+                .map((item) => (
+                  <Link href={item.href} key={item.section}>
+                    <span aria-hidden="true">{item.icon}</span>
+                    <div>
+                      <b>{item.label}</b>
+                      <small>{sectionDetails[item.section].description}</small>
+                    </div>
+                    <i aria-hidden="true">→</i>
+                  </Link>
+                ))}
+            </section>
+          </>
+        )}
 
+        {activeSection === "ai-listing" && (
+          <AIProductAssistant
+            categories={categories}
+            products={products}
+            onApply={applyAiListing}
+          />
+        )}
+
+        {activeSection === "categories" && (
         <section className="admin-panel" id="categories">
           <div className="admin-panel-head">
             <div>
@@ -842,23 +1104,20 @@ export function AdminCatalogue({
                   <button onClick={() => openNew(category.slug)}>
                     ＋ Add here
                   </button>
-                  <button
+                  <Link
                     className="category-view"
-                    onClick={() => {
-                      setFilter(category.slug);
-                      document
-                        .getElementById("catalogue")
-                        ?.scrollIntoView({ behavior: "smooth" });
-                    }}
+                    href={`/admin/products?category=${encodeURIComponent(category.slug)}`}
                   >
                     Manage
-                  </button>
+                  </Link>
                 </article>
               );
             })}
           </div>
         </section>
+        )}
 
+        {activeSection === "products" && (
         <section className="admin-panel" id="catalogue">
           <div className="admin-panel-head">
             <div>
@@ -940,7 +1199,9 @@ export function AdminCatalogue({
             </p>
           )}
         </section>
+        )}
 
+        {activeSection === "reviews" && (
         <section className="admin-panel" id="reviews">
           <div className="admin-panel-head">
             <div>
@@ -1009,6 +1270,9 @@ export function AdminCatalogue({
             ))}
           </div>
         </section>
+        )}
+
+        {activeSection === "orders" && (
         <section className="admin-panel" id="orders">
           <div className="admin-panel-head">
             <div>
@@ -1034,41 +1298,52 @@ export function AdminCatalogue({
           )}
           {orderRows.length ? (
             <div className="admin-order-list">
+              <div className="admin-order-heading" aria-hidden="true">
+                <span>Order</span>
+                <span>Customer</span>
+                <span>Total</span>
+                <span>Payment</span>
+                <span>Date</span>
+                <span>Fulfilment</span>
+              </div>
               {orderRows.slice(0, 20).map((order) => (
                 <article key={order.id}>
-                  <b>{order.orderNumber}</b>
-                  <span>{order.customerName}</span>
-                  <span>{formatNaira(order.totalKobo)}</span>
-                  <i>
+                  <b data-label="Order">{order.orderNumber}</b>
+                  <span data-label="Customer">{order.customerName}</span>
+                  <span data-label="Total">{formatNaira(order.totalKobo)}</span>
+                  <i data-label="Payment">
                     {order.paymentMethod === "cash_on_delivery"
                       ? "Pay on delivery"
                       : order.paymentStatus}
                   </i>
-                  <small>
+                  <small data-label="Date">
                     {new Date(order.createdAt).toLocaleDateString("en-NG")}
                   </small>
-                  <select
-                    aria-label={`Status for ${order.orderNumber}`}
-                    value={order.status}
-                    onChange={(event) =>
-                      updateOrderStatus(order, event.target.value)
-                    }
-                  >
-                    {[
-                      "confirmed",
-                      "processing",
-                      "packaged",
-                      "dispatched",
-                      "delivered",
-                      "refunded",
-                    ].map((status) => (
-                      <option value={status} key={status}>
-                        {status.replace(/^./, (character) =>
-                          character.toUpperCase(),
-                        )}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="admin-order-status">
+                    <span>Fulfilment</span>
+                    <select
+                      aria-label={`Status for ${order.orderNumber}`}
+                      value={order.status}
+                      onChange={(event) =>
+                        updateOrderStatus(order, event.target.value)
+                      }
+                    >
+                      {[
+                        "confirmed",
+                        "processing",
+                        "packaged",
+                        "dispatched",
+                        "delivered",
+                        "refunded",
+                      ].map((status) => (
+                        <option value={status} key={status}>
+                          {status.replace(/^./, (character) =>
+                            character.toUpperCase(),
+                          )}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </article>
               ))}
             </div>
@@ -1082,7 +1357,11 @@ export function AdminCatalogue({
             </div>
           )}
         </section>
-        <CustomerReminderBot orders={orderRows} />
+        )}
+
+        {activeSection === "reminders" && (
+          <CustomerReminderBot orders={orderRows} />
+        )}
       </main>
 
       {productModalOpen && (
@@ -1403,8 +1682,9 @@ export function AdminCatalogue({
                 <fieldset className="assistant-fields">
                   <legend>5. Product assistant knowledge</legend>
                   <p>
-                    Only add approved customer-facing facts. Private supplier
-                    details are never sent to the AI provider.
+                    Only add approved customer-facing facts. Existing private
+                    supplier records are never sent automatically to the AI
+                    provider.
                   </p>
                   <label>
                     Knowledge notes
@@ -1620,7 +1900,7 @@ export function AdminCatalogue({
                   <legend>Cover image</legend>
                   <label className="media-drop">
                     <input
-                      required={!form.imageUrl}
+                      required={!form.imageUrl && !primaryFile}
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/avif"
                       onChange={(e) =>
