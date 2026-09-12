@@ -39,14 +39,17 @@ function amountDue(order: typeof orders.$inferSelect) {
   return `₦${(order.totalKobo / 100).toLocaleString("en-NG")} due on delivery`;
 }
 
-function reminderText(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect) {
+function reminderText(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine") {
   const appUrl = (setting("APP_URL") ?? "https://shoprenova.com.ng").replace(/\/$/, "");
   const estimate = reminder.deliveryEstimate || order.estimatedDelivery || "Delivery timing will be updated as movement continues";
   const note = reminder.customerNote ? ` ${reminder.customerNote}` : "";
-  return `Hello ${firstName(order.customerName)}, your Renova order ${order.orderNumber} is on the way. Latest verified update: ${reminder.currentCheckpoint}. Expected delivery: ${estimate}. ${amountDue(order)}.${note} Please keep your phone available for the delivery call. Track your order at ${appUrl}/track-order`;
+  const opening = kind === "arrival"
+    ? `Hello ${firstName(order.customerName)}, there is an important delivery update for your Renova order ${order.orderNumber}.`
+    : `Hello ${firstName(order.customerName)}, your Renova order ${order.orderNumber} is on the way.`;
+  return `${opening} Latest verified update: ${reminder.currentCheckpoint}. Expected delivery: ${estimate}. ${amountDue(order)}.${note} Please keep your phone available for the delivery call. Track your order at ${appUrl}/track-order`;
 }
 
-async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect): Promise<DeliveryResult> {
+async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine"): Promise<DeliveryResult> {
   if (!reminder.emailEnabled) return { channel: "email", status: "skipped" };
   const apiKey = setting("RESEND_API_KEY");
   const from = setting("RESEND_FROM_EMAIL") ?? setting("ORDER_FROM_EMAIL");
@@ -60,8 +63,8 @@ async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof ord
     body: JSON.stringify({
       from,
       to: [order.customerEmail],
-      subject: `Your Renova order is on the way — ${order.orderNumber}`,
-      html: `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#171717"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fff;border:1px solid #e9e2de"><tr><td style="padding:26px 30px;border-bottom:4px solid #ff5a2f"><div style="font-size:24px;font-weight:800;letter-spacing:4px">RENOVA</div><div style="margin-top:6px;color:#777;font-size:12px">DELIVERY UPDATE</div></td></tr><tr><td style="padding:32px 30px"><p style="margin:0 0 12px;font-size:16px">Hello ${escapeHtml(firstName(order.customerName))},</p><h1 style="margin:0 0 14px;font-size:28px;line-height:1.2">Your order is on the way.</h1><p style="margin:0;color:#555;font-size:16px;line-height:1.65">We are keeping watch on your delivery and will continue sending verified updates until it reaches you.</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;background:#fff7f2;border-left:4px solid #ff5a2f"><tr><td style="padding:18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Latest verified update</div><div style="margin-top:6px;font-size:17px;font-weight:700">${escapeHtml(reminder.currentCheckpoint)}</div></td></tr><tr><td style="padding:0 18px 18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Expected delivery</div><div style="margin-top:6px;font-size:15px">${escapeHtml(estimate)}</div></td></tr></table>${reminder.customerNote ? `<p style="font-size:15px;line-height:1.6">${escapeHtml(reminder.customerNote)}</p>` : ""}<p style="font-size:15px;line-height:1.6"><b>Order:</b> ${escapeHtml(order.orderNumber)}<br><b>${escapeHtml(amountDue(order))}</b></p><p style="font-size:14px;line-height:1.6;color:#555">Please keep your phone available so the courier can reach you. You do not need to place another order.</p><a href="${escapeHtml(`${appUrl}/track-order`)}" style="display:inline-block;margin-top:8px;background:#ff5a2f;color:#fff;text-decoration:none;font-weight:800;padding:14px 24px">TRACK YOUR ORDER</a></td></tr><tr><td style="padding:20px 30px;background:#171717;color:#fff;font-size:12px;line-height:1.6">Need help? <a href="mailto:support@shoprenova.com.ng" style="color:#ff8a68">support@shoprenova.com.ng</a></td></tr></table></td></tr></table></body></html>`,
+      subject: kind === "arrival" ? `Important delivery update — ${order.orderNumber}` : `Your Renova order is on the way — ${order.orderNumber}`,
+      html: `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#171717"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fff;border:1px solid #e9e2de"><tr><td style="padding:26px 30px;border-bottom:4px solid #ff5a2f"><div style="font-size:24px;font-weight:800;letter-spacing:4px">RENOVA</div><div style="margin-top:6px;color:#777;font-size:12px">DELIVERY UPDATE</div></td></tr><tr><td style="padding:32px 30px"><p style="margin:0 0 12px;font-size:16px">Hello ${escapeHtml(firstName(order.customerName))},</p><h1 style="margin:0 0 14px;font-size:28px;line-height:1.2">${kind === "arrival" ? "An important update about your delivery." : "Your order is on the way."}</h1><p style="margin:0;color:#555;font-size:16px;line-height:1.65">${kind === "arrival" ? "Please review the latest verified information from the delivery service below." : "We are keeping watch on your delivery and will continue sending verified updates until it reaches you."}</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;background:#fff7f2;border-left:4px solid #ff5a2f"><tr><td style="padding:18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Latest verified update</div><div style="margin-top:6px;font-size:17px;font-weight:700">${escapeHtml(reminder.currentCheckpoint)}</div></td></tr><tr><td style="padding:0 18px 18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Expected delivery</div><div style="margin-top:6px;font-size:15px">${escapeHtml(estimate)}</div></td></tr></table>${reminder.customerNote ? `<p style="font-size:15px;line-height:1.6">${escapeHtml(reminder.customerNote)}</p>` : ""}<p style="font-size:15px;line-height:1.6"><b>Order:</b> ${escapeHtml(order.orderNumber)}<br><b>${escapeHtml(amountDue(order))}</b></p><p style="font-size:14px;line-height:1.6;color:#555">Please keep your phone available so the courier can reach you. You do not need to place another order.</p><a href="${escapeHtml(`${appUrl}/track-order`)}" style="display:inline-block;margin-top:8px;background:#ff5a2f;color:#fff;text-decoration:none;font-weight:800;padding:14px 24px">TRACK YOUR ORDER</a></td></tr><tr><td style="padding:20px 30px;background:#171717;color:#fff;font-size:12px;line-height:1.6">Need help? <a href="mailto:support@shoprenova.com.ng" style="color:#ff8a68">support@shoprenova.com.ng</a></td></tr></table></td></tr></table></body></html>`,
     }),
   });
   const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
@@ -101,7 +104,7 @@ async function sendWhatsApp(order: typeof orders.$inferSelect, reminder: typeof 
   return { channel: "whatsapp", status: "sent", providerMessageId: payload.messages?.[0]?.id };
 }
 
-async function sendSms(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect): Promise<DeliveryResult> {
+async function sendSms(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine"): Promise<DeliveryResult> {
   if (!reminder.smsEnabled) return { channel: "sms", status: "skipped" };
   const apiKey = setting("TERMII_API_KEY");
   const senderId = setting("TERMII_SENDER_ID") ?? "Renova";
@@ -113,7 +116,7 @@ async function sendSms(order: typeof orders.$inferSelect, reminder: typeof order
       api_key: apiKey,
       to: phoneForApi(order.customerPhone),
       from: senderId,
-      sms: reminderText(order, reminder),
+      sms: reminderText(order, reminder, kind),
       type: "plain",
       channel: setting("TERMII_CHANNEL") ?? "generic",
     }),
@@ -201,7 +204,7 @@ export async function stopReminderForTerminalOrder(orderId: number) {
   return stopReminder(orderId);
 }
 
-export async function dispatchReminder(reminderId: number, force = false) {
+export async function dispatchReminder(reminderId: number, force = false, kind: "routine" | "arrival" = "routine") {
   const db = getDb();
   const [reminder] = await db.select().from(orderReminders).where(eq(orderReminders.id, reminderId)).limit(1);
   if (!reminder || !reminder.active) return { skipped: true, reason: "Reminder is not active." };
@@ -225,9 +228,9 @@ export async function dispatchReminder(reminderId: number, force = false) {
     if (!claimed) return { skipped: true, reason: "Another scheduler already claimed this reminder." };
   }
   const results = await Promise.all([
-    attempt("email", () => sendEmail(order, reminder)),
+    attempt("email", () => sendEmail(order, reminder, kind)),
     attempt("whatsapp", () => sendWhatsApp(order, reminder)),
-    attempt("sms", () => sendSms(order, reminder)),
+    attempt("sms", () => sendSms(order, reminder, kind)),
   ]);
   const completedAt = new Date().toISOString();
   for (const result of results) {

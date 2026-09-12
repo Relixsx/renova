@@ -24,6 +24,7 @@ type Reminder = {
   currentCheckpoint: string;
   deliveryEstimate: string;
   customerNote: string;
+  arrivalMessage: string;
   lastSentAt?: string | null;
   nextSendAt?: string | null;
 };
@@ -77,6 +78,7 @@ export function CustomerReminderBot({ orders }: { orders: Order[] }) {
             currentCheckpoint: reminder?.currentCheckpoint ?? "Shipped and in transit",
             deliveryEstimate: reminder?.deliveryEstimate ?? order.estimatedDelivery ?? "7–14 working days",
             customerNote: reminder?.customerNote ?? "",
+            arrivalMessage: "",
           }];
         })));
       })
@@ -93,6 +95,7 @@ export function CustomerReminderBot({ orders }: { orders: Order[] }) {
       currentCheckpoint: "Shipped and in transit",
       deliveryEstimate: order.estimatedDelivery ?? "7–14 working days",
       customerNote: "",
+      arrivalMessage: "",
     };
   }
 
@@ -109,13 +112,14 @@ export function CustomerReminderBot({ orders }: { orders: Order[] }) {
           currentCheckpoint: "Shipped and in transit",
           deliveryEstimate: order.estimatedDelivery ?? "7–14 working days",
           customerNote: "",
+          arrivalMessage: "",
         }),
         ...changes,
       },
     }));
   }
 
-  async function act(order: Order, action: "start" | "send_now" | "stop") {
+  async function act(order: Order, action: "start" | "send_now" | "arrival" | "stop") {
     setBusyOrder(order.id);
     setMessages((current) => ({ ...current, [order.id]: action === "stop" ? "Stopping reminders…" : "Sending verified update…" }));
     try {
@@ -192,12 +196,19 @@ export function CustomerReminderBot({ orders }: { orders: Order[] }) {
                     <input type="checkbox" checked={draft.consentConfirmed} onChange={(event) => update(order.id, { consentConfirmed: event.target.checked })} />
                     <span>I confirm this customer agreed to receive transactional delivery updates through the selected channels.</span>
                   </label>
+                  {reminder?.active && (
+                    <label className={`${styles.field} ${styles.wide}`}>
+                      <span>Final arrival message from Jumia</span>
+                      <textarea value={draft.arrivalMessage} onChange={(event) => update(order.id, { arrivalMessage: event.target.value })} placeholder="Paste the verified Jumia arrival or ready-for-collection message here" />
+                    </label>
+                  )}
                   {reminder && <div className={styles.timing}><span>Last sent: {formatTime(reminder.lastSentAt)}</span><span>Next scheduled: {reminder.active ? formatTime(reminder.nextSendAt) : "Stopped"}</span></div>}
                   <div className={`${styles.actions} ${styles.wide}`}>
                     {reminder?.active ? (
                       <>
                         <button className="button primary" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "send_now")}>Save update & send now</button>
-                        <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "stop")}>Stop reminders</button>
+                        <button className="button quiet" type="button" disabled={busyOrder === order.id || !draft.arrivalMessage.trim()} onClick={() => void act(order, "arrival")}>Send Jumia arrival update</button>
+                        <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "stop")}>Customer collected — stop</button>
                       </>
                     ) : (
                       <button className="button primary" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "start")}>Start daily reminders</button>

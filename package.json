@@ -14,7 +14,10 @@
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:migrate:local": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate"
+    "db:migrate:local": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
+    "verify:ai-listing": "node scripts/verify-ai-product-assistant.mjs",
+    "verify:admin": "node scripts/verify-admin-workspace.mjs",
+    "verify:cumulative": "node scripts/verify-cumulative-source.mjs && node scripts/verify-ai-product-assistant.mjs && node scripts/verify-admin-workspace.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.5.0-beta",
