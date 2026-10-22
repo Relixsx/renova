@@ -1,65 +1,17 @@
-# Renova customer reminder bot setup
+# Customer reminder setup
 
-The update adds a Customer reminder bot section to the existing admin page. Existing orders remain in the `orders` table. The migration only creates `order_reminders` and `order_reminder_logs`.
+Follow [WHATSAPP_SETUP.md](./WHATSAPP_SETUP.md) for the complete installation sequence, including migration before GitHub push/Render deployment.
 
-## Required Render variables
+Existing email/SMS channels and the manual Jumia arrival workflow remain in Admin → Reminders.
 
-Create a long random value for `REMINDER_CRON_SECRET`. Use the same value in Render and the Cloudflare Worker.
+- Email: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` (or the existing `ORDER_FROM_EMAIL` fallback).
+- Optional SMS: `TERMII_API_KEY`, `TERMII_SENDER_ID`, `TERMII_CHANNEL` and, if needed, `TERMII_API_URL`.
+- WhatsApp: the existing approved `renova_delivery_update` template, language `en`, tested API `v25.0`, and the private settings in the new guide.
+- Scheduler: `POST /api/orders/reminders/run` with `Authorization: Bearer <REMINDER_CRON_SECRET>`. Configure the same secret in Render and the existing reminder Worker.
+- Cron: `*/5 * * * *` checks due work every five minutes. Routine WhatsApp updates wait at least 24 hours after the last accepted WhatsApp message.
 
-Email uses the existing Resend settings:
+**Save for next update** changes the stored note without sending immediately. **Save update & send now** and **Send Jumia arrival update** deliberately send an immediate update. Use verified courier information and the latest estimate. An empty note uses the current order stage.
 
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL` (or `ORDER_FROM_EMAIL`)
-- `APP_URL=https://shoprenova.com.ng`
+Confirm agreement for each selected channel. Opted-in new checkout customers are enrolled in WhatsApp automatically. Older customers require recorded consent before WhatsApp is enabled. Stop after collection or mark an order delivered/cancelled/refunded. Customer STOP replies disable WhatsApp for that number's current orders while preserving other selected channels.
 
-WhatsApp Cloud API:
-
-- `WHATSAPP_ACCESS_TOKEN`
-- `WHATSAPP_PHONE_NUMBER_ID`
-- `WHATSAPP_REMINDER_TEMPLATE`
-- `WHATSAPP_TEMPLATE_LANGUAGE=en`
-- `WHATSAPP_GRAPH_API_VERSION=v23.0`
-
-The approved WhatsApp template must contain four body variables in this order: customer first name, order number, verified checkpoint, and expected delivery.
-
-Termii SMS:
-
-- `TERMII_API_KEY`
-- `TERMII_SENDER_ID=Renova`
-- `TERMII_CHANNEL=generic`
-
-## Run the migration
-
-```bash
-npm run db:migrate:local
-```
-
-The Neon websocket warning is informational when the migration completes and returns to the prompt without an error.
-
-## Schedule automatic delivery
-
-Deploy `deployment/renova-reminder-cron-worker.js` as a Cloudflare Worker. Add these Worker secrets/variables:
-
-- `RENOVA_APP_URL=https://shoprenova.com.ng`
-- `REMINDER_CRON_SECRET` — exactly the same secret stored in Render
-
-Add this Cron Trigger so the worker checks hourly:
-
-```text
-0 * * * *
-```
-
-The Worker can run hourly because Renova itself sends only reminders whose stored 24-hour deadline has arrived. Duplicate scheduler calls are claimed atomically in the database.
-
-## Safe operating procedure
-
-1. In Admin, open Customer reminder bot.
-2. Enter only the latest checkpoint confirmed by the courier.
-3. Enter the current expected delivery window.
-4. Select the configured channels.
-5. Confirm the customer's transactional-message consent.
-6. Start reminders. The first update sends immediately; later updates send every 24 hours.
-7. Update the checkpoint when new verified information arrives.
-8. Stop reminders when the parcel is received. Marking the order Delivered also stops them.
-
-Never enter a guessed parcel location. WhatsApp will not send until Meta approves the transactional template, and SMS will not send until Termii approves the sender ID where required.
+The dashboard distinguishes queued, accepted, failed and receipt statuses. Credential presence does not prove validity, and API acceptance does not prove handset delivery.

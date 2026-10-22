@@ -27,7 +27,7 @@ export function MetaPixelLoader() {
     const fbq = function (...args: unknown[]) {
       if (fbq.callMethod) fbq.callMethod(...args);
       else fbq.queue?.push(args);
-    } as Window["fbq"];
+    } as NonNullable<Window["fbq"]>;
 
     if (!fbq) return;
     fbq.queue = [];

@@ -11,6 +11,7 @@ export type MetaEventParameters = {
   value?: number;
   num_items?: number;
   order_id?: string;
+  payment_method?: string;
 };
 
 export function trackMetaEvent(event: MetaEventName, parameters: MetaEventParameters, eventId?: string) {

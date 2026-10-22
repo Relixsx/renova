@@ -1,0 +1,8 @@
+{
+  "name": "renova-order-reminders",
+  "main": "renova-reminder-cron-worker.js",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": false,
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": { "RENOVA_APP_URL": "https://shoprenova.com.ng" }
+}

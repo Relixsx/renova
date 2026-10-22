@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   integer,
+  index,
   pgTable,
   serial,
   text,
@@ -107,6 +108,10 @@ export const orders = pgTable("orders", {
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone").notNull(),
+  whatsappPhone: text("whatsapp_phone"),
+  whatsappConsentAt: text("whatsapp_consent_at"),
+  whatsappConsentSource: text("whatsapp_consent_source"),
+  whatsappOptedOutAt: text("whatsapp_opted_out_at"),
   status: text("status").notNull().default("payment_pending"),
   paymentStatus: text("payment_status").notNull().default("pending"),
   paymentMethod: text("payment_method").notNull().default("paystack"),
@@ -136,7 +141,7 @@ export const orderReminders = pgTable(
     emailEnabled: boolean("email_enabled").notNull().default(true),
     whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),
     smsEnabled: boolean("sms_enabled").notNull().default(false),
-    currentCheckpoint: text("current_checkpoint").notNull().default("Shipped and in transit"),
+    currentCheckpoint: text("current_checkpoint").notNull().default(""),
     deliveryEstimate: text("delivery_estimate").notNull().default(""),
     customerNote: text("customer_note").notNull().default(""),
     intervalHours: integer("interval_hours").notNull().default(24),
@@ -160,4 +165,38 @@ export const orderReminderLogs = pgTable("order_reminder_logs", {
   errorMessage: text("error_message"),
   checkpoint: text("checkpoint").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+});
+
+// A durable queue, independent of the existing email/SMS log. API acceptance is
+// recorded separately from delivery, which is reported by signed Meta webhooks.
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull(),
+  reminderId: integer("reminder_id").notNull(),
+  dedupeKey: text("dedupe_key").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(),
+  claimedAt: text("claimed_at"),
+  providerMessageId: text("provider_message_id"),
+  errorMessage: text("error_message"),
+  acceptedAt: text("accepted_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, (table) => [
+  uniqueIndex("whatsapp_messages_dedupe_unique").on(table.dedupeKey),
+  uniqueIndex("whatsapp_messages_provider_unique").on(table.providerMessageId),
+  uniqueIndex("whatsapp_one_sending_per_order").on(table.orderId).where(sql`${table.status} = 'sending'`),
+  uniqueIndex("whatsapp_one_pending_routine").on(table.orderId).where(sql`${table.kind} = 'routine' AND ${table.status} IN ('pending', 'sending')`),
+  index("whatsapp_messages_due_idx").on(table.status, table.nextAttemptAt),
+]);
+
+// Receipts can arrive before the sender has saved Meta's returned message ID.
+// Keeping the latest status lets both paths reconcile without losing that event.
+export const whatsappReceipts = pgTable("whatsapp_receipts", {
+  providerMessageId: text("provider_message_id").primaryKey(),
+  status: text("status").notNull(),
+  errorCode: integer("error_code"),
+  updatedAt: text("updated_at").notNull(),
 });

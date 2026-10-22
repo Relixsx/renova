@@ -19,7 +19,7 @@ function activateMetaPixel() {
   }
   const fbq = function (...args: unknown[]) {
     if (fbq.callMethod) fbq.callMethod(...args); else fbq.queue?.push(args);
-  } as Window["fbq"];
+  } as NonNullable<Window["fbq"]>;
   if (!fbq) return;
   fbq.queue = []; fbq.loaded = true; fbq.version = "2.0";
   window.fbq = fbq; window._fbq = fbq;

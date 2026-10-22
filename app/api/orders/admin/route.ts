@@ -4,8 +4,9 @@ import { orders } from "../../../../db/schema";
 import { requireOwnerRequest } from "../../../lib/admin-auth";
 import { recordOrderSales } from "../../../lib/order-payment";
 import { stopReminderForTerminalOrder } from "../../../lib/customer-reminders";
+import { confirmOrderWhatsApp } from "../../../lib/whatsapp-notifications";
 
-const allowedStatuses = new Set(["confirmed", "processing", "packaged", "dispatched", "delivered", "refunded"]);
+const allowedStatuses = new Set(["confirmed", "processing", "packaged", "dispatched", "delivered", "refunded", "cancelled"]);
 
 export async function PATCH(request: Request) {
   const denied = await requireOwnerRequest(request);
@@ -18,7 +19,8 @@ export async function PATCH(request: Request) {
     const db = getDb();
     const [updated] = await db.update(orders).set({ status, updatedAt: new Date().toISOString() }).where(eq(orders.orderNumber, orderNumber)).returning();
     if (!updated) return Response.json({ error: "Order not found." }, { status: 404 });
-    if (["delivered", "refunded"].includes(status)) await stopReminderForTerminalOrder(updated.id);
+    if (["delivered", "refunded", "cancelled"].includes(status)) await stopReminderForTerminalOrder(updated.id);
+    else await confirmOrderWhatsApp(updated.id).catch(() => console.error("WhatsApp confirmation could not be queued; the scheduler will retry."));
     const order = status === "delivered" ? await recordOrderSales(updated) : updated;
     return Response.json({ order });
   } catch (error) {

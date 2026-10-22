@@ -1,5 +1,10 @@
 import { reminderDashboardData, dispatchReminder, saveReminder, stopReminder } from "../../../lib/customer-reminders";
 import { requireOwnerRequest } from "../../../lib/admin-auth";
+import { eq } from "drizzle-orm";
+import { getDb } from "../../../../db";
+import { orders } from "../../../../db/schema";
+import { optOutWhatsApp, retryWhatsApp } from "../../../lib/whatsapp-notifications";
+import { whatsappPreview, whatsappTemplateParameters } from "../../../lib/whatsapp-message";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +34,30 @@ export async function POST(request: Request) {
       deliveryEstimate?: string;
       customerNote?: string;
       arrivalMessage?: string;
+      messageId?: number;
+      checkedWhatsAppManager?: boolean;
     };
     const orderId = Math.floor(Number(body.orderId));
     if (!Number.isFinite(orderId) || orderId < 1) return Response.json({ error: "A valid order is required." }, { status: 400 });
+    if (!["start", "save", "send_now", "arrival", "stop", "opt_out_whatsapp", "retry_whatsapp", "preview"].includes(body.action || "")) return Response.json({ error: "Choose a valid reminder action." }, { status: 400 });
+    if (body.action === "retry_whatsapp") {
+      const messageId = Number(body.messageId);
+      if (!Number.isSafeInteger(messageId) || messageId < 1) return Response.json({ error: "Choose a valid WhatsApp message." }, { status: 400 });
+      const delivery = await retryWhatsApp(messageId, body.checkedWhatsAppManager === true);
+      return Response.json({ message: `WhatsApp message status: ${delivery.status}.`, delivery });
+    }
+    if (body.action === "opt_out_whatsapp" || body.action === "preview") {
+      const [order] = await getDb().select().from(orders).where(eq(orders.id, orderId)).limit(1);
+      if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
+      if (body.action === "opt_out_whatsapp") {
+        await optOutWhatsApp(order.whatsappPhone || order.customerPhone);
+        return Response.json({ message: "WhatsApp updates stopped for this number's current orders. Other selected channels remain available." });
+      }
+      const preview = whatsappPreview(whatsappTemplateParameters(order, {
+        currentCheckpoint: String(body.currentCheckpoint || ""), customerNote: String(body.customerNote || ""), deliveryEstimate: String(body.deliveryEstimate || ""),
+      }, "routine"));
+      return Response.json({ preview, message: "Preview only. No message was sent." });
+    }
     if (body.action === "stop") {
       const reminder = await stopReminder(orderId);
       return Response.json({ reminder, message: "Daily reminders stopped." });
@@ -50,10 +76,10 @@ export async function POST(request: Request) {
       customerNote: String(body.customerNote ?? ""),
       start: true,
     });
-    const delivery = await dispatchReminder(reminder.id, true, isArrival ? "arrival" : "routine");
-    const message = isArrival
-      ? "The arrival update was sent. Daily reminders remain active until you confirm collection."
-      : body.action === "send_now" ? "Update saved and sent." : "Daily reminders started and the first update was sent.";
+    if (body.action === "save") return Response.json({ reminder, message: "Saved for the next scheduled update. No message was sent." });
+    const delivery = await dispatchReminder(reminder.id, body.action !== "start", isArrival ? "arrival" : "routine");
+    const message = delivery.skipped ? `Saved. ${delivery.reason}`
+      : `${isArrival ? "Arrival update saved." : "Daily reminder saved."} ${delivery.sent || 0} channel(s) accepted the update. WhatsApp delivery is confirmed separately by receipts. Check the status below for queued or failed messages.`;
     return Response.json({ reminder, delivery, message });
   } catch (error) {
     console.error("Customer reminder action failed", error);

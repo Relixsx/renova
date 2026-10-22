@@ -31,6 +31,7 @@ const recovery = source("app/api/admin/password-recovery/route.ts");
 const authProxy = source("app/api/auth/[...path]/route.ts");
 const exportRoute = source("app/api/orders/export/route.ts");
 const reminders = source("app/lib/customer-reminders.ts");
+const whatsapp = source("app/lib/whatsapp-delivery.ts");
 const reminderUi = source("app/components/customer-reminder-bot.tsx");
 const reminderApi = source("app/api/orders/reminders/route.ts");
 const reminderRun = source("app/api/orders/reminders/run/route.ts");
@@ -75,8 +76,8 @@ check(
   "Scheduled customer reminder workflow is incomplete.",
 );
 check(
-  reminders.includes("WHATSAPP_ACCESS_TOKEN") &&
-    reminders.includes("WHATSAPP_REMINDER_TEMPLATE") &&
+  whatsapp.includes("WHATSAPP_ACCESS_TOKEN") &&
+    whatsapp.includes("WHATSAPP_REMINDER_TEMPLATE") &&
     reminderUi.includes("whatsappEnabled"),
   "WhatsApp reminder integration is missing.",
 );

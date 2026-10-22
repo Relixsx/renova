@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orders, products } from "../../db/schema";
+import { confirmOrderWhatsApp } from "./whatsapp-notifications";
 
 function runtimeValue(name: string) {
   return process.env[name]?.trim();
@@ -117,7 +118,7 @@ async function notifyCustomerAndRecord(order: typeof orders.$inferSelect) {
 }
 
 export async function sendOrderNotifications(order: typeof orders.$inferSelect) {
-  const results = await Promise.allSettled([notifyOwner(order), notifyCustomerAndRecord(order)]);
+  const results = await Promise.allSettled([notifyOwner(order), notifyCustomerAndRecord(order), confirmOrderWhatsApp(order.id)]);
   for (const result of results) if (result.status === "rejected") console.error("Order notification failed", result.reason);
 }
 
@@ -145,7 +146,8 @@ export async function markOrderPaid(reference: string, paidAmountKobo: number) {
   // recorded but the email failed, retry the customer confirmation safely.
   if (order.paymentStatus === "paid") {
     await recordOrderSales(order);
-    if (!order.customerNotifiedAt) await notifyCustomerAndRecord(order);
+    const results = await Promise.allSettled([confirmOrderWhatsApp(order.id), ...(!order.customerNotifiedAt ? [notifyCustomerAndRecord(order)] : [])]);
+    for (const result of results) if (result.status === "rejected") console.error("Order notification retry failed", result.reason);
     return order;
   }
   const [updated] = await db.update(orders).set({ paymentStatus: "paid", status: "processing", estimatedDelivery: order.estimatedDelivery ?? "3–5 working days", updatedAt: new Date().toISOString() }).where(eq(orders.id, order.id)).returning();

@@ -1335,6 +1335,7 @@ export function AdminCatalogue({
                         "dispatched",
                         "delivered",
                         "refunded",
+                        "cancelled",
                       ].map((status) => (
                         <option value={status} key={status}>
                           {status.replace(/^./, (character) =>

@@ -43,6 +43,13 @@
       "when": 1788629929815,
       "tag": "0005_graceful_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792448371586,
+      "tag": "0006_whatsapp_order_updates",
+      "breakpoints": true
     }
   ]
 }

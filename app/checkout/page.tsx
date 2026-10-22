@@ -52,6 +52,7 @@ export default function CheckoutPage() {
   const [notice, setNotice] = useState("");
   const [paying, setPaying] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [deliveryConfirmationOpen, setDeliveryConfirmationOpen] =
     useState(false);
   const [details, setDetails] = useState<CheckoutDetails>(initialDetails);
@@ -129,6 +130,7 @@ export default function CheckoutPage() {
             variant: line.variant,
           })),
           details,
+          whatsappOptIn,
           deliveryId: delivery,
         }),
       });
@@ -181,6 +183,7 @@ export default function CheckoutPage() {
             variant: line.variant,
           })),
           details,
+          whatsappOptIn,
           deliveryId: delivery,
           customerConfirmedDeliveryCommitment: true,
         }),
@@ -348,6 +351,10 @@ export default function CheckoutPage() {
                     />
                   </label>
                 </div>
+                <label className="checkout-whatsapp-consent">
+                  <input type="checkbox" checked={whatsappOptIn} onChange={(event) => setWhatsappOptIn(event.target.checked)} />
+                  <span>Send my order confirmation and delivery updates on WhatsApp to the phone number above, including an update every 24 hours until my order is delivered or collected. This is optional. I can reply STOP at any time.</span>
+                </label>
               </fieldset>
 
               <fieldset className="checkout-fieldset address-fieldset">
