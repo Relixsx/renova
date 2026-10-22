@@ -8526,17 +8526,20 @@ main,
   font-weight: 800;
   text-decoration: none;
 }
-.checkout-whatsapp-consent {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
-  background: #f5f8f5;
+/* WhatsApp order updates are requested through the checkout submission. */
+.checkout-whatsapp-notice {
+  margin: 18px 0;
+  padding: 16px 18px;
+  border: 1px solid #cde6d5;
+  border-radius: 12px;
+  background: #f2faf5;
+  color: #28553a;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
 }
-.checkout-whatsapp-consent input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 18px; margin-top: 3px; padding: 0; accent-color: #176b35; }
+.checkout-whatsapp-notice a { text-decoration: underline; }
+
 .checkout-whatsapp-support {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

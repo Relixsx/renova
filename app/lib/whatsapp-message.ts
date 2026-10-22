@@ -33,10 +33,10 @@ export function cleanMessageText(value: string, max: number) {
 
 export function orderStageText(status: string) {
   switch (status) {
-    case "confirmed": return "Your order is confirmed. We are arranging its preparation.";
+    case "confirmed": return "Your order has been received and is being processed.";
     case "processing": return "Your order is being prepared for dispatch.";
     case "packaged": return "Your order has been packaged and is awaiting handover to the delivery partner.";
-    case "dispatched": return "Your order has been dispatched and is on the way. Please keep your phone available for the courier.";
+    case "dispatched": return "Your order has been dispatched and is on the way. Please be ready to receive your parcel.";
     default: return "We will share a delivery update once your order is confirmed.";
   }
 }
@@ -51,7 +51,7 @@ function itemSummary(json: string) {
   try {
     const items: Array<{ name?: string; quantity?: number }> = JSON.parse(json);
     if (!Array.isArray(items) || !items.length) return "";
-    const names = items.slice(0, 2).map((item) => `${Math.max(1, Number(item.quantity) || 1)} × ${cleanMessageText(item.name || "item", 45)}`).join(", ");
+    const names = items.slice(0, 2).map((item) => `${Math.max(1, Number(item.quantity) || 1)} × ${cleanMessageText(item.name || "item", 35)}`).join(", ");
     return `Items: ${names}${items.length > 2 ? ` and ${items.length - 2} more` : ""}.`;
   } catch { return ""; }
 }
@@ -62,14 +62,21 @@ export function whatsappTemplateParameters(order: MessageOrder, reminder: Messag
   const name = cleanMessageText(order.customerName.trim().split(/\s+/)[0] || "there", 40);
   const number = cleanMessageText(order.orderNumber, 64);
   const estimate = cleanMessageText(reminder.deliveryEstimate || order.estimatedDelivery || "We will share an estimate when the delivery partner confirms it.", 110);
-  const checkpoint = cleanMessageText(reminder.currentCheckpoint, 160);
-  const note = cleanMessageText(reminder.customerNote, 100);
+  const checkpoint = cleanMessageText(reminder.currentCheckpoint, 120);
+  const note = cleanMessageText(reminder.customerNote, 80);
   const opening = kind === "confirmation"
-    ? `Your order is confirmed. Thank you for choosing Renova! ${itemSummary(order.itemsJson)} ${order.status === "confirmed" ? "We are arranging its preparation." : orderStageText(order.status)}`
-    : checkpoint ? `Latest recorded delivery update: ${checkpoint}` : orderStageText(order.status);
+    ? `Thank you for choosing Renova! ${orderStageText(order.status)}`
+    : kind === "arrival" && checkpoint ? `Delivery update: ${checkpoint}`
+    : `Your daily delivery update: ${orderStageText(order.status)}`;
   const stop = "Reply STOP to stop WhatsApp updates.";
-  const content = [opening, paymentText(order), kind === "confirmation" && checkpoint ? `Delivery note: ${checkpoint}` : "", note].filter(Boolean).join(" ");
-  const update = `${cleanMessageText(content, 440)} ${stop}`;
+  // Keep the order summary and payment amount ahead of optional notes. Bound
+  // the whole expanded body, not just individual template variables.
+  const essentials = [opening, itemSummary(order.itemsJson), paymentText(order)].filter(Boolean).join(" ");
+  const optional = [kind !== "arrival" && checkpoint ? `Courier update: ${checkpoint}` : "", note].filter(Boolean).join(" ");
+  const available = Math.min(440, 1024 - whatsappPreview([name, number, "", estimate]).length - stop.length - 1);
+  const roomForNotes = available - essentials.length - 1;
+  const content = roomForNotes > 20 && optional ? `${essentials} ${cleanMessageText(optional, roomForNotes)}` : essentials;
+  const update = `${cleanMessageText(content, available)} ${stop}`;
   return [name, number, update, estimate];
 }
 

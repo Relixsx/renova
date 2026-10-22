@@ -4,9 +4,8 @@ import { orderReminders, orders, whatsappMessages, whatsappReceipts } from "../.
 import { deliverQueuedWhatsApp, whatsappSettings, type DeliveryPatch, type WhatsAppDeliveryStore } from "./whatsapp-delivery";
 import { ACCEPTED_WHATSAPP_STATUSES, confirmedOrder, DAY_MS, phoneForWhatsApp, whatsappTemplateParameters, type WhatsAppKind } from "./whatsapp-message";
 
-export function checkoutWhatsAppConsent(optIn: unknown, phone: string) {
-  return optIn === true ? { whatsappPhone: phoneForWhatsApp(phone), whatsappConsentAt: new Date().toISOString(), whatsappConsentSource: "checkout-v1" } : {};
-}
+import { CHECKOUT_WHATSAPP_SOURCES } from "./checkout-whatsapp";
+export { checkoutWhatsAppConsent } from "./checkout-whatsapp";
 
 const store: WhatsAppDeliveryStore = {
   async load(id) {
@@ -82,7 +81,7 @@ export async function enqueueWhatsApp(orderId: number, reminderId: number, kind:
 export async function confirmOrderWhatsApp(orderId: number) {
   const db = getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order?.whatsappConsentAt || order.whatsappConsentSource !== "checkout-v1" || order.whatsappOptedOutAt || !confirmedOrder(order)) return { status: "skipped" };
+  if (!order?.whatsappConsentAt || !CHECKOUT_WHATSAPP_SOURCES.includes(order.whatsappConsentSource || "") || order.whatsappOptedOutAt || !confirmedOrder(order)) return { status: "skipped" };
   const now = new Date().toISOString();
   // Existing stopped reminders and channel choices are never re-enabled by a
   // repeated Paystack callback. Legacy orders have no WhatsApp consent timestamp.
@@ -159,7 +158,7 @@ export async function runWhatsAppQueue(deadline = Date.now() + 40_000) {
     .where(and(eq(whatsappMessages.status, "sending"), lte(whatsappMessages.claimedAt, new Date(Date.now() - 10 * 60_000).toISOString())));
   // Repair the gap if checkout was saved but the server stopped before queuing
   // its confirmation. Only explicitly opted-in, confirmed orders qualify.
-  const missing = await db.select({ id: orders.id }).from(orders).where(and(isNotNull(orders.whatsappConsentAt), eq(orders.whatsappConsentSource, "checkout-v1"), isNull(orders.whatsappOptedOutAt),
+  const missing = await db.select({ id: orders.id }).from(orders).where(and(isNotNull(orders.whatsappConsentAt), inArray(orders.whatsappConsentSource, CHECKOUT_WHATSAPP_SOURCES), isNull(orders.whatsappOptedOutAt),
     inArray(orders.status, ["confirmed", "processing", "packaged", "dispatched"]),
     sql`(${orders.paymentMethod} = 'cash_on_delivery' OR ${orders.paymentStatus} = 'paid')`,
     sql`NOT EXISTS (SELECT 1 FROM whatsapp_messages existing WHERE existing.dedupe_key = 'confirmation:' || ${orders.id}::text)`)).limit(50);

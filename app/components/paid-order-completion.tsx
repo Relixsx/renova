@@ -7,10 +7,10 @@ import { onMetaPixelReady, trackMetaEvent } from "../lib/meta-pixel";
 type PaidItem = { id: string; quantity: number; itemPrice: number };
 
 export function PaidOrderCompletion({ orderNumber, total, items }: { orderNumber: string; total: number; items: PaidItem[] }) {
-  const { clear } = useCart();
+  const { completeCheckout } = useCart();
 
   useEffect(() => {
-    clear();
+    completeCheckout(orderNumber);
     window.sessionStorage.setItem("renova-last-paid-order", orderNumber);
     const purchaseKey = `renova-meta-purchase-${orderNumber}`;
     return onMetaPixelReady(() => {
@@ -19,7 +19,7 @@ export function PaidOrderCompletion({ orderNumber, total, items }: { orderNumber
         window.localStorage.setItem(purchaseKey, "1");
       }
     });
-  }, [clear, orderNumber, total, items]);
+  }, [completeCheckout, orderNumber, total, items]);
 
   return null;
 }

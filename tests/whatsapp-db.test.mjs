@@ -15,12 +15,15 @@ const wa = await load("app/lib/whatsapp-notifications.ts");
 const reminders = await load("app/lib/customer-reminders.ts");
 const payments = await load("app/lib/order-payment.ts");
 const webhook = await load("app/api/whatsapp/webhook/route.ts");
+const codCheckout = await load("app/api/checkout/place-order/route.ts");
+const prepaidCheckout = await load("app/api/checkout/initialize/route.ts");
 const cron = await load("app/api/orders/reminders/run/route.ts");
 const pg = new PGlite();
 const db = drizzle(pg, { schema });
 const symbol = Symbol.for("renova-whatsapp-test-db");
 const originalFetch = globalThis.fetch;
 let calls, graphBehavior;
+const productsSymbol = Symbol.for("renova-whatsapp-test-products");
 const journal = JSON.parse(await readFile(join(root, "drizzle-neon/meta/_journal.json"), "utf8"));
 
 async function migrateOriginal(database) {
@@ -40,17 +43,19 @@ before(async () => {
 beforeEach(async () => {
   await pg.exec("TRUNCATE whatsapp_messages,whatsapp_receipts,order_reminder_logs,order_reminders,orders RESTART IDENTITY");
   globalThis[symbol] = db;
-  Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-db-test-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", WHATSAPP_APP_SECRET: "fake-app-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "fake-verify-token", REMINDER_CRON_SECRET: "fake-cron-secret", RESEND_API_KEY: "fake-resend-key", RESEND_FROM_EMAIL: "qa@example.invalid", FORMSPREE_ENDPOINT: "https://forms.example.invalid/qa", APP_URL: "https://renova.example.invalid" });
+  globalThis[productsSymbol] = [{ slug: "qa-headphones", name: "Headphones", sku: "QA-001", variants: ["Black"], imageUrl: "/qa.svg", isPublished: true, stock: 20, paymentMode: "cash_on_delivery", priceKobo: 2450000 }];
+  Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-db-test-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", WHATSAPP_APP_SECRET: "fake-app-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "fake-verify-token", REMINDER_CRON_SECRET: "fake-cron-secret", PAYSTACK_SECRET_KEY: "fake-paystack-key", RESEND_API_KEY: "fake-resend-key", RESEND_FROM_EMAIL: "qa@example.invalid", FORMSPREE_ENDPOINT: "https://forms.example.invalid/qa", APP_URL: "https://renova.example.invalid" });
   calls = []; graphBehavior = undefined;
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body); calls.push({ url: String(url), body });
     if (String(url).startsWith("https://graph.facebook.com/")) return graphBehavior ? graphBehavior(body) : Response.json({ messages: [{ id: `wamid.qa-${calls.length}` }] });
+    if (String(url) === "https://api.paystack.co/transaction/initialize") return Response.json({ status: true, data: { authorization_url: "https://paystack.example.invalid/qa" } });
     if (String(url) === "https://api.resend.com/emails") return Response.json({ id: "qa-email" });
     if (String(url) === "https://forms.example.invalid/qa") return Response.json({ ok: true });
     throw new Error("Tests block all unexpected outbound requests");
   };
 });
-after(async () => { globalThis.fetch = originalFetch; delete globalThis[symbol]; await pg.close(); });
+after(async () => { globalThis.fetch = originalFetch; delete globalThis[symbol]; delete globalThis[productsSymbol]; await pg.close(); });
 
 async function createOrder(overrides = {}) {
   const [order] = await db.insert(schema.orders).values({ orderNumber: `REN-QA-${crypto.randomUUID().slice(0, 8)}`, customerName: "Amina Example", customerEmail: "qa@example.invalid", customerPhone: "08000000000", status: "confirmed", paymentMethod: "cash_on_delivery", paymentStatus: "payment_due_on_delivery", totalKobo: 2450000, itemsJson: '[{"name":"Headphones","quantity":1}]', addressJson: "{}", shippingJson: "{}", estimatedDelivery: "24–26 October", ...wa.checkoutWhatsAppConsent(true, "08000000000"), ...overrides }).returning();
@@ -201,4 +206,51 @@ test("a SQL failure rolls back the additive migration with existing store data r
     assert.equal((await temporary.query("SELECT count(*)::int AS count FROM orders")).rows[0].count, 1);
     assert.equal((await temporary.query("SELECT to_regclass('public.whatsapp_messages') AS name")).rows[0].name, null);
   } finally { await temporary.close(); }
+});
+
+
+const checkoutDetails = { fullName: "Amina Example", email: "qa@example.invalid", phone: "08000000000", whatsappPhone: "09000000001", streetAddress: "QA Street", stateCode: "LA", lga: "Ikeja", cityTown: "Ikeja" };
+const checkoutRequest = (overrides = {}) => new Request("https://renova.example.invalid/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines: [{ slug: "qa-headphones", quantity: 1 }], deliveryId: "jumia", details: checkoutDetails, customerConfirmedDeliveryCommitment: true, whatsapp: { phone: checkoutDetails.whatsappPhone, noticeVersion: "checkout-v2" }, ...overrides }) });
+
+test("new COD checkout automatically confirms to the separate WhatsApp number and admin saves preserve it", async () => {
+  const response = await codCheckout.POST(checkoutRequest());
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  const [order] = await db.select().from(schema.orders);
+  assert.equal(order.customerPhone, "08000000000"); assert.equal(order.whatsappPhone, "2349000000001"); assert.equal(order.whatsappConsentSource, "checkout-v2");
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
+  const [reminder] = await db.select().from(schema.orderReminders);
+  assert.equal(reminder.active, true); assert.equal(reminder.whatsappEnabled, true);
+  await reminders.saveReminder({ ...reminder, start: true, customerNote: "Please keep your phone reachable." });
+  assert.equal((await db.select().from(schema.orders))[0].whatsappPhone, "2349000000001");
+  await wa.optOutWhatsApp("09000000001");
+  assert.ok((await db.select().from(schema.orders))[0].whatsappOptedOutAt);
+  await assert.rejects(reminders.saveReminder({ ...reminder, start: true }), /opted out/);
+  await wa.runWhatsAppQueue(); assert.equal(graphCalls().length, 1);
+});
+
+test("malformed or missing WhatsApp number in the new checkout request creates no order", async () => {
+  for (const whatsapp of [{ phone: "", noticeVersion: "checkout-v2" }, { phone: "123", noticeVersion: "checkout-v2" }, { noticeVersion: "checkout-v2" }, { phone: "09000000001", noticeVersion: "unknown" }, null]) {
+    const response = await codCheckout.POST(checkoutRequest({ whatsapp }));
+    assert.equal(response.status, 400);
+  }
+  assert.equal((await db.select().from(schema.orders)).length, 0); assert.equal(graphCalls().length, 0);
+});
+
+test("separate WhatsApp checkout for Paystack waits for verified payment and confirms once", async () => {
+  globalThis[productsSymbol][0].paymentMode = "prepaid";
+  const response = await prepaidCheckout.POST(checkoutRequest());
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  const [order] = await db.select().from(schema.orders);
+  assert.equal(order.whatsappPhone, "2349000000001"); assert.equal(graphCalls().length, 0);
+  await wa.runWhatsAppQueue(); assert.equal(graphCalls().length, 0);
+  await payments.markOrderPaid(order.orderNumber, order.totalKobo);
+  await payments.markOrderPaid(order.orderNumber, order.totalKobo);
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
+});
+
+test("scheduler recovers a v2 confirmation without enrolling an older unconsented order", async () => {
+  await createOrder({ ...wa.checkoutWhatsAppConsent(false, "08000000000", { phone: "09000000001", noticeVersion: "checkout-v2" }) });
+  await createOrder({ whatsappConsentAt: null, whatsappPhone: null, whatsappConsentSource: null });
+  await wa.runWhatsAppQueue(); await wa.runWhatsAppQueue();
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
 });

@@ -53,10 +53,13 @@ export async function POST(request: Request) {
         await optOutWhatsApp(order.whatsappPhone || order.customerPhone);
         return Response.json({ message: "WhatsApp updates stopped for this number's current orders. Other selected channels remain available." });
       }
-      const preview = whatsappPreview(whatsappTemplateParameters(order, {
+      const draft = {
         currentCheckpoint: String(body.currentCheckpoint || ""), customerNote: String(body.customerNote || ""), deliveryEstimate: String(body.deliveryEstimate || ""),
-      }, "routine"));
-      return Response.json({ preview, message: "Preview only. No message was sent." });
+      };
+      const preview = whatsappPreview(whatsappTemplateParameters(order, draft, "routine"));
+      // A new-order confirmation does not include later owner-entered notes.
+      const confirmationPreview = whatsappPreview(whatsappTemplateParameters({ ...order, status: "confirmed" }, { currentCheckpoint: "", customerNote: "", deliveryEstimate: "" }, "confirmation"));
+      return Response.json({ preview, confirmationPreview, message: "Previews only. No message was sent." });
     }
     if (body.action === "stop") {
       const reminder = await stopReminder(orderId);

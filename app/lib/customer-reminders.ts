@@ -80,7 +80,7 @@ async function sendSms(order: typeof orders.$inferSelect, reminder: typeof order
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       api_key: apiKey,
-      to: phoneForWhatsApp(order.customerPhone),
+      to: phoneForWhatsApp(order.whatsappPhone || order.customerPhone),
       from: senderId,
       sms: reminderText(order, reminder, kind),
       type: "plain",
@@ -142,7 +142,7 @@ export async function saveReminder(input: {
   const now = new Date();
   const [existing] = await db.select().from(orderReminders).where(eq(orderReminders.orderId, order.id)).limit(1);
   if (input.whatsappEnabled) {
-    const [consented] = await db.update(orders).set({ whatsappPhone: phoneForWhatsApp(order.customerPhone), whatsappConsentAt: order.whatsappConsentAt || now.toISOString(),
+    const [consented] = await db.update(orders).set({ whatsappPhone: phoneForWhatsApp(order.whatsappPhone || order.customerPhone), whatsappConsentAt: order.whatsappConsentAt || now.toISOString(),
       whatsappConsentSource: order.whatsappConsentSource || "owner-recorded" }).where(and(eq(orders.id, order.id), sql`${orders.whatsappOptedOutAt} IS NULL`)).returning({ id: orders.id });
     if (!consented) throw new Error("This customer opted out of WhatsApp updates.");
   } else await cancelQueuedWhatsApp(order.id);

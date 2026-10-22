@@ -116,3 +116,15 @@ test("the scheduler Worker rejects unauthenticated requests and makes one authen
     await worker.scheduled({}, env, { waitUntil(task) { scheduled = task; } }); await scheduled; assert.equal(checks, 1);
   } finally { globalThis.fetch = original; }
 });
+
+
+test("daily messages retain item quantities and the amount while confirmed orders avoid transit claims", () => {
+  for (const status of ["confirmed", "processing", "packaged", "dispatched"]) {
+    const parameters = whatsappTemplateParameters({ ...order, status }, reminder, "routine");
+    assert.match(parameters[2], /daily delivery update/);
+    assert.match(parameters[2], /2 × Wireless headphones/); assert.match(parameters[2], /₦24,500/);
+    if (status !== "dispatched") assert.doesNotMatch(parameters[2], /on the way|has been dispatched/);
+  }
+  const confirmation = whatsappTemplateParameters(order, reminder, "confirmation")[2];
+  assert.match(confirmation, /Thank you for choosing Renova/); assert.match(confirmation, /received and is being processed/);
+});

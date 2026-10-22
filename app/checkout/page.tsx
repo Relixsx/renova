@@ -7,6 +7,9 @@ import { useCart } from "../components/cart-provider";
 import { OrderMotionVisual } from "../components/order-motion-visual";
 import { formatNaira } from "../lib/catalog";
 import { deliveryOptions } from "../lib/checkout";
+import { CHECKOUT_WHATSAPP_NOTICE_VERSION } from "../lib/checkout-whatsapp";
+import { browserCartStorage, readStoredCart } from "../lib/cart-storage";
+import { phoneForWhatsApp } from "../lib/whatsapp-message";
 import { onMetaPixelReady, trackMetaEvent } from "../lib/meta-pixel";
 
 const nigeriaStates = getAllStates();
@@ -19,6 +22,7 @@ type CheckoutDetails = {
   fullName: string;
   email: string;
   phone: string;
+  whatsappPhone: string;
   stateCode: string;
   lga: string;
   cityTown: string;
@@ -32,6 +36,7 @@ const initialDetails: CheckoutDetails = {
   fullName: "",
   email: "",
   phone: "",
+  whatsappPhone: "",
   stateCode: "LA",
   lga: "Ikeja",
   cityTown: "",
@@ -46,13 +51,12 @@ function stateLabel(code: string, name: string) {
 }
 
 export default function CheckoutPage() {
-  const { lines, subtotalKobo, clear } = useCart();
+  const { lines, subtotalKobo, clear, rememberCheckout } = useCart();
   const [step, setStep] = useState(1);
   const [delivery, setDelivery] = useState("jumia");
   const [notice, setNotice] = useState("");
   const [paying, setPaying] = useState(false);
   const [policyAccepted, setPolicyAccepted] = useState(false);
-  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [deliveryConfirmationOpen, setDeliveryConfirmationOpen] =
     useState(false);
   const [details, setDetails] = useState<CheckoutDetails>(initialDetails);
@@ -92,6 +96,17 @@ export default function CheckoutPage() {
     [lines, subtotalKobo],
   );
 
+  useEffect(() => {
+    const resetAfterReturn = (event: PageTransitionEvent) => {
+      if (event.persisted && !readStoredCart(browserCartStorage()).length) {
+        setDetails(initialDetails); setStep(1); setPolicyAccepted(false);
+        setPaying(false); setNotice(""); setDeliveryConfirmationOpen(false);
+      }
+    };
+    window.addEventListener("pageshow", resetAfterReturn);
+    return () => window.removeEventListener("pageshow", resetAfterReturn);
+  }, []);
+
   function updateDetail<K extends keyof CheckoutDetails>(
     field: K,
     value: CheckoutDetails[K],
@@ -106,6 +121,11 @@ export default function CheckoutPage() {
 
   function continueForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (step === 1) {
+      try { phoneForWhatsApp(details.whatsappPhone); }
+      catch (error) { setNotice(error instanceof Error ? error.message : "Check your WhatsApp number."); return; }
+    }
+    setNotice("");
     setStep((current) => Math.min(3, current + 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -130,28 +150,32 @@ export default function CheckoutPage() {
             variant: line.variant,
           })),
           details,
-          whatsappOptIn,
+          whatsapp: { phone: details.whatsappPhone, noticeVersion: CHECKOUT_WHATSAPP_NOTICE_VERSION },
           deliveryId: delivery,
         }),
       });
       const payload = (await response.json()) as {
         authorizationUrl?: string;
+        orderNumber?: string;
         error?: string;
       };
-      if (!response.ok || !payload.authorizationUrl)
+      if (!response.ok || !payload.authorizationUrl || !payload.orderNumber)
         throw new Error(payload.error || "Payment could not be started.");
-      trackMetaEvent("AddPaymentInfo", {
-        contents: lines.map((line) => ({
-          id: line.slug,
-          quantity: line.quantity,
-          item_price: line.priceKobo / 100,
-        })),
-        content_ids: lines.map((line) => line.slug),
-        content_type: "product",
-        value: total / 100,
-        currency: "NGN",
-        num_items: lines.reduce((sum, line) => sum + line.quantity, 0),
-      });
+      try {
+        trackMetaEvent("AddPaymentInfo", {
+          contents: lines.map((line) => ({
+            id: line.slug,
+            quantity: line.quantity,
+            item_price: line.priceKobo / 100,
+          })),
+          content_ids: lines.map((line) => line.slug),
+          content_type: "product",
+          value: total / 100,
+          currency: "NGN",
+          num_items: lines.reduce((sum, line) => sum + line.quantity, 0),
+        });
+      } catch { /* Analytics must not interrupt checkout completion. */ }
+      rememberCheckout(payload.orderNumber, lines);
       window.location.href = payload.authorizationUrl;
     } catch (error) {
       setNotice(
@@ -183,7 +207,7 @@ export default function CheckoutPage() {
             variant: line.variant,
           })),
           details,
-          whatsappOptIn,
+          whatsapp: { phone: details.whatsappPhone, noticeVersion: CHECKOUT_WHATSAPP_NOTICE_VERSION },
           deliveryId: delivery,
           customerConfirmedDeliveryCommitment: true,
         }),
@@ -194,20 +218,26 @@ export default function CheckoutPage() {
       };
       if (!response.ok || !payload.orderNumber)
         throw new Error(payload.error || "The order could not be placed.");
-      trackMetaEvent("Purchase", {
-        contents: lines.map((line) => ({
-          id: line.slug,
-          quantity: line.quantity,
-          item_price: line.priceKobo / 100,
-        })),
-        content_ids: lines.map((line) => line.slug),
-        content_type: "product",
-        value: total / 100,
-        currency: "NGN",
-        num_items: lines.reduce((sum, line) => sum + line.quantity, 0),
-        payment_method: "cash_on_delivery",
-      });
+      try {
+        trackMetaEvent("Purchase", {
+          contents: lines.map((line) => ({
+            id: line.slug,
+            quantity: line.quantity,
+            item_price: line.priceKobo / 100,
+          })),
+          content_ids: lines.map((line) => line.slug),
+          content_type: "product",
+          value: total / 100,
+          currency: "NGN",
+          num_items: lines.reduce((sum, line) => sum + line.quantity, 0),
+          payment_method: "cash_on_delivery",
+        });
+      } catch { /* Analytics must not interrupt checkout completion. */ }
       clear();
+      setDetails(initialDetails);
+      setStep(1);
+      setPolicyAccepted(false);
+      setDeliveryConfirmationOpen(false);
       window.location.href = `/order/success/${encodeURIComponent(payload.orderNumber)}`;
     } catch (error) {
       setNotice(
@@ -337,7 +367,7 @@ export default function CheckoutPage() {
                     />
                   </label>
                   <label>
-                    Phone number
+                    Phone number for delivery
                     <input
                       required
                       type="tel"
@@ -351,10 +381,20 @@ export default function CheckoutPage() {
                     />
                   </label>
                 </div>
-                <label className="checkout-whatsapp-consent">
-                  <input type="checkbox" checked={whatsappOptIn} onChange={(event) => setWhatsappOptIn(event.target.checked)} />
-                  <span>Send my order confirmation and delivery updates on WhatsApp to the phone number above, including an update every 24 hours until my order is delivered or collected. This is optional. I can reply STOP at any time.</span>
+                <label>
+                  WhatsApp phone number
+                  <input
+                    required type="tel" inputMode="tel" autoComplete="section-whatsapp tel"
+                    aria-describedby="whatsapp-number-help"
+                    value={details.whatsappPhone}
+                    onChange={(event) => updateDetail("whatsappPhone", event.target.value)}
+                    placeholder="0801 234 5678 or +234 801 234 5678"
+                  />
+                  <small className="field-hint" id="whatsapp-number-help">
+                    Enter your WhatsApp number for your order confirmation and daily delivery updates. It can be different from your delivery phone number. Reply STOP at any time.
+                  </small>
                 </label>
+                {notice && <div className="integration-notice" role="alert">{notice}</div>}
               </fieldset>
 
               <fieldset className="checkout-fieldset address-fieldset">
@@ -481,8 +521,7 @@ export default function CheckoutPage() {
               <label className="policy-check">
                 <input type="checkbox" required />
                 <span>
-                  I agree that Renova may use these details to process and track
-                  my order.
+                  I agree that Renova may use these details to process my order and send order confirmation and delivery updates to the WhatsApp number I provide.
                 </span>
               </label>
               <button className="button primary" type="submit">
@@ -568,6 +607,13 @@ export default function CheckoutPage() {
                 <button type="button" onClick={() => setStep(1)}>
                   Change
                 </button>
+              </div>
+              <div className="review-block">
+                <span>Contact details</span>
+                <b>{details.email}</b>
+                <small>Delivery phone: {details.phone}</small>
+                <small>WhatsApp updates: {details.whatsappPhone}</small>
+                <button type="button" onClick={() => setStep(1)}>Change</button>
               </div>
               <div className="review-block">
                 <span>Delivery method</span>
@@ -658,6 +704,9 @@ export default function CheckoutPage() {
                   <Link href="/terms">Terms</Link>.
                 </span>
               </label>
+              <p className="checkout-whatsapp-notice">
+                By placing your order, you request Renova&apos;s order confirmation and delivery updates on WhatsApp at <b>{details.whatsappPhone}</b>, including an update every 24 hours while your order is active. Updates stop after delivery, collection or cancellation. Reply <b>STOP</b> at any time. <Link href="/privacy">Privacy policy</Link>.
+              </p>
               {notice && <div className="integration-notice">{notice}</div>}
               <div className="checkout-buttons">
                 <button
@@ -782,7 +831,7 @@ export default function CheckoutPage() {
             </div>
             <p className="cod-confirmation-agreement">
               By placing the order, you confirm that you requested it and
-              intend to receive and pay for it on delivery.
+              intend to receive and pay for it on delivery. You also request your order confirmation and daily delivery updates on WhatsApp at {details.whatsappPhone}. Reply STOP at any time.
             </p>
             <div className="cod-confirmation-actions">
               <button

@@ -253,3 +253,8 @@
     flex: 1 1 100%;
   }
 }
+
+.messagePlan { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.messagePlan > div { display: grid; gap: 6px; padding: 14px; border: 1px solid #cde6d5; background: #f2faf5; font-size: 12px; line-height: 1.6; }
+.messagePlan span, .preview small { display: block; color: #605954; font-size: 11px; }
+@media (max-width: 760px) { .messagePlan { grid-template-columns: 1fr; } }

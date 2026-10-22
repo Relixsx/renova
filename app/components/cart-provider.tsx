@@ -1,18 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { formatNaira, type Product } from "../lib/catalog";
-
-export type CartLine = {
-  slug: string;
-  name: string;
-  imageUrl: string;
-  priceKobo: number;
-  variant: string;
-  quantity: number;
-  paymentMode: "prepaid" | "cash_on_delivery";
-};
+import { browserCartStorage, CART_STORAGE_KEY, completeCheckoutCart, createCartStore, rememberCheckoutCart, type CartLine } from "../lib/cart-storage";
+export type { CartLine } from "../lib/cart-storage";
 
 type CartContextValue = {
   lines: CartLine[];
@@ -22,80 +14,71 @@ type CartContextValue = {
   update: (slug: string, variant: string, quantity: number) => void;
   remove: (slug: string, variant: string) => void;
   clear: () => void;
+  rememberCheckout: (orderNumber: string, snapshot: CartLine[]) => void;
+  completeCheckout: (orderNumber: string) => void;
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
 };
-
 const CartContext = createContext<CartContextValue | null>(null);
-const STORAGE_KEY = "renova-cart-v1";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [lines, setLines] = useState<CartLine[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const store = useMemo(() => createCartStore(), []);
+  const lines = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
   const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setLines((JSON.parse(stored) as CartLine[]).map((line) => ({ ...line, paymentMode: line.paymentMode ?? "prepaid" })));
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-    setLoaded(true);
-  }, []);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === CART_STORAGE_KEY || event.key === null) store.refresh();
+    };
+    window.addEventListener("pageshow", store.refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("pageshow", store.refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [store]);
 
-  useEffect(() => {
-    if (loaded) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
-  }, [lines, loaded]);
+  const commit = store.commit;
 
   const add = useCallback((product: Product, variant = product.variants[0] ?? "Standard", quantity = 1) => {
-    setLines((current) => {
-      const paymentMode = product.paymentMode ?? "prepaid";
-      if (current.length && current.some((line) => line.paymentMode !== paymentMode)) {
-        window.alert("Prepaid and payment-on-delivery products must be checked out separately. Please complete or clear your current bag first.");
-        return current;
-      }
-      const found = current.find((line) => line.slug === product.slug && line.variant === variant);
-      if (found) {
-        return current.map((line) =>
-          line.slug === product.slug && line.variant === variant
-            ? { ...line, quantity: Math.min(10, line.quantity + quantity) }
-            : line,
-        );
-      }
-      return [...current, { slug: product.slug, name: product.name, imageUrl: product.imageUrl, priceKobo: product.priceKobo, variant, quantity, paymentMode }];
-    });
-    setCartOpen(true);
-  }, []);
-
-  const update = useCallback((slug: string, variant: string, quantity: number) => {
-    if (quantity < 1) {
-      setLines((current) => current.filter((line) => !(line.slug === slug && line.variant === variant)));
+    const current = store.getSnapshot();
+    const paymentMode = product.paymentMode ?? "prepaid";
+    if (current.length && current.some((line) => line.paymentMode !== paymentMode)) {
+      window.alert("Prepaid and payment-on-delivery products must be checked out separately. Please complete or clear your current bag first.");
       return;
     }
-    setLines((current) => current.map((line) => line.slug === slug && line.variant === variant ? { ...line, quantity } : line));
-  }, []);
+    const found = current.find((line) => line.slug === product.slug && line.variant === variant);
+    commit(found
+      ? current.map((line) => line.slug === product.slug && line.variant === variant ? { ...line, quantity: Math.min(10, line.quantity + quantity) } : line)
+      : [...current, { slug: product.slug, name: product.name, imageUrl: product.imageUrl, priceKobo: product.priceKobo, variant, quantity, paymentMode }]);
+    setCartOpen(true);
+  }, [commit, store]);
+
+  const update = useCallback((slug: string, variant: string, quantity: number) => {
+    commit(quantity < 1
+      ? store.getSnapshot().filter((line) => !(line.slug === slug && line.variant === variant))
+      : store.getSnapshot().map((line) => line.slug === slug && line.variant === variant ? { ...line, quantity } : line));
+  }, [commit, store]);
 
   const remove = useCallback((slug: string, variant: string) => {
-    setLines((current) => current.filter((line) => !(line.slug === slug && line.variant === variant)));
-  }, []);
+    commit(store.getSnapshot().filter((line) => !(line.slug === slug && line.variant === variant)));
+  }, [commit, store]);
 
-  const clear = useCallback(() => {
-    setLines([]);
-    setCartOpen(false);
+  const clear = useCallback(() => { commit([]); setCartOpen(false); }, [commit]);
+  const rememberCheckout = useCallback((orderNumber: string, snapshot: CartLine[]) => {
+    rememberCheckoutCart(browserCartStorage(), orderNumber, snapshot);
   }, []);
+  const completeCheckout = useCallback((orderNumber: string) => {
+    if (completeCheckoutCart(browserCartStorage(), orderNumber)) {
+      store.refresh(); setCartOpen(false);
+    }
+  }, [store]);
 
   const value = useMemo(() => ({
-    lines,
-    count: lines.reduce((sum, line) => sum + line.quantity, 0),
+    lines, count: lines.reduce((sum, line) => sum + line.quantity, 0),
     subtotalKobo: lines.reduce((sum, line) => sum + line.priceKobo * line.quantity, 0),
-    add,
-    update,
-    remove,
-    clear,
-    cartOpen,
-    setCartOpen,
-  }), [lines, add, update, remove, clear, cartOpen]);
+    add, update, remove, clear, rememberCheckout, completeCheckout, cartOpen, setCartOpen,
+  }), [lines, add, update, remove, clear, rememberCheckout, completeCheckout, cartOpen]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

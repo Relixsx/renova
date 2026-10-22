@@ -28,6 +28,8 @@ type AdminOrder = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  whatsappPhone?: string | null;
+  whatsappConsentAt?: string | null;
   paymentStatus: string;
   paymentMethod?: string;
   status: string;

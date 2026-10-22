@@ -9,14 +9,14 @@ type CartLine = { slug: string; quantity: number; variant?: string };
 
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; customerConfirmedDeliveryCommitment?: boolean; whatsappOptIn?: boolean };
+    const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; customerConfirmedDeliveryCommitment?: boolean; whatsappOptIn?: boolean; whatsapp?: unknown };
     const details = payload.details ?? {};
     const delivery = getDeliveryOption(String(payload.deliveryId ?? ""));
     if (!delivery || !payload.lines?.length) return Response.json({ error: "Your cart or delivery selection is incomplete." }, { status: 400 });
     if (payload.customerConfirmedDeliveryCommitment !== true) return Response.json({ error: "Confirm that you intend to receive and pay for this order at delivery." }, { status: 400 });
     if (!details.fullName || !details.email || !details.phone || !details.streetAddress || !details.stateCode || !details.lga || !details.cityTown) return Response.json({ error: "Complete the delivery address before placing the order." }, { status: 400 });
     let whatsappConsent;
-    try { whatsappConsent = checkoutWhatsAppConsent(payload.whatsappOptIn, details.phone); }
+    try { whatsappConsent = checkoutWhatsAppConsent(payload.whatsappOptIn, details.phone, payload.whatsapp); }
     catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Check your WhatsApp number." }, { status: 400 }); }
 
     const verifiedItems = [];

@@ -11,13 +11,13 @@ export async function POST(request: Request) {
   try {
     const secret = paystackSecret();
     if (!secret) return Response.json({ error: "Live Paystack checkout is waiting for the store owner’s secret key." }, { status: 503 });
-    const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; whatsappOptIn?: boolean };
+    const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; whatsappOptIn?: boolean; whatsapp?: unknown };
     const details = payload.details ?? {};
     const delivery = getDeliveryOption(String(payload.deliveryId ?? ""));
     if (!delivery || !payload.lines?.length) return Response.json({ error: "Your cart or delivery selection is incomplete." }, { status: 400 });
     if (!details.fullName || !details.email || !details.phone || !details.streetAddress || !details.stateCode || !details.lga || !details.cityTown) return Response.json({ error: "Complete the delivery address before payment." }, { status: 400 });
     let whatsappConsent;
-    try { whatsappConsent = checkoutWhatsAppConsent(payload.whatsappOptIn, details.phone); }
+    try { whatsappConsent = checkoutWhatsAppConsent(payload.whatsappOptIn, details.phone, payload.whatsapp); }
     catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Check your WhatsApp number." }, { status: 400 }); }
 
     const verifiedItems = [];

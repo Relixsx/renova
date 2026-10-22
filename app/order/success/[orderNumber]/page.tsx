@@ -20,7 +20,7 @@ export default async function SuccessPage({ params }: { params: Promise<{ orderN
     <span className="eyebrow">{deliveryPayment ? "Order confirmed" : paid ? "Payment verified" : "Payment status"}</span>
     <h1>{confirmed ? <>Thank you.<br/><em>Your order is in motion.</em></> : "We are confirming your payment."}</h1>
     {order ? <>
-      <p>Order <b>{order.orderNumber}</b> · {formatNaira(order.totalKobo)}. {confirmed ? deliveryPayment ? "Your order is confirmed for payment on delivery, tracking is active, and your shopping bag has been cleared." : "Your confirmation is being sent, tracking is active, and your shopping bag has been cleared." : "Please do not pay twice; refresh after a moment if Paystack has completed your payment."}</p>
+      <p>Order <b>{order.orderNumber}</b> · {formatNaira(order.totalKobo)}. {confirmed ? deliveryPayment ? "Your order is confirmed for payment on delivery, tracking is active, and you can follow its progress below." : "Your confirmation is being sent, tracking is active, and you can follow its progress below." : "Please do not pay twice; refresh after a moment if Paystack has completed your payment."}</p>
       <div className="success-facts"><span>Order status <b>{order.status.replaceAll("_", " ")}</b></span><span>Estimated delivery <b>{order.estimatedDelivery ?? "3–5 working days"}</b></span></div>
     </> : <p>We could not find this order reference. Please email support if payment was deducted.</p>}
     <div className="success-actions"><Link href="/track-order" className="button primary">Track this order</Link><Link href="/shop" className="button quiet">Continue shopping</Link></div>
