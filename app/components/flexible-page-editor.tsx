@@ -263,7 +263,7 @@ export function FlexiblePageEditor({ value, onChange }: Props) {
             pairText(value.metrics.items),
             (text) => set("metrics", { items: pairs(text) }),
             true,
-            "3–5 days | Estimated delivery",
+            "3–5 working days within Lagos and 3–12 working days outside Lagos | Estimated delivery",
           )}
         </div>
       </details>

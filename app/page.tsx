@@ -15,7 +15,7 @@ export default async function Home() {
 
       <section className="trust-row emberline-trust" aria-label="Store assurances">
         <div><b>01</b><span><strong>Secure prepaid checkout</strong><small>Payments protected by Paystack</small></span></div>
-        <div><b>02</b><span><strong>3–5 working days</strong><small>Clear delivery expectations</small></span></div>
+        <div><b>02</b><span><strong>Lagos: 3–5 working days</strong><small>Outside Lagos: 3–12 working days</small></span></div>
         <div><b>03</b><span><strong>Track every order</strong><small>From payment to delivery</small></span></div>
         <div><b>04</b><span><strong>Email-first support</strong><small>support@shoprenova.com.ng</small></span></div>
       </section>

@@ -82,6 +82,8 @@ export async function confirmOrderWhatsApp(orderId: number) {
   const db = getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order?.whatsappConsentAt || !CHECKOUT_WHATSAPP_SOURCES.includes(order.whatsappConsentSource || "") || order.whatsappOptedOutAt || !confirmedOrder(order)) return { status: "skipped" };
+  const [manual] = await db.select({ id: whatsappMessages.id }).from(whatsappMessages).where(and(eq(whatsappMessages.orderId, orderId), eq(whatsappMessages.kind, "activation"))).limit(1);
+  if (manual) return { status: "skipped" };
   const now = new Date().toISOString();
   // Existing stopped reminders and channel choices are never re-enabled by a
   // repeated Paystack callback. Legacy orders have no WhatsApp consent timestamp.
@@ -161,7 +163,7 @@ export async function runWhatsAppQueue(deadline = Date.now() + 40_000) {
   const missing = await db.select({ id: orders.id }).from(orders).where(and(isNotNull(orders.whatsappConsentAt), inArray(orders.whatsappConsentSource, CHECKOUT_WHATSAPP_SOURCES), isNull(orders.whatsappOptedOutAt),
     inArray(orders.status, ["confirmed", "processing", "packaged", "dispatched"]),
     sql`(${orders.paymentMethod} = 'cash_on_delivery' OR ${orders.paymentStatus} = 'paid')`,
-    sql`NOT EXISTS (SELECT 1 FROM whatsapp_messages existing WHERE existing.dedupe_key = 'confirmation:' || ${orders.id}::text)`)).limit(50);
+    sql`NOT EXISTS (SELECT 1 FROM whatsapp_messages existing WHERE existing.dedupe_key = 'confirmation:' || ${orders.id}::text OR (existing.order_id = ${orders.id} AND existing.kind = 'activation'))`)).limit(50);
   for (const order of missing) {
     if (Date.now() > deadline - 22_000) break;
     await confirmOrderWhatsApp(order.id);

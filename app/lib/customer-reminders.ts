@@ -1,3 +1,4 @@
+import { standardDeliveryEstimate } from "./delivery-estimate";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orderReminderLogs, orderReminders, orders, whatsappMessages } from "../../db/schema";
@@ -37,7 +38,7 @@ function amountDue(order: typeof orders.$inferSelect) {
 
 function reminderText(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine") {
   const appUrl = (setting("APP_URL") ?? "https://shoprenova.com.ng").replace(/\/$/, "");
-  const estimate = reminder.deliveryEstimate || order.estimatedDelivery || "Delivery timing will be updated as movement continues";
+  const estimate = standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson);
   const note = reminder.customerNote ? ` ${reminder.customerNote}` : "";
   const opening = kind === "arrival"
     ? `Hello ${firstName(order.customerName)}, there is an important delivery update for your Renova order ${order.orderNumber}.`
@@ -52,7 +53,7 @@ async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof ord
   if (!apiKey || !from) return { channel: "email", status: "failed", error: "Resend is not configured." };
   if (!order.customerEmail?.includes("@")) return { channel: "email", status: "failed", error: "Customer email is invalid." };
   const appUrl = (setting("APP_URL") ?? "https://shoprenova.com.ng").replace(/\/$/, "");
-  const estimate = reminder.deliveryEstimate || order.estimatedDelivery || "We will update you as delivery progresses";
+  const estimate = standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(10_000),
@@ -80,7 +81,7 @@ async function sendSms(order: typeof orders.$inferSelect, reminder: typeof order
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       api_key: apiKey,
-      to: phoneForWhatsApp(order.whatsappPhone || order.customerPhone),
+      to: phoneForWhatsApp(order.customerPhone),
       from: senderId,
       sms: reminderText(order, reminder, kind),
       type: "plain",
@@ -110,12 +111,13 @@ export function reminderProviderStatus() {
 
 export async function reminderDashboardData() {
   const db = getDb();
-  const [reminders, logs, whatsapp] = await Promise.all([
+  const [reminders, logs, whatsapp, contacts] = await Promise.all([
     db.select().from(orderReminders).orderBy(desc(orderReminders.id)),
     db.select().from(orderReminderLogs).orderBy(desc(orderReminderLogs.id)).limit(100),
     db.select().from(whatsappMessages).orderBy(desc(whatsappMessages.id)).limit(100),
+    db.select({ orderId: orders.id, phone: orders.whatsappPhone, consentAt: orders.whatsappConsentAt, optedOutAt: orders.whatsappOptedOutAt }).from(orders),
   ]);
-  return { reminders, logs, whatsappMessages: whatsapp, providers: reminderProviderStatus() };
+  return { reminders, logs, whatsappMessages: whatsapp, whatsappContacts: contacts, providers: reminderProviderStatus() };
 }
 
 export async function saveReminder(input: {

@@ -1,8 +1,10 @@
-export type WhatsAppKind = "confirmation" | "routine" | "arrival";
+import { standardDeliveryEstimate } from "./delivery-estimate";
+
+export type WhatsAppKind = "confirmation" | "routine" | "arrival" | "activation";
 export type MessageOrder = {
   customerName: string; orderNumber: string; customerPhone: string;
   status: string; paymentMethod: string; paymentStatus: string;
-  totalKobo: number; itemsJson: string; estimatedDelivery?: string | null;
+  totalKobo: number; itemsJson: string; estimatedDelivery?: string | null; addressJson?: string | null;
 };
 export type MessageReminder = { currentCheckpoint: string; customerNote: string; deliveryEstimate: string };
 
@@ -61,13 +63,13 @@ function itemSummary(json: string) {
 export function whatsappTemplateParameters(order: MessageOrder, reminder: MessageReminder, kind: WhatsAppKind): [string, string, string, string] {
   const name = cleanMessageText(order.customerName.trim().split(/\s+/)[0] || "there", 40);
   const number = cleanMessageText(order.orderNumber, 64);
-  const estimate = cleanMessageText(reminder.deliveryEstimate || order.estimatedDelivery || "We will share an estimate when the delivery partner confirms it.", 110);
+  const estimate = cleanMessageText(standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson), 110);
   const checkpoint = cleanMessageText(reminder.currentCheckpoint, 120);
   const note = cleanMessageText(reminder.customerNote, 80);
   const opening = kind === "confirmation"
     ? `Thank you for choosing Renova! ${orderStageText(order.status)}`
     : kind === "arrival" && checkpoint ? `Delivery update: ${checkpoint}`
-    : `Your daily delivery update: ${orderStageText(order.status)}`;
+    : `${kind === "activation" ? "Your latest order update" : "Your daily delivery update"}: ${orderStageText(order.status)}`;
   const stop = "Reply STOP to stop WhatsApp updates.";
   // Keep the order summary and payment amount ahead of optional notes. Bound
   // the whole expanded body, not just individual template variables.

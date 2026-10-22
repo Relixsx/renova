@@ -1,3 +1,4 @@
+import { deliveryEstimateForAddress } from "../../../lib/delivery-estimate";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { getDeliveryOption } from "../../../lib/checkout";
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; customerConfirmedDeliveryCommitment?: boolean; whatsappOptIn?: boolean; whatsapp?: unknown };
     const details = payload.details ?? {};
-    const delivery = getDeliveryOption(String(payload.deliveryId ?? ""));
+    const delivery = getDeliveryOption(String(payload.deliveryId ?? ""), details);
     if (!delivery || !payload.lines?.length) return Response.json({ error: "Your cart or delivery selection is incomplete." }, { status: 400 });
     if (payload.customerConfirmedDeliveryCommitment !== true) return Response.json({ error: "Confirm that you intend to receive and pay for this order at delivery." }, { status: 400 });
     if (!details.fullName || !details.email || !details.phone || !details.streetAddress || !details.stateCode || !details.lga || !details.cityTown) return Response.json({ error: "Complete the delivery address before placing the order." }, { status: 400 });
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       addressJson: JSON.stringify(details),
       shippingJson: JSON.stringify(delivery),
       trackingNumber: orderNumber,
-      estimatedDelivery: "3–5 working days",
+      estimatedDelivery: deliveryEstimateForAddress(details),
     }).returning();
     await sendOrderNotifications(created);
     return Response.json({ orderNumber });

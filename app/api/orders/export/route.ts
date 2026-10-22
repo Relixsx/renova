@@ -1,3 +1,4 @@
+import { normalizeDeliveryCopy, standardDeliveryEstimate } from "../../../lib/delivery-estimate";
 import ExcelJS from "exceljs";
 import { desc } from "drizzle-orm";
 import { getDb } from "../../../../db";
@@ -199,8 +200,8 @@ export async function GET(request: Request) {
         text(address.stateName || address.state || address.stateCode),
         text(address.deliveryInstructions),
         text(shipping.name),
-        text(shipping.detail),
-        text(order.estimatedDelivery),
+        normalizeDeliveryCopy(text(shipping.detail), true, order.addressJson),
+        standardDeliveryEstimate(order.estimatedDelivery, order.addressJson),
         text(order.trackingNumber),
         watDate(order.customerNotifiedAt),
         watDate(order.updatedAt),

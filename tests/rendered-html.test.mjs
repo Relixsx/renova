@@ -36,4 +36,15 @@ test("renders Renova production metadata", async () => {
     html,
     /<meta(?=[^>]*\bname=["']viewport["'])(?=[^>]*\bcontent=["']width=device-width, initial-scale=1["'])[^>]*>/i,
   );
+  assert.match(html, /Lagos: 3–5 working days/);
+  assert.match(html, /Outside Lagos: 3–12 working days/);
+  for (const path of ["/delivery", "/products/aura-quietmax-wireless-headphones"]) {
+    const page = await worker.fetch(new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
+    assert.equal(page.status, 200, path);
+    const content = await page.text();
+    assert.match(content, /3–5 working days within Lagos/, path);
+    assert.match(content, /3–12 working days outside Lagos/, path);
+    assert.doesNotMatch(content, /3–7 working days/, path);
+  }
+
 });

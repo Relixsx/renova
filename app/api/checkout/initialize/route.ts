@@ -1,3 +1,4 @@
+import { deliveryEstimateForAddress } from "../../../lib/delivery-estimate";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { getDeliveryOption } from "../../../lib/checkout";
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
     if (!secret) return Response.json({ error: "Live Paystack checkout is waiting for the store owner’s secret key." }, { status: 503 });
     const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; whatsappOptIn?: boolean; whatsapp?: unknown };
     const details = payload.details ?? {};
-    const delivery = getDeliveryOption(String(payload.deliveryId ?? ""));
+    const delivery = getDeliveryOption(String(payload.deliveryId ?? ""), details);
     if (!delivery || !payload.lines?.length) return Response.json({ error: "Your cart or delivery selection is incomplete." }, { status: 400 });
     if (!details.fullName || !details.email || !details.phone || !details.streetAddress || !details.stateCode || !details.lga || !details.cityTown) return Response.json({ error: "Complete the delivery address before payment." }, { status: 400 });
     let whatsappConsent;
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     }
     const totalKobo = subtotalKobo + delivery.priceKobo;
     const orderNumber = `REN-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
-    await getDb().insert(orders).values({ orderNumber, customerName: details.fullName, customerEmail: details.email, customerPhone: details.phone, ...whatsappConsent, paymentMethod: "paystack", totalKobo, itemsJson: JSON.stringify(verifiedItems), addressJson: JSON.stringify(details), shippingJson: JSON.stringify(delivery) });
+    await getDb().insert(orders).values({ orderNumber, customerName: details.fullName, customerEmail: details.email, customerPhone: details.phone, ...whatsappConsent, paymentMethod: "paystack", estimatedDelivery: deliveryEstimateForAddress(details), totalKobo, itemsJson: JSON.stringify(verifiedItems), addressJson: JSON.stringify(details), shippingJson: JSON.stringify(delivery) });
 
     const requestOrigin = new URL(request.url).origin;
     const origin = (process.env.APP_URL?.trim() || requestOrigin).replace(/\/$/, "");

@@ -30,11 +30,13 @@ type AdminOrder = {
   customerPhone: string;
   whatsappPhone?: string | null;
   whatsappConsentAt?: string | null;
+  whatsappOptedOutAt?: string | null;
   paymentStatus: string;
   paymentMethod?: string;
   status: string;
   totalKobo: number;
   estimatedDelivery?: string | null;
+  addressJson?: string | null;
   createdAt: string;
 };
 const emptyForm = {
@@ -1275,6 +1277,7 @@ export function AdminCatalogue({
         )}
 
         {activeSection === "orders" && (
+        <>
         <section className="admin-panel" id="orders">
           <div className="admin-panel-head">
             <div>
@@ -1310,7 +1313,7 @@ export function AdminCatalogue({
               </div>
               {orderRows.slice(0, 20).map((order) => (
                 <article key={order.id}>
-                  <b data-label="Order">{order.orderNumber}</b>
+                  <b data-label="Order">{order.orderNumber}<a className="admin-whatsapp-order-link" href={`/admin/reminders#whatsapp-order-${order.id}`}>WhatsApp notifications →</a></b>
                   <span data-label="Customer">{order.customerName}</span>
                   <span data-label="Total">{formatNaira(order.totalKobo)}</span>
                   <i data-label="Payment">
@@ -1360,6 +1363,8 @@ export function AdminCatalogue({
             </div>
           )}
         </section>
+        <CustomerReminderBot orders={orderRows} compact />
+        </>
         )}
 
         {activeSection === "reminders" && (
@@ -1710,7 +1715,7 @@ export function AdminCatalogue({
                         updateField("chatbotFaq", e.target.value)
                       }
                       placeholder={
-                        "Is it rechargeable? | Yes, using the included USB-C cable.\nWhen will it arrive? | Usually within 3–5 working days."
+                        "Is it rechargeable? | Yes, using the included USB-C cable.\nWhen will it arrive? | Usually within 3–5 working days within Lagos and 3–12 working days outside Lagos."
                       }
                     />
                   </label>

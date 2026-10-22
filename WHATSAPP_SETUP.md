@@ -1,5 +1,7 @@
 # Renova WhatsApp order updates
 
+Latest 22 October update: use [REGIONAL_DELIVERY_UPDATE.md](./REGIONAL_DELIVERY_UPDATE.md) for Lagos (3–5 working days) and outside Lagos (3–12 working days). Use [WHATSAPP_ORDER_CONTROLS.md](./WHATSAPP_ORDER_CONTROLS.md) for per-order start/stop and historical orders.
+
 Source: `Relixsx/renova`, branch `migration/neon-render`. The initial WhatsApp integration was deployed as `123e4e4`.
 
 **22 October checkout update:** if you already installed the integration and migration, follow [CHECKOUT_UPDATE.md](./CHECKOUT_UPDATE.md). That incremental update needs no new database migration, Meta template, Worker deployment or Render environment changes. The original installation steps below are retained for a fresh setup only.

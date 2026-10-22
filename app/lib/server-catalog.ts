@@ -1,3 +1,4 @@
+import { normalizeDeliveryCopy, normalizeStructuredDeliveryCopy } from "./delivery-estimate";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "../../db";
 import {
@@ -175,7 +176,7 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
   }
   const flexibleDefaults: Partial<Product> = {
     name: row.name,
-    shortDescription: row.shortDescription,
+    shortDescription: normalizeDeliveryCopy(row.shortDescription),
     imageUrl: row.imageUrl,
   };
   try {
@@ -193,8 +194,8 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     slug: row.slug,
     sku: row.sku,
     categorySlug: row.categorySlug,
-    shortDescription: row.shortDescription,
-    description: row.description,
+    shortDescription: normalizeDeliveryCopy(row.shortDescription),
+    description: normalizeDeliveryCopy(row.description),
     priceKobo: row.priceKobo,
     compareAtKobo: row.compareAtKobo,
     supplierCostKobo: row.supplierCostKobo,
@@ -224,8 +225,8 @@ function mapProduct(row: typeof productTable.$inferSelect): Product {
     countryOfOrigin: row.countryOfOrigin,
     careInstructions: row.careInstructions,
     compatibility: row.compatibility,
-    chatbotKnowledge: row.chatbotKnowledge,
-    chatbotFaq,
+    chatbotKnowledge: normalizeDeliveryCopy(row.chatbotKnowledge),
+    chatbotFaq: normalizeStructuredDeliveryCopy(chatbotFaq),
     pageTemplate: row.pageTemplate === "flexible" ? "flexible" : "standard",
     landingPage,
     promoEnabled: row.promoEnabled,

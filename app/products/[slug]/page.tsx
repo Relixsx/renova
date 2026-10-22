@@ -1,3 +1,4 @@
+import { DEFAULT_DELIVERY_ESTIMATE } from "../../lib/delivery-estimate";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -261,7 +262,7 @@ export default async function ProductPage({
               <i aria-hidden="true">↗</i>
               <span>
                 <b>Tracked delivery</b>
-                <small>Estimated in 3–5 working days</small>
+                <small>Estimated in {DEFAULT_DELIVERY_ESTIMATE}</small>
               </span>
             </article>
             <article>
@@ -286,7 +287,7 @@ export default async function ProductPage({
                 Delivery information <span>＋</span>
               </summary>
               <p>
-                Estimated delivery is 3–5 working days after order confirmation.
+                Estimated delivery is {DEFAULT_DELIVERY_ESTIMATE} after order confirmation.
                 Eligible Jumia campaign delivery may be free; every available
                 carrier and charge is shown before the order is placed.
               </p>
@@ -360,7 +361,7 @@ export default async function ProductPage({
                 {
                   question: "When should this product arrive?",
                   answer:
-                    "The standard estimate is 3–5 working days after verified payment. The selected carrier and any applicable charge are confirmed during checkout.",
+                    `The standard estimate is ${DEFAULT_DELIVERY_ESTIMATE} after order confirmation for payment on delivery, or verified payment for prepaid orders. The selected carrier and any applicable charge are confirmed during checkout.`,
                 },
                 {
                   question: "How do I know whether my payment succeeded?",

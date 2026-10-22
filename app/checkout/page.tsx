@@ -6,7 +6,8 @@ import { getAllStates, getLGAsByState } from "ng-geo-data";
 import { useCart } from "../components/cart-provider";
 import { OrderMotionVisual } from "../components/order-motion-visual";
 import { formatNaira } from "../lib/catalog";
-import { deliveryOptions } from "../lib/checkout";
+import { deliveryEstimateForAddress } from "../lib/delivery-estimate";
+import { deliveryOptions, deliveryOptionDetail } from "../lib/checkout";
 import { CHECKOUT_WHATSAPP_NOTICE_VERSION } from "../lib/checkout-whatsapp";
 import { browserCartStorage, readStoredCart } from "../lib/cart-storage";
 import { phoneForWhatsApp } from "../lib/whatsapp-message";
@@ -553,7 +554,7 @@ export default function CheckoutPage() {
                     />
                     <span>
                       <b>{option.name}</b>
-                      <small>{option.detail}</small>
+                      <small>{deliveryOptionDetail(option, details)}</small>
                     </span>
                     {option.label && <i>{option.label}</i>}
                     <strong>
@@ -618,7 +619,7 @@ export default function CheckoutPage() {
               <div className="review-block">
                 <span>Delivery method</span>
                 <b>{selectedDelivery.name}</b>
-                <small>{selectedDelivery.detail}</small>
+                <small>{deliveryOptionDetail(selectedDelivery, details)}</small>
                 <button type="button" onClick={() => setStep(2)}>
                   Change
                 </button>
@@ -777,6 +778,10 @@ export default function CheckoutPage() {
               <span>Total</span>
               <b>{formatNaira(total)}</b>
             </p>
+          </div>
+          <div className="checkout-assurance">
+            <b>Estimated delivery</b>
+            <span>{deliveryEstimateForAddress(details)} after {isDeliveryPayment ? "order confirmation" : "verified payment"}.</span>
           </div>
           <div className="checkout-assurance">
             <b>↻ Seven-day return policy</b>

@@ -1,3 +1,4 @@
+import { DELIVERY_POLICY_TEXT, normalizeStructuredDeliveryCopy } from "./delivery-estimate";
 import { expandedSeedProducts } from "./catalog-expanded";
 
 export type Category = {
@@ -253,7 +254,7 @@ export function defaultFlexibleProductPage(
       items: [
         {
           question: "How long does delivery take?",
-          answer: "Estimated delivery is 3–5 working days.",
+          answer: DELIVERY_POLICY_TEXT,
         },
         {
           question: "Can I track my order?",
@@ -290,7 +291,7 @@ export function normalizeFlexibleProductPage(
     value && typeof value === "object" && !Array.isArray(value)
       ? { ...base, ...value }
       : base;
-  return {
+  return normalizeStructuredDeliveryCopy({
     ...fallback,
     ...source,
     theme: merge(fallback.theme, source.theme),
@@ -311,7 +312,7 @@ export function normalizeFlexibleProductPage(
     order: merge(fallback.order, source.order),
     finalCta: merge(fallback.finalCta, source.finalCta),
     stickyCta: merge(fallback.stickyCta, source.stickyCta),
-  };
+  });
 }
 
 export type Product = {

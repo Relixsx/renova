@@ -1,3 +1,4 @@
+import { standardDeliveryEstimate } from "../../../lib/delivery-estimate";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
@@ -11,6 +12,6 @@ export async function POST(request: Request) {
     const [order] = await getDb().select().from(orders).where(and(eq(orders.orderNumber, orderNumber), sql`lower(${orders.customerEmail}) = ${email}`)).limit(1);
     if (!order) return Response.json({ error: "We could not match those order details." }, { status: 404 });
     const shipping = JSON.parse(order.shippingJson || "{}") as Record<string, unknown>;
-    return Response.json({ order: { orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, carrier: String(shipping.name ?? shipping.carrier ?? "Renova delivery partner"), trackingNumber: order.trackingNumber, estimatedDelivery: order.estimatedDelivery ?? "3–5 working days", createdAt: order.createdAt } });
+    return Response.json({ order: { orderNumber: order.orderNumber, status: order.status, paymentStatus: order.paymentStatus, carrier: String(shipping.name ?? shipping.carrier ?? "Renova delivery partner"), trackingNumber: order.trackingNumber, estimatedDelivery: standardDeliveryEstimate(order.estimatedDelivery, order.addressJson), createdAt: order.createdAt } });
   } catch { return Response.json({ error: "Order tracking is temporarily unavailable." }, { status: 500 }); }
 }

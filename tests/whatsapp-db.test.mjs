@@ -12,6 +12,8 @@ const build = process.env.RENOVA_TEST_BUILD, root = process.env.RENOVA_TEST_SOUR
 const load = (name) => import(pathToFileURL(join(build, name.replace(/\.ts$/, ".mjs"))));
 const schema = await load("db/schema.ts");
 const wa = await load("app/lib/whatsapp-notifications.ts");
+const controls = await load("app/lib/whatsapp-order-controls.ts");
+const reminderRoute = await load("app/api/orders/reminders/route.ts");
 const reminders = await load("app/lib/customer-reminders.ts");
 const payments = await load("app/lib/order-payment.ts");
 const webhook = await load("app/api/whatsapp/webhook/route.ts");
@@ -44,12 +46,13 @@ beforeEach(async () => {
   await pg.exec("TRUNCATE whatsapp_messages,whatsapp_receipts,order_reminder_logs,order_reminders,orders RESTART IDENTITY");
   globalThis[symbol] = db;
   globalThis[productsSymbol] = [{ slug: "qa-headphones", name: "Headphones", sku: "QA-001", variants: ["Black"], imageUrl: "/qa.svg", isPublished: true, stock: 20, paymentMode: "cash_on_delivery", priceKobo: 2450000 }];
-  Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-db-test-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", WHATSAPP_APP_SECRET: "fake-app-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "fake-verify-token", REMINDER_CRON_SECRET: "fake-cron-secret", PAYSTACK_SECRET_KEY: "fake-paystack-key", RESEND_API_KEY: "fake-resend-key", RESEND_FROM_EMAIL: "qa@example.invalid", FORMSPREE_ENDPOINT: "https://forms.example.invalid/qa", APP_URL: "https://renova.example.invalid" });
+  Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-db-test-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", WHATSAPP_APP_SECRET: "fake-app-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "fake-verify-token", REMINDER_CRON_SECRET: "fake-cron-secret", PAYSTACK_SECRET_KEY: "fake-paystack-key", TERMII_API_KEY: "", RESEND_API_KEY: "fake-resend-key", RESEND_FROM_EMAIL: "qa@example.invalid", FORMSPREE_ENDPOINT: "https://forms.example.invalid/qa", APP_URL: "https://renova.example.invalid" });
   calls = []; graphBehavior = undefined;
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body); calls.push({ url: String(url), body });
     if (String(url).startsWith("https://graph.facebook.com/")) return graphBehavior ? graphBehavior(body) : Response.json({ messages: [{ id: `wamid.qa-${calls.length}` }] });
     if (String(url) === "https://api.paystack.co/transaction/initialize") return Response.json({ status: true, data: { authorization_url: "https://paystack.example.invalid/qa" } });
+    if (String(url) === "https://v3.api.termii.com/api/sms/send") return Response.json({ message_id: "qa-sms" });
     if (String(url) === "https://api.resend.com/emails") return Response.json({ id: "qa-email" });
     if (String(url) === "https://forms.example.invalid/qa") return Response.json({ ok: true });
     throw new Error("Tests block all unexpected outbound requests");
@@ -253,4 +256,179 @@ test("scheduler recovers a v2 confirmation without enrolling an older unconsente
   await createOrder({ whatsappConsentAt: null, whatsappPhone: null, whatsappConsentSource: null });
   await wa.runWhatsAppQueue(); await wa.runWhatsAppQueue();
   assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
+});
+
+
+const olderOrder = (overrides = {}) => createOrder({ whatsappPhone: null, whatsappConsentAt: null, whatsappConsentSource: null, status: "dispatched", ...overrides });
+const startInput = (order, overrides = {}) => ({ orderId: order.id, phone: "09000000001", consentConfirmed: true, ...overrides });
+
+test("owner can start a historical order immediately with recorded consent and a separate WhatsApp recipient", async () => {
+  const order = await olderOrder();
+  await assert.rejects(controls.startOrderWhatsApp(startInput(order, { consentConfirmed: false })), /agreement/);
+  await assert.rejects(controls.startOrderWhatsApp(startInput(order, { phone: "123" })), /valid/);
+  assert.equal((await allMessages()).length, 0);
+  const result = await controls.startOrderWhatsApp(startInput(order));
+  assert.equal(result.changed, true); assert.equal(result.delivery.status, "accepted");
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
+  assert.match(graphCalls()[0].body.template.components[0].parameters[2].text, /latest order update.*dispatched and is on the way/);
+  assert.doesNotMatch(graphCalls()[0].body.template.components[0].parameters[2].text, /received and is being processed|Thank you for choosing/);
+  const [saved] = await db.select().from(schema.orders);
+  assert.equal(saved.whatsappConsentSource, "owner-recorded"); assert.ok(saved.whatsappConsentAt);
+  assert.equal(saved.customerPhone, "08000000000");
+  assert.equal((await allMessages())[0].kind, "activation");
+  await wa.runWhatsAppQueue(); assert.equal(graphCalls().length, 1);
+});
+
+test("repeated and concurrent start clicks send one activation, and daily sends wait a full 24 hours", async () => {
+  const order = await olderOrder();
+  const results = await Promise.all([controls.startOrderWhatsApp(startInput(order)), controls.startOrderWhatsApp(startInput(order)), controls.startOrderWhatsApp(startInput(order))]);
+  assert.equal(results.filter((r) => r.changed).length, 1); assert.equal(graphCalls().length, 1);
+  await controls.startOrderWhatsApp(startInput(order)); assert.equal(graphCalls().length, 1);
+  const [reminder] = await db.select().from(schema.orderReminders);
+  assert.ok(Date.parse(reminder.nextSendAt) >= Date.now() + 23.99 * 3600_000);
+  const yesterday = new Date(Date.now() - 25 * 3600_000).toISOString();
+  await db.update(schema.orderReminders).set({ nextSendAt: yesterday });
+  await reminders.runDueReminders(); assert.equal(graphCalls().length, 1);
+  await db.update(schema.whatsappMessages).set({ acceptedAt: yesterday, nextAttemptAt: yesterday });
+  await db.update(schema.orderReminders).set({ nextSendAt: yesterday });
+  await reminders.runDueReminders(); assert.equal(graphCalls().length, 2);
+});
+
+test("owner pause cancels queued WhatsApp only for that order and can be resumed without changing consent", async () => {
+  process.env.WHATSAPP_AUTOMATION_ENABLED = "false";
+  const one = await olderOrder(), two = await olderOrder();
+  await controls.startOrderWhatsApp(startInput(one)); await controls.startOrderWhatsApp(startInput(two));
+  await controls.stopOrderWhatsApp(one.id);
+  const messages = await allMessages();
+  assert.equal(messages.find((m) => m.orderId === one.id).status, "cancelled");
+  assert.equal(messages.find((m) => m.orderId === two.id).status, "pending");
+  const [saved] = await db.select().from(schema.orders).where(eq(schema.orders.id, one.id));
+  assert.equal(saved.whatsappOptedOutAt, null); assert.ok(saved.whatsappConsentAt);
+  process.env.WHATSAPP_AUTOMATION_ENABLED = "true";
+  await wa.runWhatsAppQueue(); assert.equal(graphCalls().length, 1);
+  const resumed = await controls.startOrderWhatsApp(startInput(one));
+  assert.equal(resumed.changed, true); assert.equal(graphCalls().length, 2);
+});
+
+test("starting and stopping WhatsApp preserves other channel choices and never sends an immediate email or SMS", async () => {
+  const order = await olderOrder();
+  const previous = await reminders.saveReminder({ orderId: order.id, consentConfirmed: true, emailEnabled: true, whatsappEnabled: false, smsEnabled: true, currentCheckpoint: "Verified courier hub update", deliveryEstimate: "24–26 October", customerNote: "Keep the collection code", start: true });
+  await controls.startOrderWhatsApp(startInput(order));
+  assert.equal(calls.length, 1); assert.equal(graphCalls().length, 1);
+  const stopped = await controls.stopOrderWhatsApp(order.id);
+  assert.equal(stopped.reminder.active, true); assert.equal(stopped.reminder.emailEnabled, true); assert.equal(stopped.reminder.smsEnabled, true); assert.equal(stopped.reminder.whatsappEnabled, false);
+  assert.equal(stopped.reminder.currentCheckpoint, previous.currentCheckpoint); assert.equal(stopped.reminder.customerNote, previous.customerNote);
+  assert.ok(stopped.reminder.nextSendAt);
+  process.env.TERMII_API_KEY = "fake-sms-key";
+  await db.update(schema.orderReminders).set({ nextSendAt: "2020-01-01T00:00:00.000Z" });
+  await reminders.dispatchReminder(previous.id);
+  assert.equal(calls.find((c) => c.url.includes("termii.com")).body.to, "2348000000000");
+  assert.equal(graphCalls().length, 1);
+});
+
+test("new checkout orders remain automatic, while a stopped checkout order can resume with current progress only", async () => {
+  const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+  const already = await controls.startOrderWhatsApp(startInput(order, { phone: "08000000000", consentConfirmed: false }));
+  assert.equal(already.changed, false); assert.equal(graphCalls().length, 1);
+  await controls.stopOrderWhatsApp(order.id);
+  const resumed = await controls.startOrderWhatsApp(startInput(order, { phone: "08000000000", consentConfirmed: false }));
+  assert.equal(resumed.changed, true); assert.equal(graphCalls().length, 2);
+  await wa.confirmOrderWhatsApp(order.id); await wa.runWhatsAppQueue(); assert.equal(graphCalls().length, 2);
+});
+
+test("a manually started checkout order never replays a missing new-order confirmation", async () => {
+  const order = await createOrder({ status: "dispatched" });
+  await controls.startOrderWhatsApp(startInput(order, { phone: "08000000000" }));
+  await wa.confirmOrderWhatsApp(order.id); await wa.runWhatsAppQueue();
+  assert.equal(graphCalls().length, 1); assert.equal((await allMessages())[0].kind, "activation");
+});
+
+test("STOP, unpaid and terminal orders cannot be re-enabled by the owner controls", async () => {
+  const stopped = await olderOrder(); await controls.startOrderWhatsApp(startInput(stopped)); await wa.optOutWhatsApp("09000000001");
+  await assert.rejects(controls.startOrderWhatsApp(startInput(stopped)), /requested STOP/);
+  await assert.rejects(controls.startOrderWhatsApp(startInput(stopped, { phone: "08000000002" })), /requested STOP/);
+  for (const status of ["delivered", "collected", "cancelled", "refunded", "payment_pending"]) {
+    const order = await olderOrder({ status }); await assert.rejects(controls.startOrderWhatsApp(startInput(order)), /awaiting delivery/);
+  }
+  const unpaid = await olderOrder({ paymentMethod: "paystack", paymentStatus: "pending" });
+  await assert.rejects(controls.startOrderWhatsApp(startInput(unpaid)), /verified paid/);
+  assert.equal(graphCalls().length, 1);
+});
+
+test("a process failure after activation commit leaves a durable job for the scheduler", async () => {
+  const order = await olderOrder();
+  globalThis[symbol] = new Proxy(db, { get(target, key) { if (key === "execute") return async (...args) => { await target.execute(...args); throw new Error("simulated process stop after commit"); }; return Reflect.get(target, key); } });
+  await assert.rejects(controls.startOrderWhatsApp(startInput(order)), /simulated process stop/);
+  globalThis[symbol] = db;
+  assert.equal((await allMessages())[0].status, "pending"); assert.equal(graphCalls().length, 0);
+  await wa.runWhatsAppQueue(); await wa.runWhatsAppQueue();
+  assert.equal(graphCalls().length, 1); assert.equal((await allMessages())[0].kind, "activation");
+});
+
+const controlRequest = (body, owner = true) => new Request("https://renova.example.invalid/api/orders/reminders", { method: "POST", headers: { "content-type": "application/json", ...(owner ? { "x-renova-test-owner": "yes" } : {}) }, body: JSON.stringify(body) });
+test("admin route requires owner access and validates consent before any WhatsApp start", async () => {
+  const order = await olderOrder();
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "start_whatsapp", orderId: order.id, whatsappPhone: "09000000001", consentConfirmed: true }, false))).status, 403);
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "start_whatsapp", orderId: order.id, whatsappPhone: "09000000001", consentConfirmed: false }))).status, 400);
+  assert.equal(graphCalls().length, 0);
+  const response = await reminderRoute.POST(controlRequest({ action: "start_whatsapp", orderId: order.id, whatsappPhone: "09000000001", consentConfirmed: true }));
+  assert.equal(response.status, 200); const payload = await response.json();
+  assert.equal(payload.contact.phone, "2349000000001"); assert.equal(payload.delivery.status, "accepted");
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "stop_whatsapp", orderId: order.id }))).status, 200);
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "stop_whatsapp", orderId: 999999 }))).status, 404);
+});
+
+const tracking = await load("app/api/orders/track/route.ts");
+const trackingRequest = (order) => new Request("https://renova.example.invalid/api/orders/track", { method: "POST", body: JSON.stringify({ orderNumber: order.orderNumber, email: order.customerEmail }) });
+
+test("COD checkout persists the state-specific estimate and uses it in confirmation, email and tracking", async () => {
+  for (const [stateCode, expected] of [["LA", "3–5 working days"], ["OG", "3–12 working days"]]) {
+    const response = await codCheckout.POST(checkoutRequest({ details: { ...checkoutDetails, stateCode } }));
+    assert.equal(response.status, 200);
+    const { orderNumber } = await response.json();
+    const [order] = await db.select().from(schema.orders).where(eq(schema.orders.orderNumber, orderNumber));
+    assert.equal(order.estimatedDelivery, expected);
+    assert.ok(JSON.parse(order.shippingJson).detail.startsWith(expected));
+    assert.equal(graphCalls().at(-1).body.template.components[0].parameters[3].text, expected);
+    assert.ok(calls.filter((call) => call.url === "https://api.resend.com/emails").at(-1).body.html.includes(expected));
+    const result = await tracking.POST(trackingRequest(order));
+    assert.equal((await result.json()).order.estimatedDelivery, expected);
+  }
+});
+
+test("prepaid checkout retains its destination estimate after verified payment and sends one confirmation", async () => {
+  globalThis[productsSymbol][0].paymentMode = "prepaid";
+  const response = await prepaidCheckout.POST(checkoutRequest({ details: { ...checkoutDetails, stateCode: "FC" } }));
+  assert.equal(response.status, 200);
+  const [order] = await db.select().from(schema.orders);
+  assert.equal(order.estimatedDelivery, "3–12 working days"); assert.equal(graphCalls().length, 0);
+  await payments.markOrderPaid(order.orderNumber, order.totalKobo);
+  await payments.markOrderPaid(order.orderNumber, order.totalKobo);
+  assert.equal(graphCalls().length, 1);
+  assert.equal(graphCalls()[0].body.template.components[0].parameters[3].text, "3–12 working days");
+  assert.equal((await db.select().from(schema.orders))[0].estimatedDelivery, "3–12 working days");
+});
+
+test("historical estimates refresh in tracking and immediate progress messages without rewriting courier dates", async () => {
+  for (const [stateCode, estimate, expected] of [["OG", "3–5 working days", "3–12 working days"], ["LA", "3–7 working days", "3–5 working days"], ["OG", "24–26 October", "24–26 October"]]) {
+    const order = await olderOrder({ orderNumber: `REN-QA-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, addressJson: JSON.stringify({ stateCode }), estimatedDelivery: estimate });
+    assert.equal((await (await tracking.POST(trackingRequest(order))).json()).order.estimatedDelivery, expected);
+    await controls.startOrderWhatsApp(startInput(order));
+    assert.equal(graphCalls().at(-1).body.template.components[0].parameters[3].text, expected);
+    assert.equal((await db.select().from(schema.orders).where(eq(schema.orders.id, order.id)))[0].estimatedDelivery, estimate);
+  }
+});
+
+test("daily email, SMS and WhatsApp previews use the current region for an older generic estimate", async () => {
+  process.env.TERMII_API_KEY = "fake-sms-key";
+  const order = await createOrder({ addressJson: '{"stateCode":"OG"}', estimatedDelivery: "3–5 working days" });
+  const reminder = await reminders.saveReminder({ orderId: order.id, consentConfirmed: true, emailEnabled: true, whatsappEnabled: true, smsEnabled: true, currentCheckpoint: "", deliveryEstimate: "3–7 working days", customerNote: "", start: true });
+  const preview = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id, currentCheckpoint: "", deliveryEstimate: reminder.deliveryEstimate, customerNote: "" }));
+  assert.equal(preview.status, 200);
+  const previews = await preview.json();
+  assert.ok(JSON.stringify(previews).includes("3–12 working days"));
+  await db.update(schema.orderReminders).set({ nextSendAt: "2020-01-01T00:00:00.000Z" });
+  await reminders.dispatchReminder(reminder.id);
+  assert.ok(calls.find((call) => call.url === "https://api.resend.com/emails").body.html.includes("3–12 working days"));
+  assert.ok(calls.find((call) => call.url.includes("termii.com")).body.sms.includes("3–12 working days"));
 });
