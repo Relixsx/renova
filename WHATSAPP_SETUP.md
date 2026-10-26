@@ -1,5 +1,7 @@
 # Renova WhatsApp order updates
 
+Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download.
+
 Latest 22 October update: use [REGIONAL_DELIVERY_UPDATE.md](./REGIONAL_DELIVERY_UPDATE.md) for Lagos (3–5 working days) and outside Lagos (3–12 working days). Use [WHATSAPP_ORDER_CONTROLS.md](./WHATSAPP_ORDER_CONTROLS.md) for per-order start/stop and historical orders.
 
 Source: `Relixsx/renova`, branch `migration/neon-render`. The initial WhatsApp integration was deployed as `123e4e4`.

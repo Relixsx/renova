@@ -1,3 +1,4 @@
+import { reminderMessageDefaults } from "./reminder-message-settings";
 import { and, desc, eq, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orderReminders, orders, whatsappMessages, whatsappReceipts } from "../../db/schema";
@@ -18,11 +19,13 @@ const store: WhatsAppDeliveryStore = {
     let to = "";
     try { to = phoneForWhatsApp(order.whatsappPhone || ""); } catch { /* Invalid numbers are never sent to Meta. */ }
     const eligible = Boolean(to && order.whatsappConsentAt && !order.whatsappOptedOutAt && confirmedOrder(order)
-      && reminder.active && reminder.consentConfirmed && reminder.whatsappEnabled);
+      && reminder.active && reminder.consentConfirmed && reminder.whatsappEnabled
+      && (message.kind !== "routine" || reminder.reminderPhase !== "arrival")
+      && (!["arrival", "arrival_reminder"].includes(message.kind) || (reminder.reminderPhase === "arrival" && reminder.arrivalConfirmedAt)));
     let deferUntil: string | undefined;
-    if (eligible && message.kind === "routine") {
+    if (eligible && ["routine", "arrival_reminder"].includes(message.kind)) {
       const [confirmation] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.dedupeKey, `confirmation:${order.id}`)).limit(1);
-      if (confirmation && !ACCEPTED_WHATSAPP_STATUSES.includes(confirmation.status)) {
+      if (message.kind === "routine" && confirmation && !ACCEPTED_WHATSAPP_STATUSES.includes(confirmation.status)) {
         deferUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       } else {
         const [last] = await db.select().from(whatsappMessages).where(and(eq(whatsappMessages.orderId, order.id), inArray(whatsappMessages.status, ACCEPTED_WHATSAPP_STATUSES), isNotNull(whatsappMessages.acceptedAt)))
@@ -32,7 +35,7 @@ const store: WhatsAppDeliveryStore = {
     }
     return { id, status: message.status, attempts: message.attempts, nextAttemptAt: message.nextAttemptAt, eligible,
       reason: "The order is unpaid, completed, stopped, missing WhatsApp consent or opted out.", deferUntil, to,
-      parameters: whatsappTemplateParameters(order, reminder, message.kind as WhatsAppKind) };
+      parameters: whatsappTemplateParameters(order, reminder, message.kind as WhatsAppKind, message.kind === "confirmation" ? undefined : await reminderMessageDefaults()) };
   },
   async claim(id, now) {
     try {
@@ -52,12 +55,17 @@ const store: WhatsAppDeliveryStore = {
     const db = getDb();
     const [saved] = await db.update(whatsappMessages).set({ ...patch, updatedAt: now }).where(and(eq(whatsappMessages.id, id), eq(whatsappMessages.status, "sending"))).returning();
     if (saved?.status === "accepted") {
-      await db.update(orderReminders).set({ lastSentAt: now, nextSendAt: new Date(Date.parse(now) + DAY_MS).toISOString(), updatedAt: now })
+      const arrivalMessage = ["arrival", "arrival_reminder"].includes(saved.kind);
+      const next = new Date(Date.parse(now) + DAY_MS).toISOString();
+      await db.update(orderReminders).set({ lastSentAt: now, updatedAt: now,
+        nextSendAt: sql`CASE WHEN ${orderReminders.reminderPhase} = 'arrival' AND ${orderReminders.arrivalAnnouncedAt} IS NULL AND NOT ${arrivalMessage}
+          THEN COALESCE(${orderReminders.nextSendAt}, ${next}) ELSE ${next} END`,
+        arrivalAnnouncedAt: sql`CASE WHEN ${orderReminders.reminderPhase} = 'arrival' AND ${arrivalMessage} THEN COALESCE(${orderReminders.arrivalAnnouncedAt}, ${now}) ELSE ${orderReminders.arrivalAnnouncedAt} END` })
         .where(and(eq(orderReminders.id, saved.reminderId), eq(orderReminders.active, true), eq(orderReminders.whatsappEnabled, true)));
       // Coalesce an outage into the latest update instead of replaying old daily
       // reminders in a burst when credentials or the network recover.
       await db.update(whatsappMessages).set({ status: "cancelled", errorMessage: "Superseded by a newer accepted update.", updatedAt: now })
-        .where(and(eq(whatsappMessages.orderId, saved.orderId), ne(whatsappMessages.id, id), eq(whatsappMessages.kind, "routine"), eq(whatsappMessages.status, "pending")));
+        .where(and(eq(whatsappMessages.orderId, saved.orderId), ne(whatsappMessages.id, id), inArray(whatsappMessages.kind, ["routine", "arrival_reminder"]), eq(whatsappMessages.status, "pending")));
       if (saved.providerMessageId) await reconcileWhatsAppReceipt(saved.providerMessageId);
     }
   },
@@ -74,7 +82,7 @@ export async function enqueueWhatsApp(orderId: number, reminderId: number, kind:
   if (created) return created;
   const [same] = await db.select().from(whatsappMessages).where(eq(whatsappMessages.dedupeKey, dedupeKey)).limit(1);
   if (same) return same;
-  const [pending] = await db.select().from(whatsappMessages).where(and(eq(whatsappMessages.orderId, orderId), eq(whatsappMessages.kind, "routine"), inArray(whatsappMessages.status, ["pending", "sending"]))).limit(1);
+  const [pending] = await db.select().from(whatsappMessages).where(and(eq(whatsappMessages.orderId, orderId), inArray(whatsappMessages.kind, ["routine", "arrival_reminder"]), inArray(whatsappMessages.status, ["pending", "sending"]))).limit(1);
   return pending ?? null;
 }
 
@@ -90,7 +98,13 @@ export async function confirmOrderWhatsApp(orderId: number) {
   await db.insert(orderReminders).values({ orderId, active: true, consentConfirmed: true, emailEnabled: false, whatsappEnabled: true, smsEnabled: false,
     currentCheckpoint: "", deliveryEstimate: "", customerNote: "", intervalHours: 24, startedAt: now,
     nextSendAt: new Date(Date.parse(now) + DAY_MS).toISOString(), createdAt: now, updatedAt: now }).onConflictDoNothing();
-  const [reminder] = await db.select().from(orderReminders).where(eq(orderReminders.orderId, orderId)).limit(1);
+  let [reminder] = await db.select().from(orderReminders).where(eq(orderReminders.orderId, orderId)).limit(1);
+  if (reminder.reminderPhase === "arrival") return { status: "skipped" };
+  if (!reminder.startedAt && !reminder.stoppedAt && !reminder.consentConfirmed) {
+    const [initialized] = await db.update(orderReminders).set({ active: true, consentConfirmed: true, whatsappEnabled: true, startedAt: now, nextSendAt: new Date(Date.parse(now) + DAY_MS).toISOString(), updatedAt: now })
+      .where(and(eq(orderReminders.id, reminder.id), isNull(orderReminders.startedAt), isNull(orderReminders.stoppedAt), eq(orderReminders.consentConfirmed, false))).returning();
+    if (initialized) reminder = initialized;
+  }
   const message = await enqueueWhatsApp(orderId, reminder.id, "confirmation", `confirmation:${orderId}`);
   return message ? dispatchWhatsApp(message.id) : { status: "skipped" };
 }
@@ -121,7 +135,7 @@ export async function retryWhatsApp(id: number, checkedUncertain: boolean) {
   if (!message || !["failed", "uncertain"].includes(message.status)) throw new Error("Only failed or uncertain WhatsApp messages can be retried.");
   if (message.status === "uncertain" && !checkedUncertain) throw new Error("Check WhatsApp Manager first and confirm that this message was not delivered before retrying.");
   if (message.kind === "routine") {
-    const [newer] = await db.select({ id: whatsappMessages.id }).from(whatsappMessages).where(and(eq(whatsappMessages.orderId, message.orderId), ne(whatsappMessages.id, message.id), eq(whatsappMessages.kind, "routine"), inArray(whatsappMessages.status, ["pending", "sending"])));
+    const [newer] = await db.select({ id: whatsappMessages.id }).from(whatsappMessages).where(and(eq(whatsappMessages.orderId, message.orderId), ne(whatsappMessages.id, message.id), inArray(whatsappMessages.kind, ["routine", "arrival_reminder"]), inArray(whatsappMessages.status, ["pending", "sending"])));
     if (newer) throw new Error("A newer daily update is already queued. Check that message instead.");
   }
   const now = new Date().toISOString();

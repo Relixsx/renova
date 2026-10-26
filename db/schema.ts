@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  date,
   integer,
   index,
   pgTable,
@@ -144,6 +146,13 @@ export const orderReminders = pgTable(
     currentCheckpoint: text("current_checkpoint").notNull().default(""),
     deliveryEstimate: text("delivery_estimate").notNull().default(""),
     customerNote: text("customer_note").notNull().default(""),
+    messageOverridesJson: text("message_overrides_json").notNull().default("{}"),
+    reminderPhase: text("reminder_phase").notNull().default("delivery"),
+    arrivalCheckpoint: text("arrival_checkpoint").notNull().default(""),
+    arrivalConfirmedAt: text("arrival_confirmed_at"),
+    arrivalAnnouncedAt: text("arrival_announced_at"),
+    jumiaDeliveryFrom: date("jumia_delivery_from", { mode: "string" }),
+    jumiaDeliveryTo: date("jumia_delivery_to", { mode: "string" }),
     intervalHours: integer("interval_hours").notNull().default(24),
     startedAt: text("started_at"),
     lastSentAt: text("last_sent_at"),
@@ -152,7 +161,10 @@ export const orderReminders = pgTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
-  (table) => [uniqueIndex("order_reminders_order_unique").on(table.orderId)],
+  (table) => [
+    uniqueIndex("order_reminders_order_unique").on(table.orderId),
+    check("order_reminders_jumia_window_check", sql`(${table.jumiaDeliveryFrom} IS NULL AND ${table.jumiaDeliveryTo} IS NULL) OR (${table.jumiaDeliveryFrom} IS NOT NULL AND ${table.jumiaDeliveryTo} IS NOT NULL AND ${table.jumiaDeliveryTo} >= ${table.jumiaDeliveryFrom})`),
+  ],
 );
 
 export const orderReminderLogs = pgTable("order_reminder_logs", {
@@ -165,6 +177,13 @@ export const orderReminderLogs = pgTable("order_reminder_logs", {
   errorMessage: text("error_message"),
   checkpoint: text("checkpoint").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+});
+
+export const reminderMessageSettings = pgTable("reminder_message_settings", {
+  id: text("id").primaryKey(),
+  dailyJson: text("daily_json").notNull(),
+  arrivalJson: text("arrival_json").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
 });
 
 // A durable queue, independent of the existing email/SMS log. API acceptance is
@@ -188,7 +207,7 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   uniqueIndex("whatsapp_messages_dedupe_unique").on(table.dedupeKey),
   uniqueIndex("whatsapp_messages_provider_unique").on(table.providerMessageId),
   uniqueIndex("whatsapp_one_sending_per_order").on(table.orderId).where(sql`${table.status} = 'sending'`),
-  uniqueIndex("whatsapp_one_pending_routine").on(table.orderId).where(sql`${table.kind} = 'routine' AND ${table.status} IN ('pending', 'sending')`),
+  uniqueIndex("whatsapp_one_pending_routine").on(table.orderId).where(sql`${table.kind} IN ('routine', 'arrival_reminder') AND ${table.status} IN ('pending', 'sending')`),
   index("whatsapp_messages_due_idx").on(table.status, table.nextAttemptAt),
 ]);
 

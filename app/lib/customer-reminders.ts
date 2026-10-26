@@ -1,8 +1,9 @@
-import { standardDeliveryEstimate } from "./delivery-estimate";
+import { reminderMessageDefaults } from "./reminder-message-settings";
+import type { MessageDefaults } from "./reminder-message-content";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orderReminderLogs, orderReminders, orders, whatsappMessages } from "../../db/schema";
-import { confirmedOrder, DAY_MS, orderStageText, phoneForWhatsApp, TERMINAL_ORDER_STATUSES } from "./whatsapp-message";
+import { confirmedOrder, DAY_MS, orderStageText, phoneForWhatsApp, reminderMessageFields, type MessageReminder, TERMINAL_ORDER_STATUSES } from "./whatsapp-message";
 import { whatsappConfigured, whatsappSettings } from "./whatsapp-delivery";
 import { cancelQueuedWhatsApp, dispatchWhatsApp, enqueueWhatsApp, runWhatsAppQueue } from "./whatsapp-notifications";
 
@@ -36,24 +37,19 @@ function amountDue(order: typeof orders.$inferSelect) {
   return `₦${(order.totalKobo / 100).toLocaleString("en-NG")} due on delivery`;
 }
 
-function reminderText(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine") {
-  const appUrl = (setting("APP_URL") ?? "https://shoprenova.com.ng").replace(/\/$/, "");
-  const estimate = standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson);
-  const note = reminder.customerNote ? ` ${reminder.customerNote}` : "";
-  const opening = kind === "arrival"
-    ? `Hello ${firstName(order.customerName)}, there is an important delivery update for your Renova order ${order.orderNumber}.`
-    : `Hello ${firstName(order.customerName)}, here is the latest update for your Renova order ${order.orderNumber}.`;
-  return `${opening} Latest verified update: ${reminder.currentCheckpoint || orderStageText(order.status)}. Expected delivery: ${estimate}. ${amountDue(order)}.${note} Please keep your phone available for the delivery call. Track your order at ${appUrl}/track-order`;
+export function reminderText(order: typeof orders.$inferSelect, reminder: MessageReminder, kind: "routine" | "arrival" = "routine", defaults?: MessageDefaults, now?: Date) {
+  const fields = reminderMessageFields(order, reminder, kind, defaults, now);
+  return `Hello ${firstName(order.customerName)}, ${fields.message} Order: ${order.orderNumber}. Expected delivery: ${fields.estimate}. ${amountDue(order)}. ${fields.note} Track your order at https://shoprenova.com.ng/track-order`;
 }
 
-async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine"): Promise<DeliveryResult> {
+async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine", defaults?: MessageDefaults): Promise<DeliveryResult> {
   if (!reminder.emailEnabled) return { channel: "email", status: "skipped" };
   const apiKey = setting("RESEND_API_KEY");
   const from = setting("RESEND_FROM_EMAIL") ?? setting("ORDER_FROM_EMAIL");
   if (!apiKey || !from) return { channel: "email", status: "failed", error: "Resend is not configured." };
   if (!order.customerEmail?.includes("@")) return { channel: "email", status: "failed", error: "Customer email is invalid." };
   const appUrl = (setting("APP_URL") ?? "https://shoprenova.com.ng").replace(/\/$/, "");
-  const estimate = standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson);
+  const fields = reminderMessageFields(order, reminder, kind, defaults);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(10_000),
@@ -61,8 +57,8 @@ async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof ord
     body: JSON.stringify({
       from,
       to: [order.customerEmail],
-      subject: kind === "arrival" ? `Important delivery update — ${order.orderNumber}` : `Your Renova order update — ${order.orderNumber}`,
-      html: `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#171717"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fff;border:1px solid #e9e2de"><tr><td style="padding:26px 30px;border-bottom:4px solid #ff5a2f"><div style="font-size:24px;font-weight:800;letter-spacing:4px">RENOVA</div><div style="margin-top:6px;color:#777;font-size:12px">DELIVERY UPDATE</div></td></tr><tr><td style="padding:32px 30px"><p style="margin:0 0 12px;font-size:16px">Hello ${escapeHtml(firstName(order.customerName))},</p><h1 style="margin:0 0 14px;font-size:28px;line-height:1.2">${kind === "arrival" ? "An important update about your delivery." : "Your latest order update."}</h1><p style="margin:0;color:#555;font-size:16px;line-height:1.65">${kind === "arrival" ? "Please review the latest verified information from the delivery service below." : "We are keeping watch on your delivery and will continue sending verified updates until it reaches you."}</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;background:#fff7f2;border-left:4px solid #ff5a2f"><tr><td style="padding:18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Latest verified update</div><div style="margin-top:6px;font-size:17px;font-weight:700">${escapeHtml(reminder.currentCheckpoint || orderStageText(order.status))}</div></td></tr><tr><td style="padding:0 18px 18px"><div style="color:#777;font-size:11px;text-transform:uppercase">Expected delivery</div><div style="margin-top:6px;font-size:15px">${escapeHtml(estimate)}</div></td></tr></table>${reminder.customerNote ? `<p style="font-size:15px;line-height:1.6">${escapeHtml(reminder.customerNote)}</p>` : ""}<p style="font-size:15px;line-height:1.6"><b>Order:</b> ${escapeHtml(order.orderNumber)}<br><b>${escapeHtml(amountDue(order))}</b></p><p style="font-size:14px;line-height:1.6;color:#555">Please keep your phone available so the courier can reach you. You do not need to place another order.</p><a href="${escapeHtml(`${appUrl}/track-order`)}" style="display:inline-block;margin-top:8px;background:#ff5a2f;color:#fff;text-decoration:none;font-weight:800;padding:14px 24px">TRACK YOUR ORDER</a></td></tr><tr><td style="padding:20px 30px;background:#171717;color:#fff;font-size:12px;line-height:1.6">Need help? <a href="mailto:support@shoprenova.com.ng" style="color:#ff8a68">support@shoprenova.com.ng</a></td></tr></table></td></tr></table></body></html>`,
+      subject: fields.subject,
+      html: `<!doctype html><html><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#171717"><table role="presentation" width="100%" style="padding:24px 12px"><tr><td align="center"><table role="presentation" width="100%" style="max-width:640px;background:#fff;border:1px solid #e9e2de"><tr><td style="padding:26px 30px;border-bottom:4px solid #ff5a2f;font-size:24px;font-weight:800;letter-spacing:4px">RENOVA</td></tr><tr><td style="padding:32px 30px"><p>Hello ${escapeHtml(firstName(order.customerName))},</p><h1 style="font-size:26px">${escapeHtml(fields.heading)}</h1><p style="white-space:pre-line;line-height:1.7">${escapeHtml(fields.message)}</p><p><b>Expected delivery:</b> ${escapeHtml(fields.estimate)}</p><p style="white-space:pre-line;line-height:1.7">${escapeHtml(fields.note)}</p><p><b>Order:</b> ${escapeHtml(order.orderNumber)}<br><b>${escapeHtml(amountDue(order))}</b></p><p>Please keep your phone available so the courier can reach you. You do not need to place another order.</p><a href="${escapeHtml(`${appUrl}/track-order`)}" style="display:inline-block;background:#ff5a2f;color:#fff;padding:14px 24px;text-decoration:none">TRACK YOUR ORDER</a></td></tr><tr><td style="padding:20px 30px;background:#171717;color:#fff;font-size:12px">Need help? support@shoprenova.com.ng</td></tr></table></td></tr></table></body></html>`,
     }),
   });
   const payload = await response.json().catch(() => ({})) as { id?: string; message?: string };
@@ -70,7 +66,7 @@ async function sendEmail(order: typeof orders.$inferSelect, reminder: typeof ord
   return { channel: "email", status: "sent", providerMessageId: payload.id };
 }
 
-async function sendSms(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine"): Promise<DeliveryResult> {
+async function sendSms(order: typeof orders.$inferSelect, reminder: typeof orderReminders.$inferSelect, kind: "routine" | "arrival" = "routine", defaults?: MessageDefaults): Promise<DeliveryResult> {
   if (!reminder.smsEnabled) return { channel: "sms", status: "skipped" };
   const apiKey = setting("TERMII_API_KEY");
   const senderId = setting("TERMII_SENDER_ID") ?? "Renova";
@@ -83,7 +79,7 @@ async function sendSms(order: typeof orders.$inferSelect, reminder: typeof order
       api_key: apiKey,
       to: phoneForWhatsApp(order.customerPhone),
       from: senderId,
-      sms: reminderText(order, reminder, kind),
+      sms: reminderText(order, reminder, kind, defaults),
       type: "plain",
       channel: setting("TERMII_CHANNEL") ?? "generic",
     }),
@@ -111,13 +107,14 @@ export function reminderProviderStatus() {
 
 export async function reminderDashboardData() {
   const db = getDb();
-  const [reminders, logs, whatsapp, contacts] = await Promise.all([
+  const [reminders, logs, whatsapp, contacts, messageDefaults] = await Promise.all([
     db.select().from(orderReminders).orderBy(desc(orderReminders.id)),
     db.select().from(orderReminderLogs).orderBy(desc(orderReminderLogs.id)).limit(100),
     db.select().from(whatsappMessages).orderBy(desc(whatsappMessages.id)).limit(100),
     db.select({ orderId: orders.id, phone: orders.whatsappPhone, consentAt: orders.whatsappConsentAt, optedOutAt: orders.whatsappOptedOutAt }).from(orders),
+    reminderMessageDefaults(),
   ]);
-  return { reminders, logs, whatsappMessages: whatsapp, whatsappContacts: contacts, providers: reminderProviderStatus() };
+  return { reminders, logs, messageDefaults, whatsappMessages: whatsapp, whatsappContacts: contacts, providers: reminderProviderStatus() };
 }
 
 export async function saveReminder(input: {
@@ -181,7 +178,7 @@ export async function stopReminderForTerminalOrder(orderId: number) {
   return stopReminder(orderId);
 }
 
-export async function dispatchReminder(reminderId: number, force = false, kind: "routine" | "arrival" = "routine") {
+export async function dispatchReminder(reminderId: number, force = false, requestedKind?: "routine" | "arrival") {
   const db = getDb();
   const [reminder] = await db.select().from(orderReminders).where(eq(orderReminders.id, reminderId)).limit(1);
   if (!reminder || !reminder.active) return { skipped: true, reason: "Reminder is not active." };
@@ -193,16 +190,22 @@ export async function dispatchReminder(reminderId: number, force = false, kind: 
     return { skipped: true, reason: `Order is ${order.status}.` };
   }
   if (!confirmedOrder(order)) return { skipped: true, reason: "Order is awaiting payment or confirmation." };
+  if ((requestedKind === "arrival" || reminder.reminderPhase === "arrival") && !reminder.arrivalConfirmedAt) return { skipped: true, reason: "Arrival has not been verified by the owner." };
+  const kind = reminder.reminderPhase === "arrival" ? (reminder.arrivalAnnouncedAt ? "arrival_reminder" : "arrival") : "routine";
+  const channelKind = kind === "routine" ? "routine" : "arrival";
+  const defaults = await reminderMessageDefaults();
   const now = new Date();
   if (!force && reminder.nextSendAt && new Date(reminder.nextSendAt) > now) return { skipped: true, reason: "Reminder is not due yet." };
   const nextSendAt = new Date(now.getTime() + DAY_MS).toISOString();
-  const dedupeKey = `${kind}:${reminder.id}:${reminder.nextSendAt || reminder.startedAt || "initial"}`;
+  const dedupeKey = kind === "arrival" ? `arrival:${order.id}:first` : `${kind}:${reminder.id}:${reminder.nextSendAt || reminder.startedAt || "initial"}`;
   // Claim the schedule and persist its WhatsApp job in ONE database statement.
   // A process crash cannot advance the daily deadline without queuing the job.
   const claim = await db.execute(sql`
     WITH claimed AS (
-      UPDATE order_reminders SET next_send_at = ${nextSendAt}, updated_at = ${now.toISOString()}
+      UPDATE order_reminders SET next_send_at = ${nextSendAt}, updated_at = ${now.toISOString()},
+        arrival_announced_at = CASE WHEN ${kind} = 'arrival' THEN ${now.toISOString()} ELSE arrival_announced_at END
       WHERE id = ${reminder.id} AND active = true AND consent_confirmed = true
+        AND reminder_phase = ${reminder.reminderPhase}
         AND next_send_at IS NOT DISTINCT FROM ${reminder.nextSendAt}::text
       RETURNING id, order_id, whatsapp_enabled
     ), queued AS (
@@ -220,9 +223,9 @@ export async function dispatchReminder(reminderId: number, force = false, kind: 
     return { channel: "whatsapp", ...result, status: result.status as DeliveryResult["status"] };
   };
   const results = await Promise.all([
-    attempt("email", () => sendEmail(order, reminder, kind)),
+    attempt("email", () => sendEmail(order, reminder, channelKind, defaults)),
     attempt("whatsapp", whatsapp),
-    attempt("sms", () => sendSms(order, reminder, kind)),
+    attempt("sms", () => sendSms(order, reminder, channelKind, defaults)),
   ]);
   const completedAt = new Date().toISOString();
   for (const result of results) {

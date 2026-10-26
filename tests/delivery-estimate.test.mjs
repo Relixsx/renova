@@ -69,11 +69,12 @@ test("saved FAQ and landing-page delivery copy refreshes on read without changin
 test("all WhatsApp message kinds use the destination window with the existing four template variables", () => {
   const order = { customerName: "Amina Example", orderNumber: "REN-QA-001", status: "processing", paymentMethod: "cash_on_delivery", paymentStatus: "payment_due_on_delivery", totalKobo: 2450000, itemsJson: '[{"name":"Headphones","quantity":1}]', estimatedDelivery: "3–7 working days" };
   const reminder = { currentCheckpoint: "", customerNote: "", deliveryEstimate: "3–5 working days" };
-  for (const kind of ["confirmation", "routine", "activation", "arrival"]) {
+  for (const kind of ["confirmation", "routine", "activation"]) {
     assert.equal(whatsappTemplateParameters({ ...order, addressJson: '{"stateCode":"LA"}' }, reminder, kind)[3], "3–5 working days");
     assert.equal(whatsappTemplateParameters({ ...order, addressJson: '{"stateCode":"OG"}' }, reminder, kind)[3], "3–12 working days");
     assert.equal(whatsappTemplateParameters(order, reminder, kind).length, 4);
   }
+  assert.equal(whatsappTemplateParameters(order, reminder, "arrival")[3], "Ready for collection now");
   assert.equal(whatsappTemplateParameters({ ...order, addressJson: '{"stateCode":"OG"}' }, { ...reminder, deliveryEstimate: "24–26 October" }, "routine")[3], "24–26 October");
 });
 

@@ -1,5 +1,7 @@
 # Customer reminder setup
 
+Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download.
+
 For the 22 October checkout update on the already deployed integration, follow [CHECKOUT_UPDATE.md](./CHECKOUT_UPDATE.md); no new migration is needed. [WHATSAPP_SETUP.md](./WHATSAPP_SETUP.md) retains the original installation sequence for a fresh setup.
 
 Existing email/SMS channels and the manual Jumia arrival workflow remain in Admin → Reminders.

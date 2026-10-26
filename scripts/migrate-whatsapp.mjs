@@ -14,8 +14,8 @@ try {
   console.log(`Checking restored database: ${connection.hostname}`);
   const query = neon(connection.toString());
   const journal = JSON.parse(await readFile(new URL("drizzle-neon/meta/_journal.json", root), "utf8"));
-  const latest = journal.entries.at(-1), previous = journal.entries.at(-2);
-  if (latest.tag !== "0006_whatsapp_order_updates" || previous.idx !== 5) throw new Error("Unexpected migration files. Use this update's unmodified source.");
+  const latest = journal.entries.find((entry) => entry.idx === 6), previous = journal.entries.find((entry) => entry.idx === 5);
+  if (latest?.tag !== "0006_whatsapp_order_updates" || previous?.idx !== 5) throw new Error("Unexpected migration files. Use this update's unmodified source.");
   const migration = await readFile(new URL(`drizzle-neon/${latest.tag}.sql`, root), "utf8");
   const hash = createHash("sha256").update(migration).digest("hex");
   const required = ["public.orders", "public.products", "public.categories", "public.reviews", "public.order_reminders", "public.order_reminder_logs", "drizzle.__drizzle_migrations"];
@@ -24,7 +24,7 @@ try {
     if (!row.name) throw new Error("This database is missing the restored store or migration history. No changes have been made.");
   }
   const history = await query`SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at`;
-  if (history.length === 7 && Number(history.at(-1).created_at) === latest.when && history.at(-1).hash === hash) {
+  if (history.length >= 7 && Number(history[6].created_at) === latest.when && history[6].hash === hash) {
     const [check] = await query`SELECT to_regclass('public.whatsapp_messages') AS messages, to_regclass('public.whatsapp_receipts') AS receipts`;
     if (!check.messages || !check.receipts) throw new Error("The migration history and tables disagree. Stop and inspect before proceeding.");
     console.log("WhatsApp migration is already applied. Nothing changed.");

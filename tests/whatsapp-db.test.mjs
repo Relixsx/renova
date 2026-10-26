@@ -36,6 +36,7 @@ before(async () => {
   await migrateOriginal(pg);
   await pg.exec("INSERT INTO orders (order_number,customer_name,customer_email,customer_phone,total_kobo,items_json,address_json,shipping_json) VALUES ('REN-LEGACY','Example Customer','qa@example.invalid','08000000000',10000,'[]','{}','{}'); INSERT INTO order_reminders (order_id,active,consent_confirmed,whatsapp_enabled) VALUES (1,true,true,false); INSERT INTO order_reminder_logs (order_id,reminder_id,channel,status) VALUES (1,1,'email','sent');");
   await pg.exec(await readFile(join(root, "drizzle-neon/0006_whatsapp_order_updates.sql"), "utf8"));
+  await pg.exec(await readFile(join(root, "drizzle-neon/0007_editable_reminder_messages.sql"), "utf8"));
   const legacy = await db.select().from(schema.orders);
   assert.equal(legacy.length, 1); assert.equal(legacy[0].orderNumber, "REN-LEGACY"); assert.equal(legacy[0].whatsappConsentAt, null);
   assert.equal((await db.select().from(schema.orderReminders))[0].whatsappEnabled, false);
@@ -43,7 +44,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  await pg.exec("TRUNCATE whatsapp_messages,whatsapp_receipts,order_reminder_logs,order_reminders,orders RESTART IDENTITY");
+  await pg.exec("TRUNCATE reminder_message_settings,whatsapp_messages,whatsapp_receipts,order_reminder_logs,order_reminders,orders RESTART IDENTITY");
   globalThis[symbol] = db;
   globalThis[productsSymbol] = [{ slug: "qa-headphones", name: "Headphones", sku: "QA-001", variants: ["Black"], imageUrl: "/qa.svg", isPublished: true, stock: 20, paymentMode: "cash_on_delivery", priceKobo: 2450000 }];
   Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-db-test-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", WHATSAPP_APP_SECRET: "fake-app-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "fake-verify-token", REMINDER_CRON_SECRET: "fake-cron-secret", PAYSTACK_SECRET_KEY: "fake-paystack-key", TERMII_API_KEY: "", RESEND_API_KEY: "fake-resend-key", RESEND_FROM_EMAIL: "qa@example.invalid", FORMSPREE_ENDPOINT: "https://forms.example.invalid/qa", APP_URL: "https://renova.example.invalid" });
@@ -431,4 +432,248 @@ test("daily email, SMS and WhatsApp previews use the current region for an older
   await reminders.dispatchReminder(reminder.id);
   assert.ok(calls.find((call) => call.url === "https://api.resend.com/emails").body.html.includes("3–12 working days"));
   assert.ok(calls.find((call) => call.url.includes("termii.com")).body.sms.includes("3–12 working days"));
+});
+
+const messageSettings = await load("app/lib/reminder-message-settings.ts");
+const messageContent = await load("app/lib/reminder-message-content.ts");
+const defaultMessages = () => structuredClone(messageContent.DEFAULT_REMINDER_MESSAGES);
+const contentText = (call) => call.body.template.components[0].parameters[2].text;
+
+test("owner-only defaults persist separately and saving them does not send or alter schedules", async () => {
+  const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+  const before = (await db.select().from(schema.orderReminders))[0];
+  const defaults = defaultMessages(); defaults.routine.message = "We are watching your delivery, {{first_name}}. {{status_update}}"; defaults.arrival.message = "Your parcel is waiting for collection. {{courier_update}}";
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "save_message_defaults", messageDefaults: defaults }, false))).status, 403);
+  assert.equal((await db.select().from(schema.reminderMessageSettings)).length, 0);
+  const response = await reminderRoute.POST(controlRequest({ action: "save_message_defaults", messageDefaults: defaults }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await messageSettings.reminderMessageDefaults(), defaults);
+  assert.deepEqual((await db.select().from(schema.orderReminders))[0], before);
+  assert.equal(graphCalls().length, 1);
+});
+
+test("per-order edits do not start a historical order or opt its customer in", async () => {
+  const order = await olderOrder();
+  const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { message: "We are checking your delivery." }, arrival: { message: "Please collect your parcel." } }, currentCheckpoint: "Verified progress", arrivalCheckpoint: "Verified collection point" }));
+  assert.equal(response.status, 200);
+  const row = (await response.json()).reminder;
+  assert.equal(row.active, false); assert.equal(row.whatsappEnabled, false); assert.equal(row.consentConfirmed, false); assert.equal(row.nextSendAt, null);
+  await wa.runWhatsAppQueue(); assert.equal(calls.length, 0);
+  const [saved] = await db.select().from(schema.orders);
+  assert.equal(saved.whatsappConsentAt, null);
+});
+
+test("concurrent edits preserve independent kinds and fields, and explicit default reset clears only its own kind", async () => {
+  const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+  const before = (await db.select().from(schema.orderReminders))[0];
+  await Promise.all([
+    messageSettings.saveOrderMessageEdits(order.id, { routine: { message: "Daily copy for this customer" } }),
+    messageSettings.saveOrderMessageEdits(order.id, { arrival: { message: "Arrival copy for this customer" } }),
+    messageSettings.saveOrderMessageEdits(order.id, { routine: { note: "Please answer the delivery call." } }),
+  ]);
+  let [row] = await db.select().from(schema.orderReminders);
+  let edits = JSON.parse(row.messageOverridesJson);
+  assert.equal(edits.routine.message, "Daily copy for this customer"); assert.equal(edits.routine.note, "Please answer the delivery call."); assert.equal(edits.arrival.message, "Arrival copy for this customer");
+  assert.equal(row.nextSendAt, before.nextSendAt); assert.equal(row.active, before.active);
+  await messageSettings.saveOrderMessageEdits(order.id, { routine: null });
+  [row] = await db.select().from(schema.orderReminders); edits = JSON.parse(row.messageOverridesJson);
+  assert.equal(edits.routine, null); assert.equal(edits.arrival.message, "Arrival copy for this customer"); assert.equal(graphCalls().length, 1);
+});
+
+test("all three previews are independent and previewing does not save, send, confirm arrival or alter a schedule", async () => {
+  const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+  const before = (await db.select().from(schema.orderReminders))[0];
+  const response = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id, messageOverrides: { routine: { message: "DAILY ONLY {{first_name}}", deliveryEstimate: "30 October" }, arrival: { message: "ARRIVAL ONLY {{courier_update}}", deliveryEstimate: "Collect before Friday 5pm" } }, arrivalCheckpoint: "Pickup desk B" }));
+  assert.equal(response.status, 200); const preview = await response.json();
+  assert.match(preview.preview, /DAILY ONLY Amina/); assert.doesNotMatch(preview.preview, /ARRIVAL ONLY/);
+  assert.match(preview.arrivalPreview, /ARRIVAL ONLY Pickup desk B/); assert.match(preview.arrivalPreview, /Collect before Friday 5pm/);
+  assert.doesNotMatch(preview.confirmationPreview, /DAILY ONLY|ARRIVAL ONLY|Friday/);
+  assert.equal(preview.emailPreviews.arrival.estimate, "Collect before Friday 5pm"); assert.match(preview.smsPreviews.routine, /DAILY ONLY/);
+  assert.deepEqual((await db.select().from(schema.orderReminders))[0], before); assert.equal(graphCalls().length, 1);
+});
+
+test("current order edits apply to the next WhatsApp, email and SMS, with email markup escaped", async () => {
+  process.env.TERMII_API_KEY = "fake-sms-key";
+  const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+  let [row] = await db.select().from(schema.orderReminders);
+  await reminders.saveReminder({ ...row, emailEnabled: true, smsEnabled: true, start: true });
+  await messageSettings.saveOrderMessageEdits(order.id, { routine: { message: 'Daily note for {{first_name}}. <script>alert("x")</script>', deliveryEstimate: "30 October", note: "Keep your collection code", emailSubject: "Delivery update for {{order_number}}", emailHeading: "Your parcel update" } });
+  const yesterday = new Date(Date.now() - 25 * 3600_000).toISOString();
+  await db.update(schema.orderReminders).set({ nextSendAt: yesterday }); await db.update(schema.whatsappMessages).set({ acceptedAt: yesterday });
+  await reminders.runDueReminders();
+  assert.match(contentText(graphCalls().at(-1)), /Daily note for Amina/); assert.equal(graphCalls().at(-1).body.template.components[0].parameters[3].text, "30 October");
+  const email = calls.filter((call) => call.url === "https://api.resend.com/emails").at(-1).body;
+  assert.equal(email.subject, `Delivery update for ${order.orderNumber}`); assert.match(email.html, /Your parcel update/); assert.match(email.html, /&lt;script&gt;/); assert.doesNotMatch(email.html, /<script>/);
+  assert.match(calls.find((call) => call.url.includes("termii.com")).body.sms, /Daily note for Amina/);
+});
+
+test("editing a not-yet-queued checkout preserves automatic confirmation recovery without applying daily wording to it", async () => {
+  const order = await createOrder();
+  await messageSettings.saveOrderMessageEdits(order.id, { routine: { message: "DAILY CUSTOM COPY" } });
+  assert.equal((await db.select().from(schema.orderReminders))[0].active, false);
+  await wa.runWhatsAppQueue();
+  assert.equal(graphCalls().length, 1); assert.match(contentText(graphCalls()[0]), /Thank you for choosing Renova/); assert.doesNotMatch(contentText(graphCalls()[0]), /DAILY CUSTOM/);
+});
+
+test("arrival requires explicit verified information and repeated concurrent clicks send one immediate arrival update", async () => {
+  const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id);
+  const body = { action: "activate_arrival", orderId: order.id, arrivalConfirmed: true, arrivalCheckpoint: "Collect at Desk B with your courier code", messageOverrides: { arrival: { message: "ARRIVED: {{courier_update}}", deliveryEstimate: "Collect by Friday 5pm" } } };
+  for (const invalid of [{ ...body, arrivalConfirmed: false }, { ...body, arrivalCheckpoint: "" }]) assert.equal((await reminderRoute.POST(controlRequest(invalid))).status, 400);
+  assert.equal((await db.select().from(schema.orderReminders))[0].reminderPhase, "delivery"); assert.equal(graphCalls().length, 1);
+  const results = await Promise.all([reminderRoute.POST(controlRequest(body)), reminderRoute.POST(controlRequest(body)), reminderRoute.POST(controlRequest(body))]);
+  for (const response of results) assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.equal(graphCalls().length, 2); assert.match(contentText(graphCalls().at(-1)), /ARRIVED: Collect at Desk B/); assert.doesNotMatch(contentText(graphCalls().at(-1)), /on the way|Thank you for choosing Renova!/);
+  const [row] = await db.select().from(schema.orderReminders);
+  assert.equal(row.reminderPhase, "arrival"); assert.ok(row.arrivalConfirmedAt); assert.ok(row.arrivalAnnouncedAt); assert.ok(Date.parse(row.nextSendAt) >= Date.now() + 23.99 * 3600_000);
+  assert.equal((await allMessages()).filter((message) => message.kind === "arrival").length, 1);
+});
+
+test("verified arrival reminders repeat after a full 24 hours and stop on collection", async () => {
+  const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id);
+  await messageSettings.saveOrderMessageEdits(order.id, { arrival: { message: "Your parcel is ready for collection. {{courier_update}}" } });
+  await reminderRoute.POST(controlRequest({ action: "activate_arrival", orderId: order.id, arrivalConfirmed: true, arrivalCheckpoint: "Pickup desk B" }));
+  assert.equal(graphCalls().length, 2);
+  await db.update(schema.orderReminders).set({ nextSendAt: "2020-01-01T00:00:00.000Z" });
+  await reminders.runDueReminders(); assert.equal(graphCalls().length, 2);
+  const yesterday = new Date(Date.now() - 25 * 3600_000).toISOString();
+  await db.update(schema.whatsappMessages).set({ acceptedAt: yesterday, nextAttemptAt: "2020-01-01T00:00:00.000Z" });
+  await db.update(schema.orderReminders).set({ nextSendAt: yesterday });
+  await Promise.all([reminders.runDueReminders(), reminders.runDueReminders()]);
+  assert.equal(graphCalls().length, 3); assert.match(contentText(graphCalls().at(-1)), /ready for collection.*Pickup desk B/);
+  assert.equal((await allMessages()).filter((message) => message.kind === "arrival_reminder" && message.status === "accepted").length, 1);
+  await db.update(schema.orders).set({ status: "collected" }); await db.update(schema.orderReminders).set({ nextSendAt: yesterday });
+  await reminders.runDueReminders(); assert.equal(graphCalls().length, 3); assert.equal((await db.select().from(schema.orderReminders))[0].active, false);
+});
+
+test("arrival wording changes do not resume paused notifications or override STOP", async () => {
+  const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id); await controls.stopOrderWhatsApp(order.id);
+  await messageSettings.saveOrderMessageEdits(order.id, { arrival: { message: "Ready for pickup now" } });
+  await messageSettings.confirmOrderArrival(order.id, "Verified pickup desk", true);
+  await reminders.runDueReminders(); assert.equal(graphCalls().length, 1);
+  await controls.startOrderWhatsApp(startInput(order, { phone: "08000000000" }));
+  assert.equal(graphCalls().length, 2); assert.match(contentText(graphCalls().at(-1)), /Ready for pickup now/);
+  await wa.optOutWhatsApp("08000000000"); await messageSettings.saveOrderMessageEdits(order.id, { arrival: { note: "Please collect this week" } });
+  await assert.rejects(controls.startOrderWhatsApp(startInput(order, { phone: "08000000000" })), /requested STOP/);
+  assert.equal(graphCalls().length, 2);
+});
+
+test("a crash after the arrival transition is recovered by the scheduler with one arrival message", async () => {
+  const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id);
+  globalThis[symbol] = new Proxy(db, { get(target, key) { if (key === "execute") return async (...args) => { await target.execute(...args); throw new Error("simulated stop after arrival commit"); }; return Reflect.get(target, key); } });
+  await assert.rejects(messageSettings.confirmOrderArrival(order.id, "Verified collection point", true), /simulated stop/);
+  globalThis[symbol] = db;
+  await reminders.runDueReminders(); await reminders.runDueReminders();
+  assert.equal(graphCalls().length, 2); assert.match(contentText(graphCalls().at(-1)), /arrived and is ready for collection/);
+});
+
+test("invalid message edits and oversized requests change no data and send nothing", async () => {
+  const order = await createOrder();
+  for (const messageOverrides of [{ confirmation: { message: "Edit initial confirmation" } }, { routine: { message: "{{unsupported}}" } }, { arrival: { note: "A".repeat(81) } }]) assert.equal((await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides }))).status, 400);
+  const response = await reminderRoute.POST(controlRequest({ action: "save_message_defaults", messageDefaults: { routine: { message: "A".repeat(17000) } } }));
+  assert.equal(response.status, 413);
+  assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal((await db.select().from(schema.reminderMessageSettings)).length, 0); assert.equal(calls.length, 0);
+});
+
+test("an older delivery send finishing after an arrival transition cannot postpone or falsely announce arrival", async () => {
+  const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id);
+  const yesterday = new Date(Date.now() - 25 * 3600_000).toISOString();
+  await db.update(schema.whatsappMessages).set({ acceptedAt: yesterday }); await db.update(schema.orderReminders).set({ nextSendAt: yesterday });
+  let releaseSend, enteredSend;
+  const blocked = new Promise((resolve) => { releaseSend = resolve; });
+  const entered = new Promise((resolve) => { enteredSend = resolve; });
+  graphBehavior = async () => { enteredSend(); await blocked; return Response.json({ messages: [{ id: "wamid.inflight-daily" }] }); };
+  const oldSend = reminders.runDueReminders();
+  await entered;
+  await messageSettings.confirmOrderArrival(order.id, "Verified pickup desk", true);
+  releaseSend(); await oldSend; graphBehavior = undefined;
+  const [waiting] = await db.select().from(schema.orderReminders);
+  assert.equal(waiting.reminderPhase, "arrival"); assert.equal(waiting.arrivalAnnouncedAt, null); assert.ok(Date.parse(waiting.nextSendAt) <= Date.now());
+  await reminders.runDueReminders();
+  assert.equal(graphCalls().length, 3); assert.match(contentText(graphCalls().at(-1)), /arrived and is ready for collection/);
+});
+
+async function onClock(iso, action) {
+  const OriginalDate = globalThis.Date;
+  const milliseconds = OriginalDate.parse(iso);
+  class ClockDate extends OriginalDate {
+    constructor(...args) { if (args.length) super(...args); else super(milliseconds); }
+    static now() { return milliseconds; }
+  }
+  globalThis.Date = ClockDate;
+  try { return await action(); } finally { globalThis.Date = OriginalDate; }
+}
+
+test("saving Jumia dates changes only that order's daily countdown and leaves confirmation and schedule intact", async () => {
+  await onClock("2026-10-27T11:00:00Z", async () => {
+    const order = await createOrder({ addressJson: '{"stateCode":"LA"}', estimatedDelivery: "3–5 working days" }); await wa.confirmOrderWhatsApp(order.id);
+    const first = structuredClone(graphCalls()[0].body); const [before] = await db.select().from(schema.orderReminders);
+    const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, jumiaDeliveryWindow: { from: "2026-11-01", to: "2026-11-03" } }));
+    assert.equal(response.status, 200); const row = (await response.json()).reminder;
+    assert.equal(row.jumiaDeliveryFrom, "2026-11-01"); assert.equal(row.jumiaDeliveryTo, "2026-11-03"); assert.equal(row.nextSendAt, before.nextSendAt); assert.equal(row.reminderPhase, "delivery");
+    assert.equal(graphCalls().length, 1); assert.deepEqual(graphCalls()[0].body, first);
+    assert.equal((await db.select().from(schema.orders))[0].estimatedDelivery, "3–5 working days");
+    const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id }))).json();
+    assert.match(preview.preview, /expected in 5–7 days/); assert.match(preview.preview, /1–3 November 2026/);
+    assert.doesNotMatch(preview.confirmationPreview, /November|5–7 days/); assert.equal(graphCalls().length, 1);
+  });
+});
+
+test("scheduled WhatsApp, email and SMS recompute the window on each actual day and never auto-confirm arrival", async () => {
+  let order;
+  await onClock("2026-10-27T11:00:00Z", async () => {
+    order = await createOrder({ status: "dispatched", estimatedDelivery: "3–5 working days" }); await wa.confirmOrderWhatsApp(order.id);
+    let [row] = await db.select().from(schema.orderReminders); await reminders.saveReminder({ ...row, emailEnabled: true, smsEnabled: true, start: true });
+    await messageSettings.saveOrderMessageEdits(order.id, {}, undefined, undefined, { from: "2026-11-01", to: "2026-11-03" });
+  });
+  process.env.TERMII_API_KEY = "fake-sms-key";
+  const days = [["2026-10-28", /in 4–6 days/], ["2026-10-29", /in 3–5 days/], ["2026-10-31", /in 1–3 days/], ["2026-11-01", /today or within the next 2 days/], ["2026-11-03", /expected today/], ["2026-11-04", /window has passed/]];
+  for (const [day, expected] of days) {
+    await onClock(`${day}T11:00:00Z`, async () => {
+      const before = graphCalls().length; await reminders.runDueReminders();
+      assert.equal(graphCalls().length, before + 1, day); assert.match(contentText(graphCalls().at(-1)), expected);
+      assert.match(calls.filter((call) => call.url === "https://api.resend.com/emails").at(-1).body.html, expected);
+      assert.match(calls.filter((call) => call.url.includes("termii.com")).at(-1).body.sms, expected);
+      assert.equal((await db.select().from(schema.orderReminders))[0].arrivalConfirmedAt, null);
+      assert.equal((await allMessages()).filter((message) => ["arrival", "arrival_reminder"].includes(message.kind)).length, 0);
+    });
+  }
+});
+
+test("revised or cleared Jumia dates apply to future reminders without sending immediately or changing another order", async () => {
+  await onClock("2026-10-27T11:00:00Z", async () => {
+    const one = await createOrder(), two = await createOrder(); await wa.confirmOrderWhatsApp(one.id); await wa.confirmOrderWhatsApp(two.id);
+    await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, { from: "2026-11-01", to: "2026-11-03" });
+    const [before] = await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, one.id));
+    await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, { from: "2026-11-03", to: "2026-11-04" });
+    const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: one.id }))).json(); assert.match(preview.preview, /in 7–8 days/);
+    assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, one.id)))[0].nextSendAt, before.nextSendAt);
+    assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, two.id)))[0].jumiaDeliveryFrom, null);
+    await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, null);
+    const cleared = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: one.id }))).json(); assert.doesNotMatch(cleared.preview, /November|in \d+–\d+ days/);
+    assert.equal(graphCalls().length, 2);
+  });
+});
+
+test("invalid Jumia ranges cause no partial edits, and previewing an unsaved valid window has no side effects", async () => {
+  const order = await olderOrder();
+  for (const jumiaDeliveryWindow of [{ from: "2026-02-30" }, { from: "2026-11-03", to: "2026-11-01" }, { from: "", to: "2026-11-01" }]) {
+    const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { message: "Do not save this partial edit" } }, jumiaDeliveryWindow })); assert.equal(response.status, 400);
+  }
+  assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal(calls.length, 0);
+  await onClock("2026-10-27T11:00:00Z", async () => {
+    const response = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id, jumiaDeliveryWindow: { from: "2026-11-01", to: "2026-11-03" } }));
+    assert.equal(response.status, 200); assert.match((await response.json()).preview, /in 5–7 days/);
+  });
+  assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal(calls.length, 0);
+});
+
+test("a separately verified early arrival replaces the saved Jumia countdown immediately", async () => {
+  await onClock("2026-10-27T11:00:00Z", async () => {
+    const order = await createOrder({ status: "dispatched" }); await wa.confirmOrderWhatsApp(order.id);
+    await messageSettings.saveOrderMessageEdits(order.id, {}, undefined, undefined, { from: "2026-11-01", to: "2026-11-03" });
+    const response = await reminderRoute.POST(controlRequest({ action: "activate_arrival", orderId: order.id, arrivalConfirmed: true, arrivalCheckpoint: "Verified early arrival at the pickup desk" }));
+    assert.equal(response.status, 200); assert.equal(graphCalls().length, 2);
+    assert.match(contentText(graphCalls().at(-1)), /has arrived and is ready for collection/); assert.doesNotMatch(contentText(graphCalls().at(-1)), /in 5–7 days|payment ready/);
+    assert.equal(graphCalls().at(-1).body.template.components[0].parameters[3].text, "Ready for collection now");
+  });
 });

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import styles from "./customer-reminder-bot.module.css";
 import { standardDeliveryEstimate } from "../lib/delivery-estimate";
+import { DEFAULT_REMINDER_MESSAGES, type MessageDefaults } from "../lib/reminder-message-content";
+import { OrderReminderMessageEditor, StoreReminderMessageDefaults, type MessageEditorReminder } from "./reminder-message-editor";
 import { confirmedOrder } from "../lib/whatsapp-message";
 import { OrderWhatsAppControl, type WhatsAppContact, type WhatsAppControlResult } from "./order-whatsapp-control";
 
@@ -33,6 +35,10 @@ type Reminder = {
   currentCheckpoint: string;
   deliveryEstimate: string;
   customerNote: string;
+  messageOverridesJson?: string;
+  reminderPhase?: string;
+  arrivalCheckpoint?: string;
+  arrivalConfirmedAt?: string | null;
   lastSentAt?: string | null;
   nextSendAt?: string | null;
 };
@@ -59,6 +65,8 @@ function formatTime(value?: string | null) {
 
 export function CustomerReminderBot({ orders, compact = false }: { orders: Order[]; compact?: boolean }) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [messageSettingsLoaded, setMessageSettingsLoaded] = useState(false);
+  const [messageDefaults, setMessageDefaults] = useState<MessageDefaults>(DEFAULT_REMINDER_MESSAGES);
   const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -82,10 +90,12 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
     let cancelled = false;
     fetch("/api/orders/reminders", { cache: "no-store" })
       .then(async (response) => {
-        const payload = await response.json() as { reminders?: Reminder[]; providers?: Providers; whatsappMessages?: WhatsAppMessage[]; whatsappContacts?: WhatsAppContact[]; error?: string };
+        const payload = await response.json() as { reminders?: Reminder[]; messageDefaults?: MessageDefaults; providers?: Providers; whatsappMessages?: WhatsAppMessage[]; whatsappContacts?: WhatsAppContact[]; error?: string };
         if (!response.ok) throw new Error(payload.error || "Could not load reminders.");
         if (cancelled) return;
         const rows = payload.reminders ?? [];
+        setMessageDefaults(payload.messageDefaults ?? DEFAULT_REMINDER_MESSAGES);
+        setMessageSettingsLoaded(true);
         setReminders(rows);
         setContacts(payload.whatsappContacts ?? []);
         setWhatsappMessages(payload.whatsappMessages ?? []);
@@ -202,6 +212,7 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
         </div>
       </header>
       <p className={styles.notice}>New checkout orders automatically receive a thank-you confirmation and daily progress updates at the separate WhatsApp number provided by the customer. For older orders, record the customer&apos;s agreement before enabling WhatsApp. Leave the delivery note blank to use the current order status. Enter courier details only after you verify them. Updates continue beyond the estimated delivery window; use the latest confirmed estimate for delayed orders.</p>
+      {messageSettingsLoaded && !loading && !compact && <StoreReminderMessageDefaults defaults={messageDefaults} onSaved={setMessageDefaults} />}
       <div className={styles.orderFilters}>
         <label className={styles.field}><span>Find an order or customer</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Order number, name, phone or email" /></label>
         <label className={styles.field}><span>Show</span><select value={showAll ? "all" : "active"} onChange={(event) => setShowAll(event.target.value === "all")}><option value="active">Orders awaiting delivery</option><option value="all">All orders, including completed</option></select></label>
@@ -227,6 +238,7 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                 </header>
                 <OrderWhatsAppControl order={order} reminder={reminder} contact={contact} configured={providers.whatsapp} loading={loading} onChanged={controlChanged} />
                 {reminder && <div className={styles.controlTiming}>Next WhatsApp update: {reminder.active && reminder.whatsappEnabled ? formatTime(reminder.nextSendAt) : "Off"}</div>}
+                {messageSettingsLoaded && !loading && <OrderReminderMessageEditor key={order.id} order={order} reminder={reminder} defaults={messageDefaults} onSaved={async (updated: MessageEditorReminder) => { setReminders((current) => [updated, ...current.filter((row) => row.orderId !== updated.orderId)]); setDrafts((current) => ({ ...current, [updated.orderId]: { ...draftFor(order), currentCheckpoint: updated.currentCheckpoint, deliveryEstimate: updated.deliveryEstimate, customerNote: updated.customerNote } })); const response = await fetch("/api/orders/reminders", { cache: "no-store" }); if (response.ok) { const data = await response.json(); setWhatsappMessages(data.whatsappMessages ?? []); } }} />}
                 {!compact && confirmedOrder({ ...order, paymentMethod: order.paymentMethod || "paystack" }) && <details className={styles.advanced}>
                   <summary>Delivery notes, message previews and other channels</summary>
                   <div className={styles.form}>
@@ -234,18 +246,6 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                     <div><b>1. Order confirmation</b><span>Sent automatically when the order is confirmed. Thanks the customer and includes their items, payment and delivery estimate.</span></div>
                     <div><b>2. Daily delivery update</b><span>Uses the current status and order details, at least 24 hours after the last accepted WhatsApp message. Stops after delivery, collection, cancellation or opt-out.</span></div>
                   </div>
-                  <label className={`${styles.field} ${styles.wide}`}>
-                    <span>Latest verified delivery update</span>
-                    <input maxLength={500} value={draft.currentCheckpoint} onChange={(event) => update(order.id, { currentCheckpoint: event.target.value })} placeholder="Optional: paste a verified courier update" />
-                  </label>
-                  <label className={styles.field}>
-                    <span>Current expected delivery</span>
-                    <input maxLength={110} value={draft.deliveryEstimate} onChange={(event) => update(order.id, { deliveryEstimate: event.target.value })} placeholder="The latest estimate given by the delivery partner" />
-                  </label>
-                  <label className={styles.field}>
-                    <span>Optional reassurance note</span>
-                    <textarea value={draft.customerNote} onChange={(event) => update(order.id, { customerNote: event.target.value })} placeholder="Any truthful information the customer should know" />
-                  </label>
                   <div className={`${styles.channels} ${styles.wide}`}>
                     <b className={styles.channelTitle}>Send through</b>
                     <label><input type="checkbox" checked={draft.emailEnabled} disabled={!providers.email} onChange={(event) => update(order.id, { emailEnabled: event.target.checked })} /> Email</label>
@@ -256,12 +256,6 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                     <input type="checkbox" checked={draft.consentConfirmed} onChange={(event) => update(order.id, { consentConfirmed: event.target.checked })} />
                     <span>I confirm this customer agreed to receive transactional delivery updates through the selected channels.</span>
                   </label>
-                  {reminder?.active && (
-                    <label className={`${styles.field} ${styles.wide}`}>
-                      <span>Final arrival message from Jumia</span>
-                      <textarea value={draft.arrivalMessage} onChange={(event) => update(order.id, { arrivalMessage: event.target.value })} placeholder="Paste the verified Jumia arrival or ready-for-collection message here" />
-                    </label>
-                  )}
                   {reminder && <div className={styles.timing}><span>Last accepted by a provider: {formatTime(reminder.lastSentAt)}</span><span>Next scheduled: {reminder.active ? formatTime(reminder.nextSendAt) : "Stopped"}</span></div>}
                   <div className={`${styles.actions} ${styles.wide}`}>
                     <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "preview")}>Preview confirmation & daily update</button>
@@ -269,7 +263,6 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                       <>
                         <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "save")}>Save for next update</button>
                         <button className="button primary" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "send_now")}>Save update & send now</button>
-                        <button className="button quiet" type="button" disabled={busyOrder === order.id || !draft.arrivalMessage.trim()} onClick={() => void act(order, "arrival")}>Send Jumia arrival update</button>
                         <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "stop")}>Stop all reminder channels</button>
                         {reminder.whatsappEnabled && <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "opt_out_whatsapp")}>Record customer opt-out for this number</button>}
                       </>

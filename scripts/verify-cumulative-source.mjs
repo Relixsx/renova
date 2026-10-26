@@ -33,6 +33,8 @@ const exportRoute = source("app/api/orders/export/route.ts");
 const reminders = source("app/lib/customer-reminders.ts");
 const whatsapp = source("app/lib/whatsapp-delivery.ts");
 const reminderUi = source("app/components/customer-reminder-bot.tsx");
+const messageEditor = source("app/components/reminder-message-editor.tsx");
+const messageSettings = source("app/lib/reminder-message-settings.ts");
 const reminderApi = source("app/api/orders/reminders/route.ts");
 const reminderRun = source("app/api/orders/reminders/run/route.ts");
 const reminderWorker = source("deployment/renova-reminder-cron-worker.js");
@@ -82,10 +84,12 @@ check(
   "WhatsApp reminder integration is missing.",
 );
 check(
-  reminderUi.includes("Final arrival message from Jumia") &&
-    reminderUi.includes("Send Jumia arrival update") &&
-    reminderApi.includes('body.action === "arrival"') &&
-    reminders.includes('"routine" | "arrival"'),
+  reminderUi.includes("OrderReminderMessageEditor") &&
+    messageEditor.includes("Confirm arrival and start arrival reminders") &&
+    messageEditor.includes("arrivalConfirmed") &&
+    reminderApi.includes("confirmOrderArrival") &&
+    messageSettings.includes("arrival_confirmed_at") &&
+    reminders.includes("arrival_reminder"),
   "The final manual logistics-arrival workflow is missing.",
 );
 check(
@@ -108,8 +112,8 @@ check(
   "The V8 product/storefront presentation is incomplete.",
 );
 check(
-  existsSync("drizzle-neon/0005_graceful_clint_barton.sql") &&
-    existsSync("drizzle-neon/meta/0005_snapshot.json") &&
+  existsSync("drizzle-neon/0007_editable_reminder_messages.sql") &&
+    existsSync("drizzle-neon/meta/0007_snapshot.json") &&
     existsSync("drizzle-neon/meta/_journal.json"),
   "The latest reminder database migration set is incomplete.",
 );

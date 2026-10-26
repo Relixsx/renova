@@ -50,6 +50,13 @@
       "when": 1792448371586,
       "tag": "0006_whatsapp_order_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793037943392,
+      "tag": "0007_editable_reminder_messages",
+      "breakpoints": true
     }
   ]
 }

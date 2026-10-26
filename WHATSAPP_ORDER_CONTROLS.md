@@ -1,5 +1,7 @@
 # Per-order WhatsApp notifications
 
+Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download. Use its installation steps for this update; the 22 October instructions below document the earlier patch.
+
 22 October 2026. This combined package includes the regional delivery estimates (3–5 working days within Lagos, 3–12 working days outside Lagos) and controls for new and historical orders. See REGIONAL_DELIVERY_UPDATE.md for the current delivery update. The installer accepts the confirmed checkout update with either earlier patch applied or neither.
 
 ## Apply and deploy
@@ -49,7 +51,7 @@ WhatsApp shows On/Off, the next schedule and recent queued/accepted/delivery sta
 
 Updates wait at least 24 hours after the last accepted WhatsApp message. They continue when delivery takes longer than the estimated delivery window and stop when paused, opted out or the order is delivered, collected, cancelled or refunded. Unconfirmed/unpaid orders cannot be started through these controls.
 
-For a delayed order, open **Delivery notes, message previews and other channels** in Reminders. Enter only verified courier information and the latest confirmed delivery estimate, then **Save for next update**. Specific dates are preserved. The regional working-day estimate is not a new countdown each time a message arrives.
+For a delayed order, open **Edit messages for this order → Daily delivery update**. Enter verified courier information and the latest confirmed delivery estimate, then **Save message wording**. Specific dates are preserved. The regional working-day estimate is not a new countdown each time a message arrives.
 
 SMS uses the delivery phone. WhatsApp uses the separately recorded WhatsApp number. Starting WhatsApp does not trigger an extra email or SMS.
 
