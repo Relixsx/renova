@@ -1,96 +1,31 @@
-# Editable daily and arrival reminders
+# Daily and arrival messages
 
-Updated 26 October 2026. This combined update includes the message editors and the Jumia countdown. Apply it directly after regional-delivery commit `a2062b8` on branch `migration/neon-render`. The earlier message-editor download was not installed; use this replacement ZIP only. See [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for date examples and the daily workflow.
+Updated 27 October 2026. Use [SIMPLE_DELIVERY_REMINDERS.md](./SIMPLE_DELIVERY_REMINDERS.md) for the current install, checks and commit/push commands. This follow-up uses the already-applied migration 0007 and needs no new migration.
 
-## The three messages
+## Ready-made messages
 
-1. **Order confirmation:** the automatic thank-you, order items, amount and regional delivery estimate stay separate from reminder edits. COD confirmation and verified prepaid payment keep their existing triggers.
-2. **Daily delivery update:** enter the order's Jumia expected-from/to dates after placing the Jumia order. Each scheduled send recalculates the calendar-day countdown using Nigeria time. Edit the additional wording, fallback expected-delivery line, customer instructions and email subject/heading separately. The saved date window takes priority over the fallback line. Without dates, the existing delivery estimate and progress remain in use. The default only says the order is on the way after dispatch.
-3. **Arrival and collection reminder:** edit its own message, collection line, customer instructions and email subject/heading. Enter verified arrival/collection details and confirm that the parcel has arrived. That transition replaces delivery-progress reminders with arrival reminders. When notifications are on, it attempts one arrival update and then waits at least 24 hours between recurring WhatsApp updates. Repeated arrival clicks do not send another first-arrival message.
+Renova prepares complete daily and arrival messages automatically. In an order, open **Delivery dates & automatic messages**. Enter Jumia's delivery dates, read the full WhatsApp preview that appears automatically, and select **Save changes**. Names, the website order number, items, payment amount and countdown fill in automatically. There are no variable-insertion buttons.
 
-Order items, payment facts, the recorded recipient and WhatsApp STOP instructions remain automatic. The editable content fits inside the existing approved `renova_delivery_update` WhatsApp template, in language `en`. Its fixed greeting, order heading and closing are visible in the preview. Editing that fixed wording would be a separate Meta template change; this update edits the message section and delivery/collection value, without replacing the working template. No new Meta approval, access token, Worker code or Render environment variable is required for these fields.
+The normal screen has dates and the customer message. Optional wording changes sit under **Optional: customise the wording**. You can leave that section closed. The standard wording is ready to use, and any genuine existing custom wording is preserved. Blank custom wording uses the ready-made message.
 
-## Install and verify locally
+## Three independent messages
 
-Download the replacement `renova-message-editor-20261023.zip` and unzip it in Downloads. This revision extracts a **renova-delivery-countdown** folder. Do not apply the older message-editor folder first.
+1. **Order confirmation:** automatic when the COD order is confirmed or prepaid payment is verified. Reminder edits and Jumia dates do not change its regional estimate.
+2. **Daily delivery update:** counts down against that order's saved Jumia window using Nigeria calendar days. Without dates, it uses the order's normal estimate and current progress. Actual dispatch status controls any on-the-way wording.
+3. **Arrival and collection reminder:** uses its own ready-made or optional custom wording. Enter verified collection details and explicitly confirm arrival before starting it. Dates alone never start it.
 
-```bash
-bash "$HOME/Downloads/renova-delivery-countdown/apply-renova-delivery-countdown.sh" &&
-cd "$HOME/Documents/Renova_Store" &&
-npm run test:whatsapp &&
-npx tsc --noEmit --incremental false &&
-npm run verify:cumulative &&
-git diff --check
-```
+Saving dates or wording does not send immediately, opt a customer in, enable channels, resume a paused order or change the 24-hour schedule. STOP and terminal order statuses still end updates. A send already in progress may still arrive after stopping or changing phase.
 
-The installer finds `Documents/Renova_Store`, verifies the affected source files and branch, and backs up replacements inside Git's metadata directory. It requires a clean working tree and rolls back an application failure. It does not push, deploy, connect to Neon or send customer messages. It adds no dependencies.
+## Optional fields
 
-If the only local change is the generated `tsconfig.tsbuildinfo`, that cache can be restored with `git restore -- tsconfig.tsbuildinfo` before retrying. Preserve any other local edits.
+Optional per-order changes include the message body, fallback delivery/collection line, customer instructions, verified courier information, and email subject/heading. Jumia dates take priority over the daily fallback line. Clear the dates and save to use that fallback again.
 
-## Apply the one-time database update before pushing
+Under **Admin → Reminders**, **Optional: change the store's message wording** sets defaults for orders without corresponding custom wording. Existing specific order notes and dates are retained. The first confirmation stays separate.
 
-```bash
-cd "$HOME/Documents/Renova_Store" &&
-bash scripts/migrate-reminder-messages.sh
-```
+WhatsApp uses the existing approved template's greeting and closing. The full preview uses the same formatting and shortening as the sender. Order facts and STOP instructions are retained. Email and SMS keep their respective layouts.
 
-Paste the connection string for your **restored NEW Neon database** into the hidden Terminal prompt. Do not paste the connection string into chat or a source file. Both its pooled and direct connection strings are accepted.
+## Arrival reminders
 
-The one combined migration, `0007_editable_reminder_messages`, adds the message-default settings table, per-order message/arrival fields and Jumia date pair. It retains existing orders, products, accounts, consent, notes and schedules. It widens the existing queue index to cover recurring arrival messages and checks that the end date is on or after the start date. The migration locks and checks the migration history, applies its changes in one transaction and recognizes an already-applied update on retry. It sends no notifications. The earlier `0006` helper remains compatible with the additional migration. There is no separate countdown migration to run.
+In the arrival tab, enter the verified collection point or arrival details, check the confirmation of courier verification, then choose **Confirm arrival and start arrival reminders**. A stopped order instead records arrival and keeps notifications off. Use the existing channel controls to restart when appropriate and with the customer's agreement.
 
-Wait for **Message-editor migration completed in one transaction** or **Message-editor migration is already applied** before proceeding. A wrong destination or inconsistent history stops the migration.
-
-## Commit and deploy
-
-Review `git diff`, then:
-
-```bash
-cd "$HOME/Documents/Renova_Store" &&
-git diff --check &&
-git add -- app db drizzle-neon scripts tests REMINDER_MESSAGE_EDITOR.md JUMIA_DELIVERY_COUNTDOWN.md WHATSAPP_SETUP.md WHATSAPP_ORDER_CONTROLS.md REMINDER_BOT_SETUP.md &&
-git commit -m "Add editable reminders with per-order delivery countdowns" &&
-git push origin migration/neon-render
-```
-
-Wait for the new commit to show **Live** on Render before using the editor.
-
-## Edit the default wording
-
-Open **Admin → Reminders → Edit default daily and arrival messages**. Choose the daily or arrival tab. Edit and preview an example, then **Save default messages**. Default changes apply to orders without a corresponding per-order override. Existing order-specific courier dates and notes are retained.
-
-The first confirmation is separate from both defaults. Restoring an original default changes the draft first; saving applies it.
-
-## Edit an individual order
-
-In **Admin → Orders** or **Admin → Reminders**, find an order and open **Edit messages for this order**.
-
-- Choose **2. Daily delivery update** or **3. Arrival and collection reminder**.
-- In the daily tab, enter **Expected from** and **Expected to** from Jumia, or leave the second field blank for one expected date.
-- Edit the message, fallback delivery/collection line, instructions and optional email fields. The daily fallback line is disabled while a Jumia date window is in use.
-- Use the detail buttons to insert the customer's name, order number, current status, courier update, tracking link, countdown or Jumia date window. These are replaced with the actual order details. The daily countdown is added automatically even if its variable is omitted from the editable body.
-- Enter daily courier progress and arrival/collection details separately.
-- Select **Preview all three messages** to see the actual WhatsApp layouts and the email/SMS previews. Previewing sends nothing and does not confirm arrival.
-- Select **Save message & Jumia dates** in the daily tab, or **Save message wording** in the arrival tab. Saving does not send, enable a channel, opt a customer in, restart a paused order, change the phase or advance its sending schedule.
-- **Use store default for this message** resets only that message's overrides after you save. Other message types stay independent.
-
-With saved Jumia dates, the daily expected-delivery line shows that exact date window. Clear both dates and save to return to the fallback. Without Jumia dates, blank daily delivery text uses the order's Lagos (3–5 working days) or outside-Lagos (3–12 working days) estimate, or its specific courier date. An explicitly entered new fallback line is retained as entered. Blank arrival/collection text uses **Ready for collection now**. The initial confirmation continues using the regional estimate regardless of Jumia dates.
-
-The countdown uses calendar dates, not working days, and is recalculated at send time. Within the window, it uses wording such as "expected today or tomorrow". After the window, it explains that the estimate has passed and arrival is not yet confirmed. Update the Jumia dates when the courier provides a revised estimate. Reaching an estimated date never confirms arrival automatically.
-
-WhatsApp condenses line breaks and can shorten expanded text to fit its approved layout. The full preview uses the same formatting and shortening as the actual outgoing WhatsApp message. Order facts and STOP instructions are retained. Email and SMS use the same selected message wording, with their respective layouts.
-
-## Start arrival reminders
-
-Open the order's arrival tab, enter the verified arrival/collection details, and select the checkbox confirming the courier's information. Then select **Confirm arrival and start arrival reminders**. Entering text or previewing alone never starts arrival messages.
-
-If notifications are off, the action records arrival and keeps them off. Restart the order's notifications through the existing controls when ready. Starting WhatsApp uses the recorded recipient and still requires the customer's agreement. Customer STOP cannot be overridden by editing or restarting.
-
-An initial verified arrival update can be sent promptly even if a delivery-progress update was sent recently. Later recurring arrival messages observe the full 24-hour interval. Provider acceptance is followed by delivery receipts; check the recipient's phone during a QA test. A send already in progress can still arrive when the phase changes or notifications stop.
-
-Stop WhatsApp through the existing order controls, or stop all selected channels under **Delivery notes, message previews and other channels**. Mark an order delivered/collected only when that is true; terminal order status also ends reminders.
-
-## Local validation and a live QA check
-
-Local validation passed 99 regression tests, TypeScript, 88 source safeguards, changed-source ESLint, a production build and the rendered HTML check. The tests use real PostgreSQL execution through PGlite and mocked providers. They cover date-window validation, countdown changes across Nigeria midnight/month/year boundaries, actual sends on successive dates, revised/cleared/overdue dates, independent defaults and per-order fields, previews without side effects, keeping confirmation wording separate, HTML escaping, consent/STOP, concurrent arrival activation, 24-hour timing, recovery after a crash, an in-flight delivery-send race, and migration rollback/retry.
-
-After Render shows Live, use an existing QA order and a recipient number you control. Preview all three messages with a future Jumia date window, save a daily edit, and check that no immediate message is sent by saving. Verify the first confirmation preview retains its regional estimate and a stopped order stays stopped. Check the next scheduled daily send on the recipient's phone. Confirm arrival for that QA parcel only when appropriate, check that one arrival update is queued/accepted and arrives, and check the next schedule. Stop the QA reminders after testing. Local tests do not verify live credentials, the webhook or handset delivery.
+The initial verified arrival update may send promptly. Later recurring updates wait a full 24 hours. Mark collection/delivery only when true, or use the stop controls. Editing wording cannot override customer STOP.

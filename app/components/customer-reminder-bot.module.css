@@ -282,10 +282,9 @@
 .editorFields { display: grid; gap: 14px; margin: 14px 0; }
 .editorFields .field small, .editorHint { color: #6a625d; font-size: 11px; line-height: 1.6; }
 .editorBody textarea, .editorBody input { min-width: 0; width: 100%; }
-.messageTabs, .variables, .editorActions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.messageTabs, .editorActions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .messageTabs button { padding: 10px 14px; border: 1px solid #ddd3cc; border-radius: 8px; background: #fff; color: #413832; font: inherit; cursor: pointer; }
 .messageTabs button[aria-pressed="true"] { background: #fff0e6; border-color: #ed6c35; color: #9b3b15; font-weight: 700; }
-.variables button { border: 1px solid #ded8d4; background: #f7f5f3; border-radius: 5px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
 .emailFields { border-top: 1px solid #eee5de; padding-top: 12px; }
 .emailFields summary { cursor: pointer; font-size: 12px; }
 .arrivalStart { padding: 14px; border: 1px solid #e6d3c5; border-radius: 8px; background: #fff8f1; }
@@ -304,3 +303,17 @@
 .countdownPreview p { margin: 6px 0; }
 .dateWarning { background: #fff1ec; border-left: 3px solid #b95632; padding: 12px; color: #833a21; margin-bottom: 14px; }
 @media (max-width: 760px) { .jumiaDateFields { grid-template-columns: 1fr; } }
+
+.editorIntro { margin: 0 0 16px; color: #605954; }
+.dateSummary { margin-bottom: 12px; }
+.automaticPreview { margin: 18px 0; border: 1px solid #c9ddd0; border-radius: 10px; background: #f4faf6; overflow: hidden; }
+.previewHeading { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border-bottom: 1px solid #dce9e0; }
+.previewHeading span { color: #376746; font-size: 11px; }
+.automaticPreview .customerMessage { margin: 0; padding: 18px; white-space: pre-line; background: #fff; line-height: 1.8; overflow-wrap: anywhere; }
+.automaticPreview > small { display: block; padding: 12px 16px; color: #5c6d62; font-size: 11px; }
+.automaticPreview > p:not(.customerMessage) { padding: 8px 16px; }
+.editorActions { align-items: center; }
+.editorActions > small { flex: 1 1 200px; color: #6a625d; font-size: 11px; }
+.optionalWording { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e8e2dd; }
+.optionalWording > summary { cursor: pointer; color: #6a625d; font-size: 12px; }
+.optionalWording > p { color: #6a625d; font-size: 12px; }

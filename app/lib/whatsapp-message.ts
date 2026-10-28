@@ -77,7 +77,6 @@ export function reminderMessageFields(order: MessageOrder, reminder: MessageRemi
     jumia_delivery_window: jumiaWindow?.dateLabel || "",
   };
   let message = renderMessageField(config.message, variables);
-  if (kind === "activation" && !arrival && config.message === DEFAULT_REMINDER_MESSAGES.routine.message) message = message.replace("Your daily delivery update:", "Your latest order update:");
   if (countdown) {
     // The countdown stays first even if the owner omits its variable or uses
     // long custom wording. A duplicated variable in the message is removed.

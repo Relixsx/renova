@@ -271,7 +271,7 @@ test("owner can start a historical order immediately with recorded consent and a
   const result = await controls.startOrderWhatsApp(startInput(order));
   assert.equal(result.changed, true); assert.equal(result.delivery.status, "accepted");
   assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
-  assert.match(graphCalls()[0].body.template.components[0].parameters[2].text, /latest order update.*dispatched and is on the way/);
+  assert.match(graphCalls()[0].body.template.components[0].parameters[2].text, /dispatched and is on the way/);
   assert.doesNotMatch(graphCalls()[0].body.template.components[0].parameters[2].text, /received and is being processed|Thank you for choosing/);
   const [saved] = await db.select().from(schema.orders);
   assert.equal(saved.whatsappConsentSource, "owner-recorded"); assert.ok(saved.whatsappConsentAt);
@@ -662,7 +662,11 @@ test("invalid Jumia ranges cause no partial edits, and previewing an unsaved val
   assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal(calls.length, 0);
   await onClock("2026-10-27T11:00:00Z", async () => {
     const response = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id, jumiaDeliveryWindow: { from: "2026-11-01", to: "2026-11-03" } }));
-    assert.equal(response.status, 200); assert.match((await response.json()).preview, /in 5–7 days/);
+    assert.equal(response.status, 200);
+    const preview = (await response.json()).preview;
+    assert.match(preview, /Hello Amina,/); assert.ok(preview.includes(order.orderNumber));
+    assert.match(preview, /in 5–7 days/); assert.match(preview, /1 × Headphones/); assert.match(preview, /₦24,500/);
+    assert.doesNotMatch(preview, /{{|Your daily delivery update:/);
   });
   assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal(calls.length, 0);
 });

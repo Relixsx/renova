@@ -54,12 +54,37 @@ test("custom WhatsApp text expands actual order details, stays within the templa
   for (const value of long) assert.doesNotMatch(value, /[\n\r\t]/);
 });
 
-test("order and store editors render accessible independent fields without sending requests", () => {
+test("the order editor puts dates and an automatic preview before optional wording, without variable buttons", () => {
   const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: false, consentConfirmed: true, emailEnabled: false, whatsappEnabled: false, smsEnabled: false, ...reminder }, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  for (const label of ["Order confirmation", "Daily delivery update", "Arrival and collection reminder", "Daily message", "Expected delivery line", "Customer instructions", "Email subject", "Email heading", "Save message &amp; Jumia dates", "Preview all three messages"]) assert.ok(html.includes(label), label);
+  for (const label of ["Daily delivery update", "Arrival and collection reminder", "Custom daily wording (optional)", "Expected delivery line", "Customer instructions", "Email subject", "Email heading", "Save changes", "The daily message your customer will receive"]) assert.ok(html.includes(label), label);
   assert.ok(html.includes("Jumia expected delivery dates")); assert.ok(html.includes("Expected from")); assert.ok(html.includes("Expected to (optional for one date)"));
+  assert.ok(html.indexOf('aria-label="Automatic customer message"') < html.indexOf("Optional: customise the wording"));
+  assert.doesNotMatch(html, /Insert an order detail|{{status_update}}|{{courier_update}}|Preview all three messages/);
+  assert.match(html, /<details class="optionalWording"><summary>Optional: customise the wording/);
   const arrivalHtml = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: true, consentConfirmed: true, emailEnabled: false, whatsappEnabled: true, smsEnabled: false, ...reminder, reminderPhase: "arrival", arrivalConfirmedAt: "2026-10-23T10:00:00.000Z" }, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  assert.ok(arrivalHtml.includes("Arrival reminder message")); assert.ok(arrivalHtml.includes("Arrival or collection line"));
+  assert.ok(arrivalHtml.includes("Custom arrival wording (optional)")); assert.ok(arrivalHtml.includes("Arrival or collection line"));
+  assert.ok(arrivalHtml.includes("Where is the parcel ready for collection?"));
   const globalHtml = renderToStaticMarkup(createElement(StoreReminderMessageDefaults, { defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
   assert.ok(globalHtml.includes("Save default messages")); assert.ok(globalHtml.includes("approved Meta template"));
+  assert.ok(globalHtml.includes("Hello Sample,")); assert.doesNotMatch(globalHtml, /Insert an order detail|{{status_update}}|{{courier_update}}/);
+});
+
+test("the ready-made daily message uses the customer's actual details without any owner-composed text", () => {
+  const untouched = { currentCheckpoint: "", customerNote: "", deliveryEstimate: "", jumiaDeliveryFrom: "2026-11-06", jumiaDeliveryTo: "2026-11-09" };
+  const text = whatsappPreview(whatsappTemplateParameters(order, untouched, "routine", undefined, new Date("2026-10-27T11:00:00Z")));
+  assert.match(text, /Hello Amina,/); assert.match(text, /REN-MESSAGE-001/);
+  assert.match(text, /expected in 10–13 days/); assert.match(text, /6–9 November 2026/);
+  assert.match(text, /1 × Headphones/); assert.match(text, /₦24,500/); assert.match(text, /keep your payment ready/);
+  assert.match(text, /dispatched and is on the way/); assert.match(text, /Reply STOP/);
+  assert.doesNotMatch(text, /{{|Your daily delivery update:|undefined/);
+});
+
+test("untouched saved defaults adopt the simpler ready-made body while real owner wording remains intact", () => {
+  const legacy = "Your daily delivery update: {{status_update}} {{courier_update}}";
+  const defaults = structuredClone(DEFAULT_REMINDER_MESSAGES); defaults.routine.message = legacy;
+  const saved = { ...reminder, messageOverridesJson: JSON.stringify({ routine: { message: legacy } }) };
+  const text = whatsappPreview(whatsappTemplateParameters(order, saved, "routine", defaults));
+  assert.match(text, /Courier update: At the dispatch hub/); assert.doesNotMatch(text, /Your daily delivery update:/);
+  const custom = { ...saved, messageOverridesJson: '{"routine":{"message":"Please call us if you need help with collection."}}' };
+  assert.match(whatsappPreview(whatsappTemplateParameters(order, custom, "routine", defaults)), /Please call us if you need help with collection/);
 });

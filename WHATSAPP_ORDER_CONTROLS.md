@@ -1,5 +1,7 @@
 # Per-order WhatsApp notifications
 
+Latest 27 October follow-up: use [SIMPLE_DELIVERY_REMINDERS.md](./SIMPLE_DELIVERY_REMINDERS.md). Enter the Jumia dates and save; the complete customer message is prepared and previewed automatically. Optional wording changes are collapsed. This follow-up uses the installed migration 0007 and needs no new migration.
+
 Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download. Use its installation steps for this update; the 22 October instructions below document the earlier patch.
 
 22 October 2026. This combined package includes the regional delivery estimates (3–5 working days within Lagos, 3–12 working days outside Lagos) and controls for new and historical orders. See REGIONAL_DELIVERY_UPDATE.md for the current delivery update. The installer accepts the confirmed checkout update with either earlier patch applied or neither.

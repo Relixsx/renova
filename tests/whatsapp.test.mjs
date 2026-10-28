@@ -121,7 +121,8 @@ test("the scheduler Worker rejects unauthenticated requests and makes one authen
 test("daily messages retain item quantities and the amount while confirmed orders avoid transit claims", () => {
   for (const status of ["confirmed", "processing", "packaged", "dispatched"]) {
     const parameters = whatsappTemplateParameters({ ...order, status }, reminder, "routine");
-    assert.match(parameters[2], /daily delivery update/);
+    assert.match(parameters[2], /Your order/);
+    assert.doesNotMatch(parameters[2], /{{|Your daily delivery update:/);
     assert.match(parameters[2], /2 × Wireless headphones/); assert.match(parameters[2], /₦24,500/);
     if (status !== "dispatched") assert.doesNotMatch(parameters[2], /on the way|has been dispatched/);
   }

@@ -26,7 +26,7 @@ export const MESSAGE_FIELD_LIMITS: Record<keyof ReminderMessageConfig, number> =
 export const MESSAGE_VARIABLES = ["first_name", "customer_name", "order_number", "status_update", "courier_update", "tracking_url", "delivery_countdown", "jumia_delivery_window"] as const;
 export const DEFAULT_REMINDER_MESSAGES: MessageDefaults = {
   routine: {
-    message: "Your daily delivery update: {{status_update}} {{courier_update}}",
+    message: "{{status_update}} {{courier_update}}",
     deliveryEstimate: "",
     note: "",
     emailSubject: "Your Renova order update: {{order_number}}",
@@ -43,6 +43,12 @@ export const DEFAULT_REMINDER_MESSAGES: MessageDefaults = {
 
 export class ReminderMessageError extends Error {
   constructor(message: string, public status = 400) { super(message); }
+}
+
+const LEGACY_DAILY_MESSAGE = "Your daily delivery update: {{status_update}} {{courier_update}}";
+
+export function isAutomaticReminderMessage(kind: EditableMessageKind, message: string) {
+  return message === DEFAULT_REMINDER_MESSAGES[kind].message || (kind === "routine" && message === LEGACY_DAILY_MESSAGE);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,7 +107,11 @@ export function resolveReminderMessage(kind: EditableMessageKind, reminder: Remi
     ...(kind === "routine" && reminder.deliveryEstimate ? { deliveryEstimate: reminder.deliveryEstimate } : {}),
     ...(reminder.customerNote && (kind === "routine" || reminder.arrivalCheckpoint === undefined) ? { note: reminder.customerNote } : {}),
   } : {};
-  return { ...inherited, ...legacy, ...overrides[kind] };
+  const result = { ...inherited, ...legacy, ...overrides[kind] };
+  // Existing untouched editor defaults adopt the ready-made wording without
+  // rewriting saved dates, real custom messages, consent or schedules.
+  if (kind === "routine" && result.message === LEGACY_DAILY_MESSAGE) result.message = DEFAULT_REMINDER_MESSAGES.routine.message;
+  return result;
 }
 
 export function hasCustomDeliveryLine(kind: EditableMessageKind, reminder: ReminderMessageSource, defaults: MessageDefaults) {
