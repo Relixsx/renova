@@ -85,6 +85,11 @@ export function reminderMessageFields(order: MessageOrder, reminder: MessageRemi
     message = [countdown.message, paymentReminder, custom].filter(Boolean).join(" ");
   }
   if (!message) message = arrival ? renderMessageField(DEFAULT_REMINDER_MESSAGES.arrival.message, variables) : orderStageText(order.status);
+  // The owner's paragraph remains editable. Actual progress and verified
+  // courier information are added without requiring template variables.
+  for (const detail of [arrival ? "" : variables.status_update, variables.courier_update]) {
+    if (detail && !message.includes(detail)) message = `${message} ${detail}`;
+  }
   const enteredEstimate = renderMessageField(config.deliveryEstimate, variables);
   const estimate = enteredEstimate && hasCustomDeliveryLine(arrival ? "arrival" : "routine", reminder, defaults)
     ? enteredEstimate

@@ -1,5 +1,9 @@
 # Automatic delivery messages, with a simpler screen
 
+Latest 28 October update: see [ORDER_MESSAGE_WORKSPACE.md](./ORDER_MESSAGE_WORKSPACE.md). All three messages now have visible tabs, daily and arrival wording are directly editable, and the delivery-date card shows today’s and tomorrow’s automatic countdown. This follow-up needs no database migration.
+
+The 27 October installation instructions below describe the previous installed release. For the current follow-up, use the 28 October guide above.
+
 27 October 2026. This is a follow-up to the installed Jumia countdown and message-editor update. It uses the existing database migration 0007. There is no new migration, dependency, API key, Meta template change or Worker change.
 
 ## Install

@@ -26,14 +26,14 @@ export const MESSAGE_FIELD_LIMITS: Record<keyof ReminderMessageConfig, number> =
 export const MESSAGE_VARIABLES = ["first_name", "customer_name", "order_number", "status_update", "courier_update", "tracking_url", "delivery_countdown", "jumia_delivery_window"] as const;
 export const DEFAULT_REMINDER_MESSAGES: MessageDefaults = {
   routine: {
-    message: "{{status_update}} {{courier_update}}",
+    message: "Thank you for your patience. We will let you know as soon as your parcel is ready to receive. Please plan ahead for your delivery.",
     deliveryEstimate: "",
     note: "",
     emailSubject: "Your Renova order update: {{order_number}}",
     emailHeading: "Your latest delivery update",
   },
   arrival: {
-    message: "Your order has arrived and is ready for collection. {{courier_update}}",
+    message: "Your order has arrived and is ready for collection.",
     deliveryEstimate: "Ready for collection now",
     note: "Please collect your parcel as soon as you can. Thank you for choosing Renova.",
     emailSubject: "Your Renova order has arrived: {{order_number}}",
@@ -45,10 +45,13 @@ export class ReminderMessageError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 
-const LEGACY_DAILY_MESSAGE = "Your daily delivery update: {{status_update}} {{courier_update}}";
+const LEGACY_MESSAGES: Record<EditableMessageKind, string[]> = {
+  routine: ["Your daily delivery update: {{status_update}} {{courier_update}}", "{{status_update}} {{courier_update}}"],
+  arrival: ["Your order has arrived and is ready for collection. {{courier_update}}"],
+};
 
 export function isAutomaticReminderMessage(kind: EditableMessageKind, message: string) {
-  return message === DEFAULT_REMINDER_MESSAGES[kind].message || (kind === "routine" && message === LEGACY_DAILY_MESSAGE);
+  return message === DEFAULT_REMINDER_MESSAGES[kind].message || LEGACY_MESSAGES[kind].includes(message);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,8 +113,16 @@ export function resolveReminderMessage(kind: EditableMessageKind, reminder: Remi
   const result = { ...inherited, ...legacy, ...overrides[kind] };
   // Existing untouched editor defaults adopt the ready-made wording without
   // rewriting saved dates, real custom messages, consent or schedules.
-  if (kind === "routine" && result.message === LEGACY_DAILY_MESSAGE) result.message = DEFAULT_REMINDER_MESSAGES.routine.message;
+  if (isAutomaticReminderMessage(kind, result.message)) result.message = DEFAULT_REMINDER_MESSAGES[kind].message;
   return result;
+}
+
+export function mergeReminderMessageOverrides(saved: MessageOverrides, draft: MessageOverrides): MessageOverrides {
+  const merged = { ...saved };
+  for (const kind of ["routine", "arrival"] as const) {
+    if (Object.hasOwn(draft, kind)) merged[kind] = draft[kind] === null ? null : { ...saved[kind], ...draft[kind] };
+  }
+  return merged;
 }
 
 export function hasCustomDeliveryLine(kind: EditableMessageKind, reminder: ReminderMessageSource, defaults: MessageDefaults) {

@@ -681,3 +681,41 @@ test("a separately verified early arrival replaces the saved Jumia countdown imm
     assert.equal(graphCalls().at(-1).body.template.components[0].parameters[3].text, "Ready for collection now");
   });
 });
+
+test("the customer's 6–10 November window counts down from 9–13 to 8–12 to 7–11 days without another edit", async () => {
+  let order;
+  const custom = "Please plan ahead for your delivery. We will let you know when your parcel is ready.";
+  await onClock("2026-10-27T08:30:00Z", async () => {
+    order = await createOrder({ createdAt: "2026-10-20T08:30:00Z", addressJson: '{"stateCode":"LA"}', estimatedDelivery: "3–5 working days" });
+    await wa.confirmOrderWhatsApp(order.id);
+    const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { message: custom } }, jumiaDeliveryWindow: { from: "2026-11-06", to: "2026-11-10" } }));
+    assert.equal(response.status, 200); assert.equal(graphCalls().length, 1);
+  });
+  for (const [date, expected] of [["2026-10-28", /expected in 9–13 days/], ["2026-10-29", /expected in 8–12 days/], ["2026-10-30", /expected in 7–11 days/]]) {
+    await onClock(`${date}T08:30:00Z`, async () => {
+      const response = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id })); const preview = await response.json();
+      assert.match(preview.preview, expected); assert.ok(preview.preview.includes(custom));
+      assert.doesNotMatch(preview.confirmationPreview, /November|days\. Please plan/);
+      assert.equal(preview.previewNigeriaDate, date);
+      const before = graphCalls().length; await reminders.runDueReminders();
+      assert.equal(graphCalls().length, before + 1); assert.match(contentText(graphCalls().at(-1)), expected); assert.ok(contentText(graphCalls().at(-1)).includes(custom));
+      const [row] = await db.select().from(schema.orderReminders);
+      assert.equal(row.jumiaDeliveryFrom, "2026-11-06"); assert.equal(row.jumiaDeliveryTo, "2026-11-10"); assert.equal(row.reminderPhase, "delivery");
+    });
+  }
+});
+
+test("a daily job queued before Nigeria midnight uses the current countdown when it is actually sent", async () => {
+  let queued;
+  await onClock("2026-10-27T08:30:00Z", async () => {
+    const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
+    await messageSettings.saveOrderMessageEdits(order.id, { routine: { message: "Your delivery reminder is here." } }, undefined, undefined, { from: "2026-11-06", to: "2026-11-10" });
+    const [row] = await db.select().from(schema.orderReminders);
+    await onClock("2026-10-28T22:59:00Z", async () => { queued = await wa.enqueueWhatsApp(order.id, row.id, "routine", "queued-before-midnight"); });
+  });
+  await onClock("2026-10-28T23:00:05Z", async () => {
+    await wa.dispatchWhatsApp(queued.id);
+    assert.equal(graphCalls().length, 2); assert.match(contentText(graphCalls().at(-1)), /expected in 8–12 days/);
+    assert.doesNotMatch(contentText(graphCalls().at(-1)), /expected in 9–13 days/);
+  });
+});

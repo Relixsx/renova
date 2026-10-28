@@ -1,5 +1,7 @@
 # Jumia dates and daily delivery countdowns
 
+Latest 28 October update: see [ORDER_MESSAGE_WORKSPACE.md](./ORDER_MESSAGE_WORKSPACE.md). All three messages now have visible tabs, daily and arrival wording are directly editable, and the delivery-date card shows today’s and tomorrow’s automatic countdown. This follow-up needs no database migration.
+
 Countdown installed 26 October 2026; screen simplified 27 October 2026. The Jumia dates and the existing migration 0007 are retained on branch `migration/neon-render`.
 
 ## Current follow-up update
@@ -12,7 +14,7 @@ The 26 October countdown package and migration 0007 are already installed. Use [
 2. Open **Delivery dates & automatic messages → 2. Daily delivery update**.
 3. Under the Jumia delivery dates, enter **Expected from** and **Expected to**. For one date, leave Expected to blank.
 4. The complete customer WhatsApp message appears automatically with the actual name, website order number, items, payment and countdown. No wording or detail buttons are required.
-5. Select **Save changes**. The next scheduled reminder uses those dates; saving and previewing send nothing immediately.
+5. Select **Save daily update**. The next scheduled reminder uses those dates; saving and previewing send nothing immediately.
 
 Each order has its own window. Changing one does not change another. Enter a revised window if Jumia revises its estimate. **Clear dates**, then save, to return to that order's normal delivery estimate. Clearing the draft alone does not change the saved dates.
 
@@ -44,7 +46,7 @@ The countdown is followed by the editable daily wording, actual order items/paym
 - **Daily delivery reminder:** editable additional wording plus the current Jumia countdown when dates are saved. Without dates, it uses the existing delivery estimate and progress. A date estimate alone does not say the parcel has been dispatched.
 - **Arrival and collection reminder:** independently editable. It starts only after you enter verified arrival/collection details and explicitly confirm arrival. An estimated date reaching zero never starts it. It can also be confirmed early if the courier verifies early arrival.
 
-Store defaults apply where an order has no corresponding custom wording. Optional text changes are under **Optional: customise the wording**. The daily countdown is included automatically whenever dates are saved. Arrival messages keep their own wording and do not receive the countdown opening.
+Store defaults apply where an order has no corresponding custom wording. The daily and arrival text fields are visible in their own tabs. The daily countdown is included automatically whenever dates are saved. Arrival messages keep their own wording and do not receive the countdown opening.
 
 The on/off controls, customer agreement and STOP handling remain in effect. Saving dates does not enroll an old order or resume a paused one. For an older order, use its existing WhatsApp start control with the recorded customer agreement. Mark the order collected/delivered or stop its reminders when complete.
 

@@ -6,9 +6,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 
 const load = (name) => import(pathToFileURL(join(process.env.RENOVA_TEST_BUILD, `${name}.mjs`)));
-const { DEFAULT_REMINDER_MESSAGES, validateMessageDefaults, validateMessageOverrides, resolveReminderMessage } = await load("app/lib/reminder-message-content");
-const { whatsappTemplateParameters, whatsappPreview } = await load("app/lib/whatsapp-message");
-const { OrderReminderMessageEditor, StoreReminderMessageDefaults } = await load("app/components/reminder-message-editor");
+const { DEFAULT_REMINDER_MESSAGES, validateMessageDefaults, validateMessageOverrides, resolveReminderMessage, mergeReminderMessageOverrides } = await load("app/lib/reminder-message-content");
+const { whatsappTemplateParameters, whatsappPreview, reminderMessageFields } = await load("app/lib/whatsapp-message");
+const { OrderReminderMessageEditor, StoreReminderMessageDefaults, OrderMessageWorkspace } = await load("app/components/reminder-message-editor");
 const order = { customerName: "Amina Example", orderNumber: "REN-MESSAGE-001", customerPhone: "08000000000", status: "dispatched", paymentMethod: "cash_on_delivery", paymentStatus: "payment_due_on_delivery", totalKobo: 2450000, itemsJson: '[{"name":"Headphones","quantity":1}]', addressJson: '{"stateCode":"OG"}', estimatedDelivery: "3–12 working days" };
 const reminder = { currentCheckpoint: "At the dispatch hub", deliveryEstimate: "30 October", customerNote: "Keep your phone available", arrivalCheckpoint: "Collect at the verified pickup desk", reminderPhase: "delivery", messageOverridesJson: "{}" };
 
@@ -54,19 +54,68 @@ test("custom WhatsApp text expands actual order details, stays within the templa
   for (const value of long) assert.doesNotMatch(value, /[\n\r\t]/);
 });
 
-test("the order editor puts dates and an automatic preview before optional wording, without variable buttons", () => {
-  const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: false, consentConfirmed: true, emailEnabled: false, whatsappEnabled: false, smsEnabled: false, ...reminder }, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  for (const label of ["Daily delivery update", "Arrival and collection reminder", "Custom daily wording (optional)", "Expected delivery line", "Customer instructions", "Email subject", "Email heading", "Save changes", "The daily message your customer will receive"]) assert.ok(html.includes(label), label);
-  assert.ok(html.includes("Jumia expected delivery dates")); assert.ok(html.includes("Expected from")); assert.ok(html.includes("Expected to (optional for one date)"));
-  assert.ok(html.indexOf('aria-label="Automatic customer message"') < html.indexOf("Optional: customise the wording"));
-  assert.doesNotMatch(html, /Insert an order detail|{{status_update}}|{{courier_update}}|Preview all three messages/);
-  assert.match(html, /<details class="optionalWording"><summary>Optional: customise the wording/);
-  const arrivalHtml = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: true, consentConfirmed: true, emailEnabled: false, whatsappEnabled: true, smsEnabled: false, ...reminder, reminderPhase: "arrival", arrivalConfirmedAt: "2026-10-23T10:00:00.000Z" }, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  assert.ok(arrivalHtml.includes("Custom arrival wording (optional)")); assert.ok(arrivalHtml.includes("Arrival or collection line"));
-  assert.ok(arrivalHtml.includes("Where is the parcel ready for collection?"));
+function workspaceProps(step = "routine", extra = {}) {
+  const clock = new Date("2026-10-28T08:30:00Z");
+  const source = { ...reminder, jumiaDeliveryFrom: "2026-11-06", jumiaDeliveryTo: "2026-11-10" };
+  const configs = { routine: resolveReminderMessage("routine", source), arrival: resolveReminderMessage("arrival", source) };
+  const preview = {
+    previewNigeriaDate: "2026-10-28",
+    confirmationPreview: whatsappPreview(whatsappTemplateParameters({ ...order, status: "confirmed" }, source, "confirmation", undefined, clock)),
+    preview: whatsappPreview(whatsappTemplateParameters(order, source, "routine", undefined, clock)),
+    arrivalPreview: whatsappPreview(whatsappTemplateParameters(order, source, "arrival", undefined, clock)),
+    emailPreviews: { routine: reminderMessageFields(order, source, "routine", undefined, clock), arrival: reminderMessageFields(order, source, "arrival", undefined, clock) },
+    smsPreviews: { routine: "Daily SMS preview", arrival: "Arrival SMS preview" },
+  };
+  const noop = () => {};
+  return { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: true, consentConfirmed: true, emailEnabled: false, whatsappEnabled: true, smsEnabled: false, ...source }, expanded: true, step, channel: "whatsapp", configs,
+    dates: { from: "2026-11-06", to: "2026-11-10" }, clock, checkpoint: source.currentCheckpoint, arrivalCheckpoint: source.arrivalCheckpoint,
+    arrivalConfirmed: false, dirty: { routine: false, arrival: false }, busy: false, feedback: "", preview,
+    actions: { toggle: noop, step: noop, channel: noop, date: noop, clearDates: noop, field: noop, checkpoint: noop, arrivalCheckpoint: noop, arrivalConfirmed: noop, reset: noop, save: noop, activateArrival: noop, retryPreview: noop }, ...extra };
+}
+
+test("all three message tabs are visible and the daily wording is a filled editable field in the main panel", () => {
+  const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: workspaceProps().reminder, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
+  for (const label of ["Order confirmation", "Daily delivery update", "Arrival &amp; collection", "Your message to the customer", "Jumia delivery dates", "Expected from", "Expected to", "Save daily update", "Message preview"]) assert.ok(html.includes(label), label);
+  assert.equal((html.match(/role="tab"/g) || []).length, 3);
+  assert.match(html, /<textarea[^>]*id="order-1-messages-routine-message"[^>]*>Thank you for your patience/);
+  assert.doesNotMatch(html, /Optional: customise|View the other messages|{{status_update}}|{{courier_update}}|Insert an order detail/);
   const globalHtml = renderToStaticMarkup(createElement(StoreReminderMessageDefaults, { defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
   assert.ok(globalHtml.includes("Save default messages")); assert.ok(globalHtml.includes("approved Meta template"));
-  assert.ok(globalHtml.includes("Hello Sample,")); assert.doesNotMatch(globalHtml, /Insert an order detail|{{status_update}}|{{courier_update}}/);
+  assert.ok(globalHtml.includes("Hello Sample,")); assert.doesNotMatch(globalHtml, /{{status_update}}|{{courier_update}}/);
+});
+
+test("the daily workspace shows today's and tomorrow's automatic counts alongside the actual customer preview", () => {
+  const html = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps()));
+  assert.match(html, /Today/); assert.match(html, /28 October 2026/); assert.match(html, /9–13 days/);
+  assert.match(html, /Tomorrow/); assert.match(html, /29 October 2026/); assert.match(html, /8–12 days/);
+  assert.match(html, /Hello Amina,/); assert.match(html, /REN-MESSAGE-001/); assert.match(html, /₦24,500/);
+  assert.match(html, /name, order details and daily countdown are filled in automatically/);
+  assert.doesNotMatch(html, /type="date"[^>]*disabled/);
+});
+
+test("order confirmation has its own read-only tab and retains the original regional estimate", () => {
+  const html = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps("confirmation")));
+  assert.match(html, /id="order-1-messages-tab-confirmation"[^>]*aria-selected="true"/);
+  assert.match(html, /automatically for new orders after confirmation or verified payment/i);
+  assert.match(html, /Thank you for choosing Renova/); assert.match(html, /3–12 working days/);
+  assert.doesNotMatch(html, /<textarea|type="date"|Save daily update|9–13 days|6–10 November/);
+});
+
+test("arrival has its own editable wording and collection details and still requires explicit verification", () => {
+  const html = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps("arrival")));
+  assert.match(html, /Your arrival message to the customer/); assert.match(html, /Where is the parcel ready for collection/);
+  assert.match(html, /Save arrival wording/); assert.match(html, /has arrived and is ready for collection/);
+  assert.match(html, /<button[^>]*disabled=""[^>]*>Confirm arrival and start arrival reminders/);
+  assert.doesNotMatch(html, /type="date"|9–13 days/);
+});
+
+test("draft message fields merge by kind without discarding independent saved wording", () => {
+  const saved = { routine: { message: "Daily wording", note: "Daily note" }, arrival: { message: "Arrival wording" } };
+  const snapshot = structuredClone(saved);
+  const merged = mergeReminderMessageOverrides(saved, { routine: { note: "Changed daily note" }, arrival: { deliveryEstimate: "Collect Friday" } });
+  assert.deepEqual(merged, { routine: { message: "Daily wording", note: "Changed daily note" }, arrival: { message: "Arrival wording", deliveryEstimate: "Collect Friday" } });
+  assert.deepEqual(saved, snapshot);
+  assert.deepEqual(mergeReminderMessageOverrides(saved, { routine: null }), { routine: null, arrival: saved.arrival });
 });
 
 test("the ready-made daily message uses the customer's actual details without any owner-composed text", () => {
@@ -87,4 +136,12 @@ test("untouched saved defaults adopt the simpler ready-made body while real owne
   assert.match(text, /Courier update: At the dispatch hub/); assert.doesNotMatch(text, /Your daily delivery update:/);
   const custom = { ...saved, messageOverridesJson: '{"routine":{"message":"Please call us if you need help with collection."}}' };
   assert.match(whatsappPreview(whatsappTemplateParameters(order, custom, "routine", defaults)), /Please call us if you need help with collection/);
+});
+
+
+test("opening an older order preserves long legacy notes without blocking unrelated message editing", () => {
+  const older = { ...workspaceProps().reminder, customerNote: "Keep this historical note. ".repeat(10), deliveryEstimate: "An older courier estimate with additional detail. ".repeat(4) };
+  const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: older, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
+  assert.match(html, /Keep this historical note/); assert.match(html, /Your message to the customer/);
+  assert.doesNotMatch(html, /must be .* characters or fewer|cannot be empty/);
 });
