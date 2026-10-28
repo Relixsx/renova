@@ -37,13 +37,13 @@ test("message validation rejects unknown fields, malformed variables, control ch
   assert.deepEqual(validateMessageOverrides({ routine: { message: "Hello {{first_name}}", note: "" }, arrival: null }), { routine: { message: "Hello {{first_name}}", note: "" }, arrival: null });
 });
 
-test("custom WhatsApp text expands actual order details, stays within the template and keeps STOP and payment facts", () => {
+test("custom WhatsApp text expands actual order details, stays within the template and keeps payment facts and leaves printed STOP instructions for arrival", () => {
   const defaults = structuredClone(DEFAULT_REMINDER_MESSAGES);
   defaults.routine.message = "Hello {{first_name}}. Order {{order_number}}. {{status_update}} {{courier_update}}";
   const parameters = whatsappTemplateParameters(order, reminder, "routine", defaults);
   assert.match(parameters[2], /Hello Amina\. Order REN-MESSAGE-001/);
   assert.match(parameters[2], /1 × Headphones/); assert.match(parameters[2], /₦24,500/);
-  assert.match(parameters[2], /Reply STOP to stop WhatsApp updates\.$/);
+  assert.doesNotMatch(parameters[2], /Reply STOP/);
   assert.equal(parameters[3], "30 October");
   const lagosOrder = { ...order, addressJson: '{"stateCode":"LA"}', estimatedDelivery: "3–5 working days" };
   assert.equal(whatsappTemplateParameters(lagosOrder, { ...reminder, messageOverridesJson: '{"routine":{"deliveryEstimate":"3–12 working days"}}' }, "routine")[3], "3–12 working days");
@@ -70,14 +70,16 @@ function workspaceProps(step = "routine", extra = {}) {
   return { order: { id: 1, ...order }, reminder: { id: 1, orderId: 1, active: true, consentConfirmed: true, emailEnabled: false, whatsappEnabled: true, smsEnabled: false, ...source }, expanded: true, step, channel: "whatsapp", configs,
     dates: { from: "2026-11-06", to: "2026-11-10" }, clock, checkpoint: source.currentCheckpoint, arrivalCheckpoint: source.arrivalCheckpoint,
     arrivalConfirmed: false, dirty: { routine: false, arrival: false }, busy: false, feedback: "", preview,
-    actions: { toggle: noop, step: noop, channel: noop, date: noop, clearDates: noop, field: noop, checkpoint: noop, arrivalCheckpoint: noop, arrivalConfirmed: noop, reset: noop, save: noop, activateArrival: noop, retryPreview: noop }, ...extra };
+    actions: { body: noop, toggle: noop, step: noop, channel: noop, date: noop, clearDates: noop, field: noop, checkpoint: noop, arrivalCheckpoint: noop, arrivalConfirmed: noop, reset: noop, save: noop, activateArrival: noop, retryPreview: noop }, ...extra };
 }
 
 test("all three message tabs are visible and the daily wording is a filled editable field in the main panel", () => {
   const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: workspaceProps().reminder, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  for (const label of ["Order confirmation", "Daily delivery update", "Arrival &amp; collection", "Your message to the customer", "Jumia delivery dates", "Expected from", "Expected to", "Save daily update", "Message preview"]) assert.ok(html.includes(label), label);
+  for (const label of ["Order confirmation", "Daily delivery update", "Arrival &amp; collection", "Daily message including items and amount", "Jumia delivery dates", "Expected from", "Expected to", "Save daily update", "Edit customer message"]) assert.ok(html.includes(label), label);
   assert.equal((html.match(/role="tab"/g) || []).length, 3);
-  assert.match(html, /<textarea[^>]*id="order-1-messages-routine-message"[^>]*>Thank you for your patience/);
+  const loaded = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps()));
+  assert.match(loaded, /<textarea[^>]*id="order-1-messages-routine-full-message"[^>]*>[^<]*Thank you for your patience/);
+  assert.doesNotMatch(loaded, /id="order-1-messages-routine-full-message"[^>]*disabled/);
   assert.doesNotMatch(html, /Optional: customise|View the other messages|{{status_update}}|{{courier_update}}|Insert an order detail/);
   const globalHtml = renderToStaticMarkup(createElement(StoreReminderMessageDefaults, { defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
   assert.ok(globalHtml.includes("Save default messages")); assert.ok(globalHtml.includes("approved Meta template"));
@@ -86,10 +88,10 @@ test("all three message tabs are visible and the daily wording is a filled edita
 
 test("the daily workspace shows today's and tomorrow's automatic counts alongside the actual customer preview", () => {
   const html = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps()));
-  assert.match(html, /Today/); assert.match(html, /28 October 2026/); assert.match(html, /9–13 days/);
-  assert.match(html, /Tomorrow/); assert.match(html, /29 October 2026/); assert.match(html, /8–12 days/);
+  assert.match(html, /Today/); assert.match(html, /28 October 2026/); assert.match(html, /9 days remaining/);
+  assert.match(html, /Tomorrow/); assert.match(html, /29 October 2026/); assert.match(html, /8 days remaining/);
   assert.match(html, /Hello Amina,/); assert.match(html, /REN-MESSAGE-001/); assert.match(html, /₦24,500/);
-  assert.match(html, /name, order details and daily countdown are filled in automatically/);
+  assert.match(html, /dates and the days remaining stay automatic/i);
   assert.doesNotMatch(html, /type="date"[^>]*disabled/);
 });
 
@@ -103,7 +105,7 @@ test("order confirmation has its own read-only tab and retains the original regi
 
 test("arrival has its own editable wording and collection details and still requires explicit verification", () => {
   const html = renderToStaticMarkup(createElement(OrderMessageWorkspace, workspaceProps("arrival")));
-  assert.match(html, /Your arrival message to the customer/); assert.match(html, /Where is the parcel ready for collection/);
+  assert.match(html, /Arrival message including items and amount/); assert.match(html, /Where is the parcel ready for collection/);
   assert.match(html, /Save arrival wording/); assert.match(html, /has arrived and is ready for collection/);
   assert.match(html, /<button[^>]*disabled=""[^>]*>Confirm arrival and start arrival reminders/);
   assert.doesNotMatch(html, /type="date"|9–13 days/);
@@ -122,9 +124,9 @@ test("the ready-made daily message uses the customer's actual details without an
   const untouched = { currentCheckpoint: "", customerNote: "", deliveryEstimate: "", jumiaDeliveryFrom: "2026-11-06", jumiaDeliveryTo: "2026-11-09" };
   const text = whatsappPreview(whatsappTemplateParameters(order, untouched, "routine", undefined, new Date("2026-10-27T11:00:00Z")));
   assert.match(text, /Hello Amina,/); assert.match(text, /REN-MESSAGE-001/);
-  assert.match(text, /expected in 10–13 days/); assert.match(text, /6–9 November 2026/);
+  assert.match(text, /10 days remaining/); assert.match(text, /6–9 November 2026/);
   assert.match(text, /1 × Headphones/); assert.match(text, /₦24,500/); assert.match(text, /keep your payment ready/);
-  assert.match(text, /dispatched and is on the way/); assert.match(text, /Reply STOP/);
+  assert.match(text, /dispatched and is on the way/); assert.doesNotMatch(text, /Reply STOP/);
   assert.doesNotMatch(text, /{{|Your daily delivery update:|undefined/);
 });
 
@@ -142,6 +144,6 @@ test("untouched saved defaults adopt the simpler ready-made body while real owne
 test("opening an older order preserves long legacy notes without blocking unrelated message editing", () => {
   const older = { ...workspaceProps().reminder, customerNote: "Keep this historical note. ".repeat(10), deliveryEstimate: "An older courier estimate with additional detail. ".repeat(4) };
   const html = renderToStaticMarkup(createElement(OrderReminderMessageEditor, { order: { id: 1, ...order }, reminder: older, defaults: DEFAULT_REMINDER_MESSAGES, onSaved() {} }));
-  assert.match(html, /Keep this historical note/); assert.match(html, /Your message to the customer/);
+  assert.equal(resolveReminderMessage("routine", older).note, older.customerNote); assert.match(html, /Daily message including items and amount/);
   assert.doesNotMatch(html, /must be .* characters or fewer|cannot be empty/);
 });

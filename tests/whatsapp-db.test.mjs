@@ -214,13 +214,21 @@ test("a SQL failure rolls back the additive migration with existing store data r
 
 
 const checkoutDetails = { fullName: "Amina Example", email: "qa@example.invalid", phone: "08000000000", whatsappPhone: "09000000001", streetAddress: "QA Street", stateCode: "LA", lga: "Ikeja", cityTown: "Ikeja" };
-const checkoutRequest = (overrides = {}) => new Request("https://renova.example.invalid/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines: [{ slug: "qa-headphones", quantity: 1 }], deliveryId: "jumia", details: checkoutDetails, customerConfirmedDeliveryCommitment: true, whatsapp: { phone: checkoutDetails.whatsappPhone, noticeVersion: "checkout-v2" }, ...overrides }) });
+const checkoutRequest = (overrides = {}) => new Request("https://renova.example.invalid/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines: [{ slug: "qa-headphones", quantity: 1 }], deliveryId: "jumia", details: checkoutDetails, customerConfirmedDeliveryCommitment: true, whatsapp: { phone: checkoutDetails.whatsappPhone, noticeVersion: "checkout-v3" }, ...overrides }) });
+
+test("an in-progress checkout using the previous WhatsApp notice still places and confirms its order", async () => {
+  const response = await codCheckout.POST(checkoutRequest({ whatsapp: { phone: checkoutDetails.whatsappPhone, noticeVersion: "checkout-v2" } }));
+  assert.equal(response.status, 200);
+  const [order] = await db.select().from(schema.orders);
+  assert.equal(order.whatsappConsentSource, "checkout-v2"); assert.equal(order.whatsappPhone, "2349000000001");
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
+});
 
 test("new COD checkout automatically confirms to the separate WhatsApp number and admin saves preserve it", async () => {
   const response = await codCheckout.POST(checkoutRequest());
   assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
   const [order] = await db.select().from(schema.orders);
-  assert.equal(order.customerPhone, "08000000000"); assert.equal(order.whatsappPhone, "2349000000001"); assert.equal(order.whatsappConsentSource, "checkout-v2");
+  assert.equal(order.customerPhone, "08000000000"); assert.equal(order.whatsappPhone, "2349000000001"); assert.equal(order.whatsappConsentSource, "checkout-v3");
   assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.to, "2349000000001");
   const [reminder] = await db.select().from(schema.orderReminders);
   assert.equal(reminder.active, true); assert.equal(reminder.whatsappEnabled, true);
@@ -367,6 +375,36 @@ test("a process failure after activation commit leaves a durable job for the sch
 });
 
 const controlRequest = (body, owner = true) => new Request("https://renova.example.invalid/api/orders/reminders", { method: "POST", headers: { "content-type": "application/json", ...(owner ? { "x-renova-test-owner": "yes" } : {}) }, body: JSON.stringify(body) });
+
+test("owner can stop every channel for a past order without changing its saved messages or another running order", async () => {
+  process.env.WHATSAPP_AUTOMATION_ENABLED = "false";
+  const past = await createOrder(), other = await createOrder();
+  await wa.confirmOrderWhatsApp(past.id); await wa.confirmOrderWhatsApp(other.id);
+  const saved = { emailEnabled: true, smsEnabled: true, reminderPhase: "arrival", arrivalConfirmedAt: "2026-10-27T10:00:00Z", arrivalCheckpoint: "Verified pickup desk", jumiaDeliveryFrom: "2026-11-06", jumiaDeliveryTo: "2026-11-10", messageOverridesJson: '{"routine":{"message":"Keep my daily wording"},"arrival":{"message":"Keep my collection wording"}}' };
+  const [before] = await db.update(schema.orderReminders).set(saved).where(eq(schema.orderReminders.orderId, past.id)).returning();
+  await wa.enqueueWhatsApp(past.id, before.id, "arrival", "filter-stop-arrival");
+  await db.update(schema.orders).set({ status: "delivered" }).where(eq(schema.orders.id, past.id));
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "stop", orderId: past.id }, false))).status, 403);
+  assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, past.id)))[0].active, true);
+  const response = await reminderRoute.POST(controlRequest({ action: "stop", orderId: past.id }));
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.match(payload.message, /All reminder channels stopped/);
+  assert.equal(payload.reminder.active, false); assert.equal(payload.reminder.nextSendAt, null); assert.ok(payload.reminder.stoppedAt);
+  for (const key of Object.keys(saved)) assert.equal(payload.reminder[key], saved[key], key);
+  assert.equal(payload.reminder.whatsappEnabled, true); // Selections are retained for a deliberate later restart.
+  for (const message of (await allMessages()).filter((message) => message.orderId === past.id)) assert.equal(message.status, "cancelled");
+  assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, other.id)))[0].active, true);
+  const { reminderOrderView } = await load("app/lib/reminder-status.ts");
+  const dashboard = await reminders.reminderDashboardData();
+  assert.deepEqual(reminderOrderView([past, other], dashboard.reminders, dashboard.whatsappContacts, "stopped").orders.map((order) => order.id), [past.id]);
+  assert.deepEqual(reminderOrderView([past, other], dashboard.reminders, dashboard.whatsappContacts, "running").orders.map((order) => order.id), [other.id]);
+  assert.equal(graphCalls().length, 0);
+  assert.equal((await reminderRoute.POST(controlRequest({ action: "stop", orderId: past.id }))).status, 200);
+  process.env.WHATSAPP_AUTOMATION_ENABLED = "true";
+  await wa.runWhatsAppQueue();
+  assert.equal(graphCalls().length, 1); assert.equal(graphCalls()[0].body.template.components[0].parameters[1].text, other.orderNumber);
+});
 test("admin route requires owner access and validates consent before any WhatsApp start", async () => {
   const order = await olderOrder();
   assert.equal((await reminderRoute.POST(controlRequest({ action: "start_whatsapp", orderId: order.id, whatsappPhone: "09000000001", consentConfirmed: true }, false))).status, 403);
@@ -438,6 +476,59 @@ const messageSettings = await load("app/lib/reminder-message-settings.ts");
 const messageContent = await load("app/lib/reminder-message-content.ts");
 const defaultMessages = () => structuredClone(messageContent.DEFAULT_REMINDER_MESSAGES);
 const contentText = (call) => call.body.template.components[0].parameters[2].text;
+
+test("owner full-message corrections survive reload and scheduled sends without changing the stored amount, items or schedule", async () => {
+  let order, nextSendAt;
+  await onClock("2026-10-27T08:30:00Z", async () => {
+    order = await createOrder({ totalKobo: 3370000, itemsJson: '[{"name":"Foldable phone","quantity":1}]' });
+    await wa.confirmOrderWhatsApp(order.id);
+    const initial = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id }))).json();
+    const body = initial.messageEditors.routine.body.replace("₦33,700", "₦58,000").replace("Items: 1 × Foldable phone.", "Items: 1 × Foldable phone and 1 × Portable speaker.");
+    const [before] = await db.select().from(schema.orderReminders); nextSendAt = before.nextSendAt;
+    assert.equal((await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { fullMessage: body } } }, false))).status, 403);
+    const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { fullMessage: body } }, jumiaDeliveryWindow: { from: "2026-11-06", to: "2026-11-10" } }));
+    assert.equal(response.status, 200); const saved = (await response.json()).reminder;
+    assert.equal(saved.nextSendAt, nextSendAt); assert.equal(saved.active, true);
+    assert.match(saved.messageOverridesJson, /58,000/); assert.match(saved.messageOverridesJson, /{{status_update}}/);
+    const dashboard = await (await reminderRoute.GET(new Request("https://qa.example.invalid/api/orders/reminders", { headers: { "x-renova-test-owner": "yes" } }))).json();
+    assert.match(dashboard.reminders[0].messageOverridesJson, /Portable speaker/);
+    const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id, messageOverrides: { routine: { emailHeading: "Updated heading" } } }))).json();
+    assert.match(preview.messageEditors.routine.body, /₦58,000/); assert.doesNotMatch(preview.preview, /33,700|Reply STOP/);
+    assert.match(preview.confirmationPreview, /₦33,700/); assert.doesNotMatch(preview.confirmationPreview, /Portable speaker|58,000/);
+    assert.equal(graphCalls().length, 1);
+    await db.update(schema.orderReminders).set({ emailEnabled: true, smsEnabled: true }).where(eq(schema.orderReminders.orderId, order.id));
+  });
+  process.env.TERMII_API_KEY = "fake-sms-key";
+  for (const [date, days] of [["2026-10-28", 9], ["2026-10-29", 8], ["2026-10-30", 7]]) {
+    await onClock(`${date}T08:30:00Z`, async () => {
+      if (date === "2026-10-29") await db.update(schema.orders).set({ status: "dispatched" }).where(eq(schema.orders.id, order.id));
+      const count = graphCalls().length; await reminders.runDueReminders(); assert.equal(graphCalls().length, count + 1);
+      const graph = graphCalls().at(-1); assert.match(contentText(graph), /Portable speaker/); assert.match(contentText(graph), /₦58,000/); assert.doesNotMatch(contentText(graph), /33,700|Reply STOP/);
+      assert.match(graph.body.template.components[0].parameters[3].text, new RegExp(`6–10 November 2026 · \\*${days} days remaining`));
+      if (date !== "2026-10-28") { assert.match(contentText(graph), /dispatched and is on the way/); assert.doesNotMatch(contentText(graph), /received and is being processed/); }
+      for (const text of [calls.filter((call) => call.url === "https://api.resend.com/emails").at(-1).body.html, calls.filter((call) => call.url.includes("termii.com")).at(-1).body.sms]) {
+        assert.match(text, /₦58,000/); assert.doesNotMatch(text, /33,700/);
+      }
+    });
+  }
+  const [stored] = await db.select().from(schema.orders).where(eq(schema.orders.id, order.id));
+  assert.equal(stored.totalKobo, 3370000); assert.equal(stored.itemsJson, order.itemsJson);
+  await wa.optOutWhatsApp(stored.whatsappPhone);
+  const count = graphCalls().length;
+  await onClock("2026-10-31T08:30:00Z", async () => { await reminders.runDueReminders(); });
+  assert.equal(graphCalls().length, count);
+});
+
+test("a full-message validation failure saves no partial wording or delivery-date changes", async () => {
+  const order = await createOrder({ orderNumber: "REN-" + "A".repeat(60), customerName: "A".repeat(40) }); await wa.confirmOrderWhatsApp(order.id);
+  const [before] = await db.select().from(schema.orderReminders);
+  const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id,
+    messageOverrides: { routine: { fullMessage: "A".repeat(690) + " ₦58,000" } }, jumiaDeliveryWindow: { from: "2026-11-06", to: "2026-11-10" }, currentCheckpoint: "Do not partially save this" }));
+  assert.equal(response.status, 400); assert.match((await response.json()).error, /too long/);
+  const [after] = await db.select().from(schema.orderReminders);
+  assert.equal(after.messageOverridesJson, before.messageOverridesJson); assert.equal(after.jumiaDeliveryFrom, before.jumiaDeliveryFrom); assert.equal(after.currentCheckpoint, before.currentCheckpoint); assert.equal(after.nextSendAt, before.nextSendAt);
+  assert.equal(graphCalls().length, 1);
+});
 
 test("owner-only defaults persist separately and saving them does not send or alter schedules", async () => {
   const order = await createOrder(); await wa.confirmOrderWhatsApp(order.id);
@@ -613,7 +704,7 @@ test("saving Jumia dates changes only that order's daily countdown and leaves co
     assert.equal(graphCalls().length, 1); assert.deepEqual(graphCalls()[0].body, first);
     assert.equal((await db.select().from(schema.orders))[0].estimatedDelivery, "3–5 working days");
     const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id }))).json();
-    assert.match(preview.preview, /expected in 5–7 days/); assert.match(preview.preview, /1–3 November 2026/);
+    assert.match(preview.preview, /5 days remaining/); assert.match(preview.preview, /1–3 November 2026/);
     assert.doesNotMatch(preview.confirmationPreview, /November|5–7 days/); assert.equal(graphCalls().length, 1);
   });
 });
@@ -630,7 +721,9 @@ test("scheduled WhatsApp, email and SMS recompute the window on each actual day 
   for (const [day, expected] of days) {
     await onClock(`${day}T11:00:00Z`, async () => {
       const before = graphCalls().length; await reminders.runDueReminders();
-      assert.equal(graphCalls().length, before + 1, day); assert.match(contentText(graphCalls().at(-1)), expected);
+      assert.equal(graphCalls().length, before + 1, day);
+      const whatsappExpected = { "2026-10-28": /\*4 days remaining/, "2026-10-29": /\*3 days remaining/, "2026-10-31": /\*1 day remaining/, "2026-11-01": /Delivery window is open/, "2026-11-03": /Expected today/, "2026-11-04": /estimate passed/ }[day];
+      assert.match(graphCalls().at(-1).body.template.components[0].parameters[3].text, whatsappExpected);
       assert.match(calls.filter((call) => call.url === "https://api.resend.com/emails").at(-1).body.html, expected);
       assert.match(calls.filter((call) => call.url.includes("termii.com")).at(-1).body.sms, expected);
       assert.equal((await db.select().from(schema.orderReminders))[0].arrivalConfirmedAt, null);
@@ -645,7 +738,7 @@ test("revised or cleared Jumia dates apply to future reminders without sending i
     await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, { from: "2026-11-01", to: "2026-11-03" });
     const [before] = await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, one.id));
     await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, { from: "2026-11-03", to: "2026-11-04" });
-    const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: one.id }))).json(); assert.match(preview.preview, /in 7–8 days/);
+    const preview = await (await reminderRoute.POST(controlRequest({ action: "preview", orderId: one.id }))).json(); assert.match(preview.preview, /7 days remaining/);
     assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, one.id)))[0].nextSendAt, before.nextSendAt);
     assert.equal((await db.select().from(schema.orderReminders).where(eq(schema.orderReminders.orderId, two.id)))[0].jumiaDeliveryFrom, null);
     await messageSettings.saveOrderMessageEdits(one.id, {}, undefined, undefined, null);
@@ -665,7 +758,7 @@ test("invalid Jumia ranges cause no partial edits, and previewing an unsaved val
     assert.equal(response.status, 200);
     const preview = (await response.json()).preview;
     assert.match(preview, /Hello Amina,/); assert.ok(preview.includes(order.orderNumber));
-    assert.match(preview, /in 5–7 days/); assert.match(preview, /1 × Headphones/); assert.match(preview, /₦24,500/);
+    assert.match(preview, /5 days remaining/); assert.match(preview, /1 × Headphones/); assert.match(preview, /₦24,500/);
     assert.doesNotMatch(preview, /{{|Your daily delivery update:/);
   });
   assert.equal((await db.select().from(schema.orderReminders)).length, 0); assert.equal(calls.length, 0);
@@ -682,7 +775,7 @@ test("a separately verified early arrival replaces the saved Jumia countdown imm
   });
 });
 
-test("the customer's 6–10 November window counts down from 9–13 to 8–12 to 7–11 days without another edit", async () => {
+test("the customer's 6–10 November window shows a bold 9, 8, 7 day countdown after the dates without another edit", async () => {
   let order;
   const custom = "Please plan ahead for your delivery. We will let you know when your parcel is ready.";
   await onClock("2026-10-27T08:30:00Z", async () => {
@@ -691,14 +784,14 @@ test("the customer's 6–10 November window counts down from 9–13 to 8–12 to
     const response = await reminderRoute.POST(controlRequest({ action: "save_message_edits", orderId: order.id, messageOverrides: { routine: { message: custom } }, jumiaDeliveryWindow: { from: "2026-11-06", to: "2026-11-10" } }));
     assert.equal(response.status, 200); assert.equal(graphCalls().length, 1);
   });
-  for (const [date, expected] of [["2026-10-28", /expected in 9–13 days/], ["2026-10-29", /expected in 8–12 days/], ["2026-10-30", /expected in 7–11 days/]]) {
+  for (const [date, expected] of [["2026-10-28", /\*9 days remaining/], ["2026-10-29", /\*8 days remaining/], ["2026-10-30", /\*7 days remaining/]]) {
     await onClock(`${date}T08:30:00Z`, async () => {
       const response = await reminderRoute.POST(controlRequest({ action: "preview", orderId: order.id })); const preview = await response.json();
       assert.match(preview.preview, expected); assert.ok(preview.preview.includes(custom));
       assert.doesNotMatch(preview.confirmationPreview, /November|days\. Please plan/);
       assert.equal(preview.previewNigeriaDate, date);
       const before = graphCalls().length; await reminders.runDueReminders();
-      assert.equal(graphCalls().length, before + 1); assert.match(contentText(graphCalls().at(-1)), expected); assert.ok(contentText(graphCalls().at(-1)).includes(custom));
+      assert.equal(graphCalls().length, before + 1); assert.match(graphCalls().at(-1).body.template.components[0].parameters[3].text, expected); assert.ok(contentText(graphCalls().at(-1)).includes(custom));
       const [row] = await db.select().from(schema.orderReminders);
       assert.equal(row.jumiaDeliveryFrom, "2026-11-06"); assert.equal(row.jumiaDeliveryTo, "2026-11-10"); assert.equal(row.reminderPhase, "delivery");
     });
@@ -715,7 +808,7 @@ test("a daily job queued before Nigeria midnight uses the current countdown when
   });
   await onClock("2026-10-28T23:00:05Z", async () => {
     await wa.dispatchWhatsApp(queued.id);
-    assert.equal(graphCalls().length, 2); assert.match(contentText(graphCalls().at(-1)), /expected in 8–12 days/);
-    assert.doesNotMatch(contentText(graphCalls().at(-1)), /expected in 9–13 days/);
+    assert.equal(graphCalls().length, 2); assert.match(graphCalls().at(-1).body.template.components[0].parameters[3].text, /\*8 days remaining/);
+    assert.doesNotMatch(graphCalls().at(-1).body.template.components[0].parameters[3].text, /\*9 days remaining/);
   });
 });

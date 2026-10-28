@@ -1,6 +1,6 @@
 import { standardDeliveryEstimate } from "./delivery-estimate";
-import { jumiaDeliveryCountdown } from "./jumia-delivery-countdown";
-import { DEFAULT_REMINDER_MESSAGES, hasCustomDeliveryLine, renderMessageField, resolveReminderMessage, type MessageDefaults, type ReminderMessageSource } from "./reminder-message-content";
+import { deliveryDaysRemaining, jumiaDeliveryCountdown } from "./jumia-delivery-countdown";
+import { DEFAULT_REMINDER_MESSAGES, hasCustomDeliveryLine, ReminderMessageError, renderMessageField, resolveReminderMessage, type MessageDefaults, type ReminderMessageSource } from "./reminder-message-content";
 
 export type WhatsAppKind = "confirmation" | "routine" | "arrival" | "arrival_reminder" | "activation";
 export type MessageOrder = {
@@ -75,6 +75,8 @@ export function reminderMessageFields(order: MessageOrder, reminder: MessageRemi
     tracking_url: "https://shoprenova.com.ng/track-order",
     delivery_countdown: countdown?.message || "",
     jumia_delivery_window: jumiaWindow?.dateLabel || "",
+    order_items: itemSummary(order.itemsJson),
+    payment_details: paymentText(order),
   };
   let message = renderMessageField(config.message, variables);
   if (countdown) {
@@ -90,6 +92,7 @@ export function reminderMessageFields(order: MessageOrder, reminder: MessageRemi
   for (const detail of [arrival ? "" : variables.status_update, variables.courier_update]) {
     if (detail && !message.includes(detail)) message = `${message} ${detail}`;
   }
+  if (config.fullMessage) message = renderMessageField(config.fullMessage, variables);
   const enteredEstimate = renderMessageField(config.deliveryEstimate, variables);
   const estimate = enteredEstimate && hasCustomDeliveryLine(arrival ? "arrival" : "routine", reminder, defaults)
     ? enteredEstimate
@@ -98,11 +101,28 @@ export function reminderMessageFields(order: MessageOrder, reminder: MessageRemi
   return {
     message,
     estimate: cleanMessageText(countdown?.dateLabel || estimate, 110),
-    note: renderMessageField(config.note, variables),
+    note: config.fullMessage ? "" : renderMessageField(config.note, variables),
     subject: cleanMessageText(renderMessageField(config.emailSubject, variables), 160),
     heading: renderMessageField(config.emailHeading, variables),
     countdown,
+    countdownLine: countdown ? deliveryDaysRemaining(countdown) : "",
+    fullMessage: Boolean(config.fullMessage),
   };
+}
+
+// Keep untouched order facts dynamic while preserving the owner's deliberate
+// item/amount corrections as reminder wording. No invoice/payment row changes.
+export function prepareFullReminderMessage(text: string, order: MessageOrder, reminder: MessageReminder, kind: "routine" | "arrival") {
+  const checkpoint = cleanMessageText(kind === "arrival" ? reminder.arrivalCheckpoint ?? reminder.currentCheckpoint : reminder.currentCheckpoint, 180);
+  const replacements = [
+    [itemSummary(order.itemsJson), "{{order_items}}"],
+    [paymentText(order), "{{payment_details}}"],
+    [kind === "routine" ? orderStageText(order.status) : "", "{{status_update}}"],
+    [checkpoint ? `${kind === "arrival" ? "" : "Courier update: "}${checkpoint}` : "", "{{courier_update}}"],
+  ];
+  let result = text;
+  for (const [original, variable] of replacements) if (original) result = result.replaceAll(original, variable);
+  return result;
 }
 
 // Exactly the four body variables of the existing approved English (en)
@@ -112,26 +132,35 @@ export function whatsappTemplateParameters(order: MessageOrder, reminder: Messag
   const number = cleanMessageText(order.orderNumber, 64);
   if (kind !== "confirmation") {
     const fields = reminderMessageFields(order, reminder, kind, defaults, now);
-    const stop = "Reply STOP to stop WhatsApp updates.";
+    const arrival = kind === "arrival" || kind === "arrival_reminder" || (kind === "activation" && reminder.reminderPhase === "arrival");
+    const stop = arrival ? "Reply STOP to stop WhatsApp updates." : "";
+    const estimate = fields.countdownLine ? `${fields.estimate} · *${fields.countdownLine}*` : fields.estimate;
+    const available = 1024 - whatsappPreview([name, number, "", estimate]).length - (stop ? stop.length + 1 : 0);
+    if (fields.fullMessage) {
+      const body = cleanMessageText(fields.message, Number.MAX_SAFE_INTEGER);
+      if (body.length > available) throw new ReminderMessageError(`This customer message is ${body.length - available} characters too long for WhatsApp. Shorten it before saving.`);
+      return [name, number, [body, stop].filter(Boolean).join(" "), estimate];
+    }
     const facts = [itemSummary(order.itemsJson), paymentText(order)].filter(Boolean).join(" ");
-    const available = 1024 - whatsappPreview([name, number, "", fields.estimate]).length - stop.length - 1;
     // Keep order facts and STOP intact. The exact bounded body is also used by
     // previews; long expanded wording never produces a different handset copy.
     const messageRoom = Math.max(1, available - facts.length - 1);
-    const prose = [fields.message, fields.note].filter(Boolean).join(" ");
-    return [name, number, `${cleanMessageText(prose, messageRoom)} ${facts} ${stop}`, fields.estimate];
+    // The live countdown belongs after the expected-delivery dates, outside
+    // the editable prose, so saving a message can never freeze its day count.
+    const body = fields.countdown ? fields.message.replaceAll(fields.countdown.message, "").trim() : fields.message;
+    const prose = [body, fields.note].filter(Boolean).join(" ");
+    return [name, number, [cleanMessageText(prose, messageRoom), facts, stop].filter(Boolean).join(" "), estimate];
   }
   // Confirmation wording is independent of every editable reminder field.
   reminder = { currentCheckpoint: "", customerNote: "", deliveryEstimate: "" };
   const estimate = cleanMessageText(standardDeliveryEstimate(reminder.deliveryEstimate || order.estimatedDelivery, order.addressJson), 110);
   const opening = `Thank you for choosing Renova! ${orderStageText(order.status)}`;
-  const stop = "Reply STOP to stop WhatsApp updates.";
   // Keep the order summary and payment amount ahead of optional notes. Bound
   // the whole expanded body, not just individual template variables.
   const essentials = [opening, itemSummary(order.itemsJson), paymentText(order)].filter(Boolean).join(" ");
-  const available = Math.min(440, 1024 - whatsappPreview([name, number, "", estimate]).length - stop.length - 1);
+  const available = Math.min(440, 1024 - whatsappPreview([name, number, "", estimate]).length);
   const content = essentials;
-  const update = `${cleanMessageText(content, available)} ${stop}`;
+  const update = cleanMessageText(content, available);
   return [name, number, update, estimate];
 }
 

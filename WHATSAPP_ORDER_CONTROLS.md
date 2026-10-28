@@ -1,10 +1,6 @@
 # Per-order WhatsApp notifications
 
-Latest 28 October update: see [ORDER_MESSAGE_WORKSPACE.md](./ORDER_MESSAGE_WORKSPACE.md). All three messages now have visible tabs, daily and arrival wording are directly editable, and the delivery-date card shows today’s and tomorrow’s automatic countdown. This follow-up needs no database migration.
-
-Latest 27 October follow-up: use [SIMPLE_DELIVERY_REMINDERS.md](./SIMPLE_DELIVERY_REMINDERS.md). Enter the Jumia dates and save; the complete customer message is prepared and previewed automatically. Optional wording changes are collapsed. This follow-up uses the installed migration 0007 and needs no new migration.
-
-Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download. Use its installation steps for this update; the 22 October instructions below document the earlier patch.
+Current message editor: see [FULL_REMINDER_MESSAGE_EDITOR.md](./FULL_REMINDER_MESSAGE_EDITOR.md). Type directly in the customer view to change wording, items and reminder amount. The Jumia date line and bold days remaining stay automatic. Printed STOP instructions are arrival-only; incoming opt-outs are honoured at every stage. The current ZIP includes the message layout and reminder-status filters and needs no new migration or Meta configuration.
 
 22 October 2026. This combined package includes the regional delivery estimates (3–5 working days within Lagos, 3–12 working days outside Lagos) and controls for new and historical orders. See REGIONAL_DELIVERY_UPDATE.md for the current delivery update. The installer accepts the confirmed checkout update with either earlier patch applied or neither.
 
@@ -66,3 +62,7 @@ Use a historical QA order and a WhatsApp number you control. Record agreement, s
 Local verification covers the actual PostgreSQL statements, queue, owner-gated route and mocked message provider: 62 regression tests, TypeScript, 86 existing source safeguards and a production build. It includes concurrency, crash recovery, historical consent, separate phone numbers, stop/resume, STOP, payment verification and preservation of other channels. The test runner substitutes only local database/catalogue fixtures and owner identity; live services are not contacted. Live handset delivery and the published webhook still require the checks above.
 
 The estimate is supplied as a variable in the existing [Meta template format](https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/types/TemplateObject/), so it does not require editing the approved Facebook template. Historical enrollment and STOP handling retain the consent and opt-out requirements in the [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/).
+
+## Reminder status filters
+
+Open **Admin → Reminders** and select **Running**, **Stopped**, **Not started** or **All**. Each shows its total and works with order/customer search. Past active schedules remain visible under Running. Use **Stop all reminders** in an order header to stop its schedule across all channels; its saved messages and Jumia dates stay in place. A WhatsApp-only pause remains available separately. See `REMINDER_STATUS_FILTERS.md` for installation and verification.

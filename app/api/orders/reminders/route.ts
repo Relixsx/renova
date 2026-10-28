@@ -7,7 +7,7 @@ import { optOutWhatsApp, retryWhatsApp } from "../../../lib/whatsapp-notificatio
 import { reminderMessageFields, whatsappPreview, whatsappTemplateParameters } from "../../../lib/whatsapp-message";
 import { startOrderWhatsApp, stopOrderWhatsApp, WhatsAppControlError } from "../../../lib/whatsapp-order-controls";
 import { confirmOrderArrival, reminderMessageDefaults, saveOrderMessageEdits, saveReminderMessageDefaults } from "../../../lib/reminder-message-settings";
-import { parseMessageOverrides, ReminderMessageError, validateMessageDefaults, validateMessageOverrides } from "../../../lib/reminder-message-content";
+import { mergeReminderMessageOverrides, parseMessageOverrides, ReminderMessageError, validateMessageDefaults, validateMessageOverrides } from "../../../lib/reminder-message-content";
 import { nigeriaCalendarDate, validateJumiaDeliveryWindow } from "../../../lib/jumia-delivery-countdown";
 
 export const dynamic = "force-dynamic";
@@ -96,19 +96,27 @@ export async function POST(request: Request) {
         customerNote: String(body.customerNote ?? saved?.customerNote ?? ""),
         deliveryEstimate: String(body.deliveryEstimate ?? saved?.deliveryEstimate ?? ""),
         arrivalCheckpoint: String(body.arrivalCheckpoint ?? saved?.arrivalCheckpoint ?? ""),
-        messageOverridesJson: JSON.stringify({ ...parseMessageOverrides(saved?.messageOverridesJson), ...overrides }),
+        messageOverridesJson: JSON.stringify(mergeReminderMessageOverrides(parseMessageOverrides(saved?.messageOverridesJson), overrides)),
         ...(dates ? { jumiaDeliveryFrom: dates.from, jumiaDeliveryTo: dates.to } : {}),
       };
       const confirmationPreview = whatsappPreview(whatsappTemplateParameters({ ...order, status: "confirmed" }, { currentCheckpoint: "", customerNote: "", deliveryEstimate: "" }, "confirmation"));
-      const preview = whatsappPreview(whatsappTemplateParameters(order, draft, "routine", defaults, previewNow));
-      const arrivalPreview = whatsappPreview(whatsappTemplateParameters(order, draft, "arrival", defaults, previewNow));
+      const dailyParameters = whatsappTemplateParameters(order, draft, "routine", defaults, previewNow);
+      const arrivalParameters = whatsappTemplateParameters(order, draft, "arrival", defaults, previewNow);
+      const preview = whatsappPreview(dailyParameters);
+      const arrivalPreview = whatsappPreview(arrivalParameters);
+      const editorMessage = (parameters: [string, string, string, string], arrival: boolean) => ({
+        body: parameters[2].replace(/\s*Reply STOP to stop WhatsApp updates\.$/, ""),
+        maxLength: Math.min(700, 1024 - whatsappPreview([parameters[0], parameters[1], "", parameters[3]]).length - (arrival ? " Reply STOP to stop WhatsApp updates.".length : 0)),
+        estimate: parameters[3],
+      });
       return Response.json({ preview, confirmationPreview, arrivalPreview,
+        messageEditors: { routine: editorMessage(dailyParameters, false), arrival: editorMessage(arrivalParameters, true) },
         previewNigeriaDate: nigeriaCalendarDate(previewNow),
         smsPreviews: { routine: reminderText(order, draft, "routine", defaults, previewNow), arrival: reminderText(order, draft, "arrival", defaults, previewNow) },
         emailPreviews: { routine: reminderMessageFields(order, draft, "routine", defaults, previewNow), arrival: reminderMessageFields(order, draft, "arrival", defaults, previewNow) },
         message: "Previews only. No message was sent and arrival has not been confirmed by previewing." });
     }
-    if (body.action === "stop") return Response.json({ reminder: await stopReminder(orderId), message: "Daily reminders stopped." });
+    if (body.action === "stop") return Response.json({ reminder: await stopReminder(orderId), message: "All reminder channels stopped for this order." });
     const reminder = await saveReminder({ orderId, consentConfirmed: body.consentConfirmed === true,
       emailEnabled: body.emailEnabled === true, whatsappEnabled: body.whatsappEnabled === true, smsEnabled: body.smsEnabled === true,
       currentCheckpoint: String(body.currentCheckpoint ?? ""), deliveryEstimate: String(body.deliveryEstimate ?? ""), customerNote: String(body.customerNote ?? ""), start: true });

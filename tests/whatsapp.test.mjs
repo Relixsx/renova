@@ -26,10 +26,10 @@ test("normalizes Nigerian national and international numbers and rejects malform
   for (const bad of ["", "123", "080000000000", "23408000000000", "phone8000000000", "2348000000000?token=x"]) assert.throws(() => phoneForWhatsApp(bad));
 });
 
-test("real confirmation contains the items, amount, estimate and opt-out instead of test text", () => {
+test("real confirmation contains the items, amount and estimate without test text or a printed STOP line", () => {
   const parameters = whatsappTemplateParameters(order, reminder, "confirmation");
   assert.equal(parameters.length, 4); assert.equal(parameters[0], "Amina"); assert.equal(parameters[1], "REN-QA-001");
-  assert.match(parameters[2], /2 × Wireless headphones/); assert.match(parameters[2], /₦24,500/); assert.match(parameters[2], /Reply STOP/);
+  assert.match(parameters[2], /2 × Wireless headphones/); assert.match(parameters[2], /₦24,500/); assert.doesNotMatch(parameters[2], /Reply STOP/);
   assert.equal(parameters[3], "24–26 October");
   assert.doesNotMatch(whatsappPreview(parameters), /connection test|not applicable|REN-TEST|on the way|has been dispatched/i);
 });
@@ -54,7 +54,7 @@ test("template parameters have no line breaks and long input stays within the bo
   const parameters = whatsappTemplateParameters({ ...order, customerName: "A".repeat(800), orderNumber: "B".repeat(800), estimatedDelivery: "C".repeat(800), itemsJson: "invalid json" }, { currentCheckpoint: "D\n\t".repeat(1000), customerNote: "E".repeat(1000), deliveryEstimate: "F".repeat(1000) }, "routine");
   for (const parameter of parameters) { assert.ok(parameter.length); assert.doesNotMatch(parameter, /[\n\r\t]/); }
   assert.ok(whatsappPreview(parameters).length <= 1024);
-  assert.match(parameters[2], /Reply STOP to stop WhatsApp updates\.$/);
+  assert.doesNotMatch(parameters[2], /Reply STOP/);
 });
 
 test("settings default to the exact tested template, English code and supported API version", () => {

@@ -8528,17 +8528,20 @@ main,
 }
 /* WhatsApp order updates are requested through the checkout submission. */
 .checkout-whatsapp-notice {
-  margin: 18px 0;
-  padding: 16px 18px;
-  border: 1px solid #cde6d5;
-  border-radius: 12px;
-  background: #f2faf5;
-  color: #28553a;
-  font-size: 13px;
-  line-height: 1.65;
+  display: grid;
+  gap: 5px;
+  margin: 16px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.checkout-whatsapp-notice a { text-decoration: underline; }
+.checkout-whatsapp-notice > strong { color: var(--brown); font-size: 12px; }
+.checkout-whatsapp-notice p { margin: 0; }
+.checkout-whatsapp-notice b { color: var(--brown); }
+.checkout-whatsapp-notice a { width: fit-content; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
 
 .checkout-whatsapp-support {
   display: grid;

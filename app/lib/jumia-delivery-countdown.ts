@@ -74,3 +74,10 @@ export function jumiaDeliveryCountdown(source: JumiaDeliverySource, now: Date = 
   }
   return { today, from: window.from, to: window.to, fromDays, toDays, state, message, dateLabel };
 }
+
+export function deliveryDaysRemaining(countdown: NonNullable<ReturnType<typeof jumiaDeliveryCountdown>>) {
+  if (countdown.fromDays > 0) return `${countdown.fromDays} ${countdown.fromDays === 1 ? "day" : "days"} remaining until the delivery window starts.`;
+  if (countdown.toDays < 0) return "Delivery estimate passed. Arrival is awaiting confirmation.";
+  if (countdown.toDays === 0) return "Expected today. Arrival is awaiting confirmation.";
+  return `Delivery window is open; up to ${countdown.toDays} ${countdown.toDays === 1 ? "day" : "days"} remaining. Arrival is awaiting confirmation.`;
+}

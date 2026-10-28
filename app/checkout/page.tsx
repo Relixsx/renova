@@ -392,7 +392,7 @@ export default function CheckoutPage() {
                     placeholder="0801 234 5678 or +234 801 234 5678"
                   />
                   <small className="field-hint" id="whatsapp-number-help">
-                    Enter your WhatsApp number for your order confirmation and daily delivery updates. It can be different from your delivery phone number. Reply STOP at any time.
+                    Your order confirmation and daily delivery updates will go to this number. It can be different from your delivery phone number.
                   </small>
                 </label>
                 {notice && <div className="integration-notice" role="alert">{notice}</div>}
@@ -705,9 +705,11 @@ export default function CheckoutPage() {
                   <Link href="/terms">Terms</Link>.
                 </span>
               </label>
-              <p className="checkout-whatsapp-notice">
-                By placing your order, you request Renova&apos;s order confirmation and delivery updates on WhatsApp at <b>{details.whatsappPhone}</b>, including an update every 24 hours while your order is active. Updates stop after delivery, collection or cancellation. Reply <b>STOP</b> at any time. <Link href="/privacy">Privacy policy</Link>.
-              </p>
+              <section className="checkout-whatsapp-notice" aria-label="WhatsApp order updates">
+                <strong>Your order updates</strong>
+                <p>By placing this order, you request an order confirmation and daily delivery updates on WhatsApp at <b>{details.whatsappPhone}</b>.</p>
+                <Link href="/privacy">Privacy policy</Link>
+              </section>
               {notice && <div className="integration-notice">{notice}</div>}
               <div className="checkout-buttons">
                 <button
@@ -836,7 +838,7 @@ export default function CheckoutPage() {
             </div>
             <p className="cod-confirmation-agreement">
               By placing the order, you confirm that you requested it and
-              intend to receive and pay for it on delivery. You also request your order confirmation and daily delivery updates on WhatsApp at {details.whatsappPhone}. Reply STOP at any time.
+              intend to receive and pay for it on delivery. Your order confirmation and daily delivery updates will be sent to your WhatsApp number, <b>{details.whatsappPhone}</b>.
             </p>
             <div className="cod-confirmation-actions">
               <button

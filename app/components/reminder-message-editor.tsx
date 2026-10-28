@@ -3,12 +3,12 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import {
   DEFAULT_REMINDER_MESSAGES, MESSAGE_FIELD_LIMITS, mergeReminderMessageOverrides,
-  parseMessageOverrides, resolveReminderMessage, validateMessageOverrides,
+  parseMessageOverrides, resolveReminderMessage, resolveReminderMessageDraft, validateMessageOverrides,
   type EditableMessageKind, type MessageDefaults, type MessageOverrides,
   type ReminderMessageConfig, type ReminderMessageSource,
 } from "../lib/reminder-message-content";
-import { reminderMessageFields, whatsappPreview, whatsappTemplateParameters } from "../lib/whatsapp-message";
-import { jumiaDeliveryCountdown, nigeriaCalendarDate, validateJumiaDeliveryWindow } from "../lib/jumia-delivery-countdown";
+import { cleanMessageText, reminderMessageFields, whatsappPreview, whatsappTemplateParameters } from "../lib/whatsapp-message";
+import { deliveryDaysRemaining, jumiaDeliveryCountdown, nigeriaCalendarDate, validateJumiaDeliveryWindow } from "../lib/jumia-delivery-countdown";
 import styles from "./customer-reminder-bot.module.css";
 
 export type MessageEditorReminder = ReminderMessageSource & {
@@ -25,6 +25,7 @@ export type ReminderPreviewPayload = {
   previewNigeriaDate?: string; confirmationPreview: string; preview: string; arrivalPreview: string;
   emailPreviews: Record<EditableMessageKind, EmailPreview>;
   smsPreviews: Record<EditableMessageKind, string>;
+  messageEditors?: Record<EditableMessageKind, { body: string; estimate: string; maxLength: number }>;
 };
 const steps: Array<{ value: MessageStep; title: string; description: string }> = [
   { value: "confirmation", title: "Order confirmation", description: "Automatic after the order is confirmed" },
@@ -58,17 +59,17 @@ function MessageTabs({ step, onChange, prefix, dirty }: {
   </button>)}</div>;
 }
 
-function WordingFields({ kind, config, channel, hasDates, onField, onReset, prefix, resetLabel = "Use store default wording" }: {
+function WordingFields({ kind, config, channel, hasDates, onField, onReset, prefix, resetLabel = "Use store default wording", settingsOnly = false }: {
   kind: EditableMessageKind; config: ReminderMessageConfig; channel: PreviewChannel; hasDates: boolean;
-  onField: (field: keyof ReminderMessageConfig, value: string) => void; onReset: () => void; prefix: string; resetLabel?: string;
+  onField: (field: keyof ReminderMessageConfig, value: string) => void; onReset: () => void; prefix: string; resetLabel?: string; settingsOnly?: boolean;
 }) {
   return <section className={styles.workspaceCard} aria-label={kind === "routine" ? "Edit daily message" : "Edit arrival message"}>
-    <div className={styles.cardTitle}><h3>{kind === "routine" ? "Daily message" : "Arrival message"}</h3><span className={styles.editableTag}>Editable</span></div>
-    <label className={styles.workspaceField}><span>{kind === "routine" ? "Your message to the customer" : "Your arrival message to the customer"}</span>
+    <div className={styles.cardTitle}><h3>{kind === "routine" ? "Daily message" : "Arrival message"}{settingsOnly ? " settings" : ""}</h3><span className={styles.editableTag}>Editable</span></div>
+    {settingsOnly ? <p className={styles.workspaceHint}>Type directly in the customer message editor. Its wording, item list and payment amount are editable. Delivery dates and the days remaining stay automatic.</p> : <><label className={styles.workspaceField}><span>{kind === "routine" ? "Your message to the customer" : "Your arrival message to the customer"}</span>
       <textarea id={`${prefix}-message`} rows={5} maxLength={MESSAGE_FIELD_LIMITS.message} value={config.message} onChange={(event) => onField("message", event.target.value)} />
       <small>{config.message.length}/{MESSAGE_FIELD_LIMITS.message}. The name, order details and daily countdown are filled in automatically.</small>
     </label>
-    <label className={styles.workspaceField}><span>Additional instructions <em>Optional</em></span><textarea rows={2} maxLength={MESSAGE_FIELD_LIMITS.note} value={config.note} onChange={(event) => onField("note", event.target.value)} placeholder="For example, have your collection code ready" /></label>
+    <label className={styles.workspaceField}><span>Additional instructions <em>Optional</em></span><textarea rows={2} maxLength={MESSAGE_FIELD_LIMITS.note} value={config.note} onChange={(event) => onField("note", event.target.value)} placeholder="For example, have your collection code ready" /></label></>}
     {(kind === "arrival" || !hasDates) && <label className={styles.workspaceField}><span>{kind === "arrival" ? "Collection information line" : "Delivery estimate before Jumia dates are available"}</span><input maxLength={MESSAGE_FIELD_LIMITS.deliveryEstimate} value={config.deliveryEstimate} onChange={(event) => onField("deliveryEstimate", event.target.value)} placeholder={kind === "arrival" ? "Ready for collection now" : "Leave blank for the normal regional estimate"} /></label>}
     {channel === "email" && <div className={styles.emailWording}>
       <label className={styles.workspaceField}><span>Email subject</span><input maxLength={MESSAGE_FIELD_LIMITS.emailSubject} value={config.emailSubject} onChange={(event) => onField("emailSubject", event.target.value)} /></label>
@@ -78,20 +79,43 @@ function WordingFields({ kind, config, channel, hasDates, onField, onReset, pref
   </section>;
 }
 
-function CustomerMessagePreview({ step, channel, onChannel, preview, error, invalid, onRetry }: {
+function WhatsAppFormattedText({ text }: { text: string }) {
+  return <>{text.split(/(\*[^*\n]+\*)/g).map((part, index) => /^\*[^*]+\*$/.test(part) ? <strong key={index}>{part.slice(1, -1)}</strong> : part)}</>;
+}
+
+function CustomerMessagePreview({ order, step, channel, onChannel, preview, error, invalid, onRetry, bodyDraft, onBody, estimateOverride }: {
+  order: EditorOrder;
   step: MessageStep; channel: PreviewChannel; onChannel: (value: PreviewChannel) => void;
   preview?: ReminderPreviewPayload; error?: string; invalid?: string; onRetry: () => void;
+  bodyDraft?: string; onBody: (value: string) => void; estimateOverride?: string;
 }) {
   const selectedChannel = step === "confirmation" ? "whatsapp" : channel;
   const email = step === "confirmation" ? undefined : preview?.emailPreviews[step];
   const whatsapp = step === "confirmation" ? preview?.confirmationPreview : step === "routine" ? preview?.preview : preview?.arrivalPreview;
+  const editing = step !== "confirmation" && selectedChannel === "whatsapp";
+  const editor = step === "confirmation" ? undefined : preview?.messageEditors?.[step];
+  const body = bodyDraft ?? editor?.body ?? whatsapp?.split("\n\n")[2]?.replace(/\s*Reply STOP to stop WhatsApp updates\.$/, "");
+  const estimate = estimateOverride ?? editor?.estimate ?? whatsapp?.split("\n\n")[3]?.replace(/^Expected delivery: /, "");
   return <aside className={styles.workspacePreview} aria-label="Customer message preview">
-    <header><div><span className={styles.workspaceEyebrow}>Customer view</span><h3>Message preview</h3></div><span className={styles.liveTag}>Automatic details</span></header>
+    <header><div><span className={styles.workspaceEyebrow}>Customer view</span><h3>{editing ? "Edit customer message" : "Message preview"}</h3></div><span className={editing ? styles.editableTag : styles.liveTag}>{editing ? "Type directly below" : "Automatic details"}</span></header>
     {step !== "confirmation" && <div className={styles.previewChannels} aria-label="Preview channel">{(["whatsapp", "email", "sms"] as const).map((value) => <button type="button" key={value} aria-pressed={channel === value} onClick={() => onChannel(value)}>{value === "whatsapp" ? "WhatsApp" : value === "email" ? "Email" : "SMS"}</button>)}</div>}
     <div className={styles.previewPaper}>
-      {invalid ? <p className={styles.previewPlaceholder}>Complete the fields on the left to update this preview.</p> : error ? <div role="alert"><p>{error}</p><button type="button" className={styles.textButton} onClick={onRetry}>Reload preview</button></div> : !preview ? <p role="status" className={styles.previewPlaceholder}>Preparing this customer’s complete message…</p> : selectedChannel === "whatsapp" ? <p className={styles.customerMessage}>{whatsapp}</p> : selectedChannel === "sms" && step !== "confirmation" ? <p className={styles.customerMessage}>{preview.smsPreviews[step]}</p> : email && <div className={styles.emailMessage}><small>Subject: {email.subject}</small><h4>{email.heading}</h4><p>{email.message}</p><p><b>Expected delivery:</b> {email.estimate}</p><p>{email.note}</p></div>}
+      {editing ? <div className={styles.fullMessageEditor}>
+        <p>Hello {cleanMessageText(order.customerName.trim().split(/\s+/)[0] || "there", 40)},</p>
+        <p>Here is the latest update for your Renova order {cleanMessageText(order.orderNumber, 64)}:</p>
+        <label className={styles.fullMessageField}><span>{step === "routine" ? "Daily message including items and amount" : "Arrival message including items and amount"}</span>
+          <textarea id={`order-${order.id}-messages-${step}-full-message`} rows={10} maxLength={MESSAGE_FIELD_LIMITS.fullMessage} value={body ?? ""} disabled={body === undefined} aria-invalid={Boolean(invalid || error)} onChange={(event) => onBody(event.target.value)} placeholder="Preparing the complete message…" />
+          <small>{body?.length ?? 0}/{editor?.maxLength ?? MESSAGE_FIELD_LIMITS.fullMessage} characters. Edit the wording, quantities, products and amount here.</small>
+        </label>
+        {step === "arrival" && <p className={styles.arrivalOptOut}>Reply STOP to stop WhatsApp updates.</p>}
+        <div className={styles.automaticDeliveryLine}><span className={styles.liveTag}>Updates automatically</span><p>Expected delivery: <WhatsAppFormattedText text={estimate || "Preparing delivery estimate…"} /></p></div>
+        <p>Please keep your phone available so the courier can reach you. You do not need to place another order.</p>
+        <p>Thank you for shopping with Renova.</p>
+        {(invalid || error) && <p role="alert" className={styles.workspaceError}>{invalid || error}</p>}
+        {!preview && !error && <small role="status">Updating the outgoing preview…</small>}
+      </div> : invalid ? <p className={styles.previewPlaceholder}>Complete the message fields to update this preview.</p> : error ? <div role="alert"><p>{error}</p><button type="button" className={styles.textButton} onClick={onRetry}>Reload preview</button></div> : !preview ? <p role="status" className={styles.previewPlaceholder}>Preparing this customer’s complete message…</p> : selectedChannel === "whatsapp" ? <p className={styles.customerMessage}><WhatsAppFormattedText text={whatsapp || ""} /></p> : selectedChannel === "sms" && step !== "confirmation" ? <p className={styles.customerMessage}>{preview.smsPreviews[step]}</p> : email && <div className={styles.emailMessage}><small>Subject: {email.subject}</small><h4>{email.heading}</h4><p>{email.message}</p><p><b>Expected delivery:</b> {email.estimate}</p><p>{email.note}</p></div>}
     </div>
-    <footer>{step === "confirmation" ? "Automatic for new confirmed orders. Previewing does not resend it." : "Previewing and saving do not send an extra message."}{preview?.previewNigeriaDate && <span>Calculated for {preview.previewNigeriaDate} · Nigeria time</span>}</footer>
+    <footer>{step === "confirmation" ? "Automatic for new confirmed orders. Previewing does not resend it." : <><span>Saving changes this reminder only; it does not change the order total or payment records and does not send an extra message.</span><span>The greeting and closing follow your approved WhatsApp template. Dates and countdown update automatically.</span></>}{preview?.previewNigeriaDate && <span>Calculated for {preview.previewNigeriaDate} · Nigeria time</span>}</footer>
   </aside>;
 }
 
@@ -99,6 +123,7 @@ type WorkspaceActions = {
   toggle: (open: boolean) => void; step: (value: MessageStep) => void; channel: (value: PreviewChannel) => void;
   date: (field: "from" | "to", value: string) => void; clearDates: () => void;
   field: (field: keyof ReminderMessageConfig, value: string) => void; checkpoint: (value: string) => void;
+  body: (value: string) => void;
   arrivalCheckpoint: (value: string) => void; arrivalConfirmed: (value: boolean) => void;
   reset: () => void; save: () => void; activateArrival: () => void; retryPreview: () => void;
 };
@@ -108,6 +133,7 @@ export type OrderMessageWorkspaceProps = {
   checkpoint: string; arrivalCheckpoint: string; arrivalConfirmed: boolean;
   dirty: Record<EditableMessageKind, boolean>; validationError?: string; busy: boolean; feedback: string;
   preview?: ReminderPreviewPayload; previewError?: string; actions: WorkspaceActions;
+  bodyDraft?: string;
 };
 
 export function OrderMessageWorkspace(props: OrderMessageWorkspaceProps) {
@@ -133,7 +159,7 @@ export function OrderMessageWorkspace(props: OrderMessageWorkspaceProps) {
                 <ul className={styles.confirmationFacts}><li>Thanks the customer and confirms receipt of the order.</li><li>Includes their name, order number, items and payment details.</li><li>Keeps the website’s regional delivery estimate.</li></ul>
                 <p className={styles.workspaceHint}>Daily wording and Jumia date changes do not change this confirmation.</p>
               </section> : <>
-                <WordingFields kind={step} config={configs[step]} channel={channel} hasDates={Boolean(dates.from && !dates.error)} prefix={`${prefix}-${step}`} onField={actions.field} onReset={actions.reset} />
+                <WordingFields kind={step} config={configs[step]} channel={channel} hasDates={Boolean(dates.from && !dates.error)} prefix={`${prefix}-${step}`} onField={actions.field} onReset={actions.reset} resetLabel="Restore automatic message and order details" settingsOnly />
                 {step === "routine" ? <section className={styles.workspaceCard} aria-label="Jumia expected delivery dates">
                   <div className={styles.cardTitle}><h3>Jumia delivery dates</h3><span className={styles.liveTag}>Daily countdown</span></div>
                   <p className={styles.workspaceHint}>Enter the window Jumia gives you after placing the supplier order.</p>
@@ -142,7 +168,7 @@ export function OrderMessageWorkspace(props: OrderMessageWorkspaceProps) {
                     <label className={styles.workspaceField}><span>Expected to <em>Optional</em></span><input type="date" min={dates.from || undefined} value={dates.to} onChange={(event) => actions.date("to", event.target.value)} /></label>
                   </div>
                   {dates.error && <p role="alert" className={styles.workspaceError}>{dates.error}</p>}
-                  {countdown && <div className={styles.countdownSchedule} aria-label="Automatic daily countdown"><div><span>Today{clock ? ` · ${dateLabel(clock)}` : ""}</span><b>{countdown.message}</b></div>{nextCountdown && <div><span>Tomorrow{tomorrow ? ` · ${dateLabel(tomorrow)}` : ""}</span><b>{nextCountdown.message}</b></div>}<small>Renova recalculates the days remaining for every scheduled message. You do not need to edit the numbers.</small></div>}
+                  {countdown && <div className={styles.countdownSchedule} aria-label="Automatic daily countdown"><div><span>Today{clock ? ` · ${dateLabel(clock)}` : ""}</span><b>{deliveryDaysRemaining(countdown)}</b></div>{nextCountdown && <div><span>Tomorrow{tomorrow ? ` · ${dateLabel(tomorrow)}` : ""}</span><b>{deliveryDaysRemaining(nextCountdown)}</b></div>}<small>Renova recalculates the days remaining for every scheduled message. You do not need to edit the numbers.</small></div>}
                   {!dates.from && !dates.to && <p className={styles.workspaceHint}>Until Jumia’s dates are available, the reminder uses the order’s normal delivery estimate.</p>}
                   <button type="button" className={styles.textButton} disabled={!dates.from && !dates.to} onClick={actions.clearDates}>Clear delivery dates</button>
                 </section> : <section className={styles.workspaceCard}>
@@ -162,7 +188,7 @@ export function OrderMessageWorkspace(props: OrderMessageWorkspaceProps) {
               </>}
               {feedback && <p role="status" className={styles.workspaceFeedback}>{feedback}</p>}
             </div>
-            <CustomerMessagePreview step={step} channel={channel} onChannel={actions.channel} preview={preview} error={previewError} invalid={invalid} onRetry={actions.retryPreview} />
+            <CustomerMessagePreview order={order} step={step} channel={channel} onChannel={actions.channel} preview={preview} error={previewError} invalid={invalid} onRetry={actions.retryPreview} bodyDraft={props.bodyDraft} onBody={actions.body} estimateOverride={step === "routine" && countdown ? `${countdown.dateLabel} · *${deliveryDaysRemaining(countdown)}*` : undefined} />
           </div>
         </fieldset>}
       </section>)}
@@ -224,8 +250,7 @@ export function OrderReminderMessageEditor({ order, reminder, defaults, onSaved 
   const checkpoint = checkpointDraft ?? reminder?.currentCheckpoint ?? "";
   const arrivalCheckpoint = arrivalDraft ?? reminder?.arrivalCheckpoint ?? "";
   const overrides = mergeReminderMessageOverrides(parseMessageOverrides(reminder?.messageOverridesJson), edits);
-  const source = { ...reminder, messageOverridesJson: JSON.stringify(overrides) };
-  const configs = { routine: resolveReminderMessage("routine", source, defaults), arrival: resolveReminderMessage("arrival", source, defaults) };
+  const configs = { routine: resolveReminderMessageDraft("routine", reminder || {}, defaults, edits), arrival: resolveReminderMessageDraft("arrival", reminder || {}, defaults, edits) };
   let dateError = "", validationError = "";
   try { validateJumiaDeliveryWindow(dates); } catch (cause) { dateError = cause instanceof Error ? cause.message : "Check the delivery dates."; }
   if (step !== "confirmation" && Object.hasOwn(edits, step)) try { validateMessageOverrides({ [step]: edits[step] }); } catch (cause) { validationError = cause instanceof Error ? cause.message : "Check the message fields."; }
@@ -267,6 +292,11 @@ export function OrderReminderMessageEditor({ order, reminder, defaults, onSaved 
       });
       if (payload.reminder) {
         await onSaved(payload.reminder);
+        const savedBody = edits[kind]?.fullMessage;
+        if (savedBody !== undefined) setPreviewResult((current) => current?.payload ? { ...current, payload: { ...current.payload,
+          messageEditors: { routine: current.payload.messageEditors?.routine || { body: "", estimate: "", maxLength: 700 }, arrival: current.payload.messageEditors?.arrival || { body: "", estimate: "", maxLength: 700 },
+            [kind]: { ...(current.payload.messageEditors?.[kind] || { estimate: "", maxLength: 700 }), body: cleanMessageText(savedBody, Number.MAX_SAFE_INTEGER) } },
+        } } : current);
         setEdits((current) => { const next = { ...current }; delete next[kind]; return next; });
         if (kind === "routine") { setDateDraft(null); setCheckpointDraft(null); } else setArrivalDraft(null);
       }
@@ -278,10 +308,11 @@ export function OrderReminderMessageEditor({ order, reminder, defaults, onSaved 
   return <OrderMessageWorkspace order={order} reminder={reminder} expanded={expanded} step={step} channel={channel}
     configs={configs} dates={{ ...dates, error: dateError }} clock={clock} checkpoint={checkpoint} arrivalCheckpoint={arrivalCheckpoint}
     arrivalConfirmed={arrivalConfirmed} dirty={dirty} validationError={validationError} busy={busy} feedback={feedback}
-    preview={preview} previewError={previewError} actions={{
+    preview={preview || previewResult?.payload} previewError={previewError} bodyDraft={step === "confirmation" ? undefined : edits[step]?.fullMessage} actions={{
       toggle: setExpanded, step: (value) => { setStep(value); setFeedback(""); }, channel: setChannel,
       date: (field, value) => { setDateDraft({ ...dates, [field]: value }); setFeedback(""); },
       clearDates: () => { setDateDraft({ from: "", to: "" }); setFeedback(""); }, field: changeField,
+      body: (value) => changeField("fullMessage", value),
       checkpoint: (value) => { setCheckpointDraft(value); setFeedback(""); }, arrivalCheckpoint: (value) => { setArrivalDraft(value); setFeedback(""); },
       arrivalConfirmed: setArrivalConfirmed, reset: () => { if (step !== "confirmation") setEdits((current) => ({ ...current, [step]: null })); setFeedback(""); },
       save: () => void save(), activateArrival: () => void save(true), retryPreview: () => setRevision((current) => current + 1),

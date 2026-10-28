@@ -1,11 +1,13 @@
 # Renova checkout and WhatsApp update
 
+Current checkout wording: the WhatsApp number hint, final review and COD confirmation explain automatic order updates without printed STOP instructions. The oversized green block is replaced by a compact order-updates section beside the order action. See `FULL_REMINDER_MESSAGE_EDITOR.md` for the current combined ZIP and install command.
+
 22 October 2026. Incremental update for `Relixsx/renova`, branch `migration/neon-render`, deployed integration commit `123e4e4`.
 
 ## What changes
 
 - Checkout has separate required email, delivery phone and WhatsApp phone fields. The WhatsApp number can differ from the courier number.
-- The optional WhatsApp checkbox is removed. The contact-field explanation, existing data-use agreement and notice beside the order button explain that placing the order requests confirmation and daily WhatsApp updates. The order records the supplied WhatsApp number, timestamp and `checkout-v2` notice version. STOP remains available.
+- The optional WhatsApp checkbox is removed. The contact-field explanation, existing data-use agreement and notice beside the order button explain that placing the order requests confirmation and daily WhatsApp updates. The order records the supplied WhatsApp number, timestamp and `checkout-v3` notice version. In-progress v2 checkout pages and earlier consent records remain supported.
 - Payment-on-delivery orders send confirmation automatically after the order is saved. Prepaid orders wait for server-verified payment. Existing consented orders continue working; historical orders without agreement are not enrolled.
 - The cart is saved as empty synchronously before successful COD navigation, so refresh, cart reopening and returning to checkout show zero. The completed COD form is reset. Failed orders keep the cart.
 - Paystack initialization keeps the bag. Returning to a server-verified paid order clears the matching checkout bag once. Reloading an old success link cannot erase a later cart. A bag edited after payment initialization is preserved.

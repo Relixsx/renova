@@ -1,9 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orderReminders, orders, reminderMessageSettings } from "../../db/schema";
-import { confirmedOrder } from "./whatsapp-message";
+import { confirmedOrder, prepareFullReminderMessage, whatsappTemplateParameters } from "./whatsapp-message";
 import { validateJumiaDeliveryWindow } from "./jumia-delivery-countdown";
-import { DEFAULT_REMINDER_MESSAGES, ReminderMessageError, validateMessageDefaults, validateMessageOverrides, type MessageDefaults } from "./reminder-message-content";
+import { DEFAULT_REMINDER_MESSAGES, mergeReminderMessageOverrides, parseMessageOverrides, ReminderMessageError, validateMessageDefaults, validateMessageOverrides, type MessageDefaults } from "./reminder-message-content";
 
 export async function reminderMessageDefaults(): Promise<MessageDefaults> {
   const [row] = await getDb().select().from(reminderMessageSettings).where(eq(reminderMessageSettings.id, "default")).limit(1);
@@ -23,8 +23,24 @@ export async function saveOrderMessageEdits(orderId: number, input: unknown, che
   const dates = jumiaDeliveryWindow === undefined ? undefined : validateJumiaDeliveryWindow(jumiaDeliveryWindow);
   for (const value of [checkpoint, arrivalCheckpoint]) if (value !== undefined && (typeof value !== "string" || value.trim().length > 500)) throw new ReminderMessageError("Courier updates must be text, with at most 500 characters.");
   const db = getDb();
-  const [order] = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).limit(1);
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) throw new ReminderMessageError("Order not found.", 404);
+  if (patch.routine?.fullMessage || patch.arrival?.fullMessage) {
+    const [saved] = await db.select().from(orderReminders).where(eq(orderReminders.orderId, orderId)).limit(1);
+    const draft = { ...(saved ?? { currentCheckpoint: "", customerNote: "", deliveryEstimate: "" }),
+      ...(typeof checkpoint === "string" ? { currentCheckpoint: checkpoint.trim() } : {}),
+      ...(typeof arrivalCheckpoint === "string" ? { arrivalCheckpoint: arrivalCheckpoint.trim() } : {}),
+      ...(dates ? { jumiaDeliveryFrom: dates.from, jumiaDeliveryTo: dates.to } : {}),
+    };
+    const defaults = await reminderMessageDefaults();
+    for (const kind of ["routine", "arrival"] as const) {
+      const full = patch[kind]?.fullMessage;
+      if (!full) continue;
+      patch[kind]!.fullMessage = prepareFullReminderMessage(full, order, draft, kind);
+      whatsappTemplateParameters(order, { ...draft, messageOverridesJson: JSON.stringify(mergeReminderMessageOverrides(parseMessageOverrides(saved?.messageOverridesJson), patch)) }, kind, defaults);
+    }
+    validateMessageOverrides(patch);
+  }
   const now = new Date().toISOString();
   const values = {
     messageOverridesJson: JSON.stringify(patch),

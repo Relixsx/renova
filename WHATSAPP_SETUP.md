@@ -1,10 +1,6 @@
 # Renova WhatsApp order updates
 
-Latest 28 October update: see [ORDER_MESSAGE_WORKSPACE.md](./ORDER_MESSAGE_WORKSPACE.md). All three messages now have visible tabs, daily and arrival wording are directly editable, and the delivery-date card shows today’s and tomorrow’s automatic countdown. This follow-up needs no database migration.
-
-Latest 27 October follow-up: use [SIMPLE_DELIVERY_REMINDERS.md](./SIMPLE_DELIVERY_REMINDERS.md). Enter the Jumia dates and save; the complete customer message is prepared and previewed automatically. Optional wording changes are collapsed. This follow-up uses the installed migration 0007 and needs no new migration.
-
-Latest 26 October combined update: see [JUMIA_DELIVERY_COUNTDOWN.md](./JUMIA_DELIVERY_COUNTDOWN.md) for per-order Jumia date ranges and daily countdowns. [REMINDER_MESSAGE_EDITOR.md](./REMINDER_MESSAGE_EDITOR.md) covers separate editable daily/arrival messages, previews and the one combined migration 0007. It replaces the uninstalled 23 October editor download.
+Current message editor: see [FULL_REMINDER_MESSAGE_EDITOR.md](./FULL_REMINDER_MESSAGE_EDITOR.md). Type directly in the customer view to change wording, items and reminder amount. The Jumia date line and bold days remaining stay automatic. Printed STOP instructions are arrival-only; incoming opt-outs are honoured at every stage. The current ZIP includes the message layout and reminder-status filters and needs no new migration or Meta configuration.
 
 Latest 22 October update: use [REGIONAL_DELIVERY_UPDATE.md](./REGIONAL_DELIVERY_UPDATE.md) for Lagos (3–5 working days) and outside Lagos (3–12 working days). Use [WHATSAPP_ORDER_CONTROLS.md](./WHATSAPP_ORDER_CONTROLS.md) for per-order start/stop and historical orders.
 

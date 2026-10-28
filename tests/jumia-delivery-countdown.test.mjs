@@ -74,21 +74,21 @@ test("date validation rejects impossible, reversed, incomplete and ambiguous dat
 test("the Jumia countdown and payment preparation are automatic even when custom wording omits the variable", () => {
   const custom = { ...reminder, messageOverridesJson: '{"routine":{"message":"Thank you for your patience.","deliveryEstimate":"An older free-text estimate"}}' };
   const parameters = whatsappTemplateParameters(order, custom, "routine", undefined, at("2026-10-27"));
-  assert.match(parameters[2], /^Your order is expected in 5–7 days\. Please keep your payment ready/);
-  assert.match(parameters[2], /Thank you for your patience/); assert.match(parameters[2], /₦24,500/); assert.match(parameters[2], /Reply STOP/);
-  assert.equal(parameters[3], "1–3 November 2026"); assert.doesNotMatch(whatsappPreview(parameters), /older free-text/);
+  assert.match(parameters[2], /^Please keep your payment ready/); assert.match(parameters[3], /\*5 days remaining until the delivery window starts\.\*/);
+  assert.match(parameters[2], /Thank you for your patience/); assert.match(parameters[2], /₦24,500/); assert.doesNotMatch(parameters[2], /Reply STOP/);
+  assert.match(parameters[3], /^1–3 November 2026 · \*5 days remaining/); assert.doesNotMatch(whatsappPreview(parameters), /older free-text/);
 });
 
 test("custom countdown variables do not duplicate the automatic countdown and long wording stays bounded", () => {
   const custom = { ...reminder, messageOverridesJson: JSON.stringify({ routine: { message: "{{delivery_countdown}} {{customer_name}} {{courier_update}} {{jumia_delivery_window}}", note: "N".repeat(80) } }), currentCheckpoint: "C".repeat(500) };
   const parameters = whatsappTemplateParameters({ ...order, customerName: "A".repeat(200), orderNumber: "B".repeat(200) }, custom, "routine", undefined, at("2026-10-27"));
-  assert.equal(parameters[2].split("Your order is expected in 5–7 days.").length - 1, 1);
-  assert.ok(whatsappPreview(parameters).length <= 1024); assert.match(parameters[2], /Reply STOP to stop WhatsApp updates\.$/);
+  assert.doesNotMatch(parameters[2], /expected in 5–7 days/); assert.equal(parameters[3].split("5 days remaining").length - 1, 1);
+  assert.ok(whatsappPreview(parameters).length <= 1024); assert.doesNotMatch(parameters[2], /Reply STOP/);
 });
 
 test("prepaid reminders do not ask for payment to be kept ready", () => {
   const parameters = whatsappTemplateParameters({ ...order, paymentMethod: "paystack", paymentStatus: "paid" }, reminder, "routine", undefined, at("2026-10-27"));
-  assert.match(parameters[2], /expected in 5–7 days/); assert.match(parameters[2], /Payment of ₦24,500 has been received/);
+  assert.match(parameters[3], /5 days remaining/); assert.match(parameters[2], /Payment of ₦24,500 has been received/);
   assert.doesNotMatch(parameters[2], /keep your payment ready|due when you receive/);
 });
 

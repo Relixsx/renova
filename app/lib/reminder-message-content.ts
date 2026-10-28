@@ -5,6 +5,7 @@ export type ReminderMessageConfig = {
   note: string;
   emailSubject: string;
   emailHeading: string;
+  fullMessage?: string;
 };
 export type MessageDefaults = Record<EditableMessageKind, ReminderMessageConfig>;
 export type MessageOverrides = Partial<Record<EditableMessageKind, Partial<ReminderMessageConfig> | null>>;
@@ -21,9 +22,9 @@ export type ReminderMessageSource = {
 };
 
 export const MESSAGE_FIELD_LIMITS: Record<keyof ReminderMessageConfig, number> = {
-  message: 220, deliveryEstimate: 110, note: 80, emailSubject: 120, emailHeading: 120,
+  message: 220, deliveryEstimate: 110, note: 80, emailSubject: 120, emailHeading: 120, fullMessage: 700,
 };
-export const MESSAGE_VARIABLES = ["first_name", "customer_name", "order_number", "status_update", "courier_update", "tracking_url", "delivery_countdown", "jumia_delivery_window"] as const;
+export const MESSAGE_VARIABLES = ["first_name", "customer_name", "order_number", "status_update", "courier_update", "tracking_url", "delivery_countdown", "jumia_delivery_window", "order_items", "payment_details"] as const;
 export const DEFAULT_REMINDER_MESSAGES: MessageDefaults = {
   routine: {
     message: "Thank you for your patience. We will let you know as soon as your parcel is ready to receive. Please plan ahead for your delivery.",
@@ -66,7 +67,7 @@ function checkedConfig(value: unknown): Partial<ReminderMessageConfig> {
     const key = field as keyof ReminderMessageConfig;
     const text = raw.trim();
     if (text.length > MESSAGE_FIELD_LIMITS[key]) throw new ReminderMessageError(`${field} must be ${MESSAGE_FIELD_LIMITS[key]} characters or fewer.`);
-    if (["message", "emailSubject", "emailHeading"].includes(field) && !text) throw new ReminderMessageError(`${field} cannot be empty. Use the store default to reset it.`);
+    if (["message", "fullMessage", "emailSubject", "emailHeading"].includes(field) && !text) throw new ReminderMessageError(`${field === "fullMessage" ? "The customer message" : field} cannot be empty. Use the store default to reset it.`);
     const remaining = text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_match, variable: string) => {
       if (!MESSAGE_VARIABLES.includes(variable as typeof MESSAGE_VARIABLES[number])) throw new ReminderMessageError(`Unknown message variable: ${variable}.`);
       return "";
@@ -123,6 +124,13 @@ export function mergeReminderMessageOverrides(saved: MessageOverrides, draft: Me
     if (Object.hasOwn(draft, kind)) merged[kind] = draft[kind] === null ? null : { ...saved[kind], ...draft[kind] };
   }
   return merged;
+}
+
+// Typing is not a saved configuration. Preserve an empty field, trailing
+// spaces and unfinished edits instead of parsing them back to the defaults.
+export function resolveReminderMessageDraft(kind: EditableMessageKind, reminder: ReminderMessageSource, defaults: MessageDefaults, draft: MessageOverrides): ReminderMessageConfig {
+  const base = draft[kind] === null ? { ...defaults[kind] } : resolveReminderMessage(kind, reminder, defaults);
+  return { ...base, ...draft[kind] };
 }
 
 export function hasCustomDeliveryLine(kind: EditableMessageKind, reminder: ReminderMessageSource, defaults: MessageDefaults) {

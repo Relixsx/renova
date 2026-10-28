@@ -7,6 +7,8 @@ import { DEFAULT_REMINDER_MESSAGES, type MessageDefaults } from "../lib/reminder
 import { OrderReminderMessageEditor, StoreReminderMessageDefaults, type MessageEditorReminder } from "./reminder-message-editor";
 import { confirmedOrder } from "../lib/whatsapp-message";
 import { OrderWhatsAppControl, type WhatsAppContact, type WhatsAppControlResult } from "./order-whatsapp-control";
+import { reminderOrderView, reminderStatusFor, type ReminderFilter } from "../lib/reminder-status";
+import { ReminderStatusFilters, StopOrderReminders } from "./reminder-status-filters";
 
 type Order = {
   id: number;
@@ -41,6 +43,8 @@ type Reminder = {
   arrivalConfirmedAt?: string | null;
   lastSentAt?: string | null;
   nextSendAt?: string | null;
+  startedAt?: string | null;
+  stoppedAt?: string | null;
 };
 
 type Draft = {
@@ -68,22 +72,23 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
   const [messageSettingsLoaded, setMessageSettingsLoaded] = useState(false);
   const [messageDefaults, setMessageDefaults] = useState<MessageDefaults>(DEFAULT_REMINDER_MESSAGES);
   const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingRequest, setLoading] = useState(true);
+  const [loadedOrders, setLoadedOrders] = useState<Order[] | null>(null);
+  const loading = loadingRequest || loadedOrders !== orders;
   const [search, setSearch] = useState("");
-  const [showAll, setShowAll] = useState(!compact);
+  const [filter, setFilter] = useState<ReminderFilter>(compact ? "all" : "running");
+  const [reload, setReload] = useState(0);
+  const [feedback, setFeedback] = useState<{ text: string; error?: boolean; destination?: ReminderFilter } | null>(null);
   const [providers, setProviders] = useState<Providers>({ email: false, whatsapp: false, sms: false });
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [messages, setMessages] = useState<Record<number, string>>({});
   const [busyOrder, setBusyOrder] = useState<number | null>(null);
+  const [stoppingOrder, setStoppingOrder] = useState<number | null>(null);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [checkedMessages, setCheckedMessages] = useState<Record<number, boolean>>({});
 
-  const eligibleOrders = useMemo(() => orders.filter((order) => {
-    const active = ["confirmed", "processing", "packaged", "dispatched"].includes(order.status) && (order.paymentMethod === "cash_on_delivery" || order.paymentStatus === "paid");
-    const phone = contacts.find((row) => row.orderId === order.id)?.phone || order.whatsappPhone || "";
-    const text = `${order.orderNumber} ${order.customerName} ${order.customerPhone} ${phone} ${order.customerEmail}`.toLowerCase();
-    return (showAll || active) && text.includes(search.trim().toLowerCase());
-  }), [orders, contacts, search, showAll]);
+  const view = useMemo(() => reminderOrderView(orders, reminders, contacts, filter, search), [orders, reminders, contacts, filter, search]);
+  const filterLabel = filter === "not_started" ? "not started" : filter;
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +98,7 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
         if (!response.ok) throw new Error(payload.error || "Could not load reminders.");
         if (cancelled) return;
         const rows = payload.reminders ?? [];
+        setLoadedOrders(orders);
         setMessageDefaults(payload.messageDefaults ?? DEFAULT_REMINDER_MESSAGES);
         setMessageSettingsLoaded(true);
         setReminders(rows);
@@ -113,10 +119,15 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
           }];
         })));
       })
-      .catch((error) => !cancelled && setMessages({ 0: error instanceof Error ? error.message : "Could not load reminders." }))
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadedOrders(orders);
+        setMessageSettingsLoaded(false);
+        setMessages({ 0: error instanceof Error ? error.message : "Could not load reminders." });
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [orders]);
+  }, [orders, reload]);
 
   function draftFor(order: Order): Draft {
     return drafts[order.id] ?? {
@@ -152,28 +163,37 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
   }
 
   async function act(order: Order, action: "start" | "save" | "send_now" | "arrival" | "stop" | "opt_out_whatsapp" | "retry_whatsapp", retry?: WhatsAppMessage) {
+    if (busyOrder !== null || loading) return;
     if (retry) setCheckedMessages((current) => ({ ...current, [retry.id]: false }));
     setBusyOrder(order.id);
+    if (action === "stop") setStoppingOrder(order.id);
+    if (action === "stop") setFeedback({ text: `Stopping all reminders for ${order.orderNumber}…` });
     setMessages((current) => ({ ...current, [order.id]: action === "stop" ? "Stopping reminders…" : action === "save" ? "Saving update…" : "Processing reminder action…" }));
     try {
       const response = await fetch("/api/orders/reminders", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, orderId: order.id, ...draftFor(order), messageId: retry?.id, checkedWhatsAppManager: retry ? checkedMessages[retry.id] === true : false }),
+        body: JSON.stringify(action === "stop" ? { action, orderId: order.id } : { action, orderId: order.id, ...draftFor(order), messageId: retry?.id, checkedWhatsAppManager: retry ? checkedMessages[retry.id] === true : false }),
       });
       const payload = await response.json() as { reminder?: Reminder; message?: string; preview?: string; confirmationPreview?: string; error?: string };
       if (!response.ok) throw new Error(payload.error || "Reminder action failed.");
       if (payload.reminder) setReminders((current) => [payload.reminder!, ...current.filter((row) => row.orderId !== order.id)]);
       setMessages((current) => ({ ...current, [order.id]: payload.message ?? "Saved." }));
-      const refresh = await fetch("/api/orders/reminders", { cache: "no-store" });
-      if (refresh.ok) {
-        const data = await refresh.json() as { reminders: Reminder[]; whatsappMessages: WhatsAppMessage[]; whatsappContacts: WhatsAppContact[] };
-        setReminders(data.reminders); setWhatsappMessages(data.whatsappMessages); setContacts(data.whatsappContacts ?? []);
-      }
+      if (action === "stop") setFeedback({ text: `${order.orderNumber}: All reminder channels stopped.`, destination: "stopped" });
+      try {
+        const refresh = await fetch("/api/orders/reminders", { cache: "no-store" });
+        if (refresh.ok) {
+          const data = await refresh.json() as { reminders: Reminder[]; whatsappMessages: WhatsAppMessage[]; whatsappContacts: WhatsAppContact[] };
+          setReminders(data.reminders); setWhatsappMessages(data.whatsappMessages); setContacts(data.whatsappContacts ?? []);
+        }
+      } catch { /* Keep the successful action visible if the status refresh fails. */ }
     } catch (error) {
-      setMessages((current) => ({ ...current, [order.id]: error instanceof Error ? error.message : "Reminder action failed." }));
+      const text = error instanceof Error ? error.message : "Reminder action failed.";
+      setMessages((current) => ({ ...current, [order.id]: text }));
+      if (action === "stop") setFeedback({ text: `${order.orderNumber}: ${text}`, error: true });
     } finally {
       setBusyOrder(null);
+      setStoppingOrder(null);
     }
   }
 
@@ -183,6 +203,8 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
       const reminder = result.reminder;
       setReminders((current) => [reminder, ...current.filter((row) => row.orderId !== reminder.orderId)]);
       update(reminder.orderId, { consentConfirmed: reminder.consentConfirmed, emailEnabled: reminder.emailEnabled, whatsappEnabled: reminder.whatsappEnabled, smsEnabled: reminder.smsEnabled });
+      const order = orders.find((row) => row.id === reminder.orderId);
+      setFeedback({ text: `${order?.orderNumber || "Order"}: ${result.message || "WhatsApp settings saved."}`, destination: reminderStatusFor(reminder) });
     }
     try {
       const response = await fetch("/api/orders/reminders", { cache: "no-store" });
@@ -210,16 +232,24 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
         </div>
       </header>
       <p className={styles.notice}>New orders receive an automatic confirmation and daily WhatsApp updates. Open an order’s messages below to edit the wording and Jumia dates. For older orders, record the customer’s agreement before starting WhatsApp.</p>
-      {messageSettingsLoaded && !loading && !compact && <StoreReminderMessageDefaults defaults={messageDefaults} onSaved={setMessageDefaults} />}
+      <ReminderStatusFilters filter={filter} counts={view.counts} loading={loading || !messageSettingsLoaded} onChange={setFilter} />
       <div className={styles.orderFilters}>
         <label className={styles.field}><span>Find an order or customer</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Order number, name, phone or email" /></label>
-        <label className={styles.field}><span>Show</span><select value={showAll ? "all" : "active"} onChange={(event) => setShowAll(event.target.value === "all")}><option value="active">Orders awaiting delivery</option><option value="all">All orders, including completed</option></select></label>
+        {search && <button className="button quiet" type="button" onClick={() => setSearch("")}>Clear search</button>}
       </div>
-      {messages[0] && <p className={styles.notice} role="alert">{messages[0]}</p>}
-      {eligibleOrders.length ? (
+      {feedback && <div className={`${styles.notice} ${styles.filterFeedback}`} role={feedback.error ? "alert" : "status"}>
+        <span>{feedback.text}</span>
+        {feedback.destination && filter !== feedback.destination && <button type="button" onClick={() => setFilter(feedback.destination!)}>View {feedback.destination === "not_started" ? "not started" : feedback.destination} reminders</button>}
+      </div>}
+      {messageSettingsLoaded && !loading && <p className={styles.filterSummary} role="status">Showing {view.orders.length} of {view.counts[filter]} {filterLabel === "all" ? "orders" : `${filterLabel} orders`}{search.trim() ? ` matching “${search.trim()}”` : ""}.</p>}
+      {messageSettingsLoaded && !loading && !compact && <StoreReminderMessageDefaults defaults={messageDefaults} onSaved={setMessageDefaults} />}
+      {loading ? <p className={styles.empty} role="status">Loading reminder status…</p> : !messageSettingsLoaded ? <div className={styles.empty}>
+        <p role="alert">{messages[0] || "Could not load reminder status."}</p><button className="button quiet" type="button" onClick={() => { setLoading(true); setMessageSettingsLoaded(false); setReload((value) => value + 1); }}>Retry loading reminders</button>
+      </div> : view.orders.length ? (
         <div className={styles.list}>
-          {eligibleOrders.map((order) => {
+          {view.orders.map((order) => {
             const reminder = reminders.find((row) => row.orderId === order.id);
+            const group = reminderStatusFor(reminder);
             const draft = draftFor(order);
             const contact = contacts.find((row) => row.orderId === order.id) ?? { orderId: order.id, phone: order.whatsappPhone, consentAt: order.whatsappConsentAt, optedOutAt: order.whatsappOptedOutAt };
             return (
@@ -232,7 +262,11 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                     <span>WhatsApp: {contact.phone || "Not recorded; confirm the number below"}</span>
                     <small>Order status: {order.status}{contact.consentAt ? " · WhatsApp agreement recorded" : ""}</small>
                   </div>
-                  <i className={`${styles.status} ${reminder?.active ? styles.active : ""}`}>{reminder?.active ? reminder.reminderPhase === "arrival" ? "Arrival reminders active" : "Daily reminders active" : "Stopped"}</i>
+                  <div className={styles.reminderCardActions}>
+                    <i className={`${styles.status} ${group === "running" ? styles.active : ""}`}>{group === "running" ? reminder?.reminderPhase === "arrival" ? "Running · Arrival reminders" : "Running · Daily reminders" : group === "stopped" ? "Stopped" : "Not started"}</i>
+                    {reminder?.active && <StopOrderReminders orderNumber={order.orderNumber} busy={busyOrder !== null} stopping={stoppingOrder === order.id} onStop={() => void act(order, "stop")} />}
+                    {reminder?.active && <small>Stops WhatsApp, email and SMS for this order.</small>}
+                  </div>
                 </header>
                 <OrderWhatsAppControl order={order} reminder={reminder} contact={contact} configured={providers.whatsapp} loading={loading} onChanged={controlChanged} />
                 {reminder && <div className={styles.controlTiming}>Next WhatsApp update: {reminder.active && reminder.whatsappEnabled ? formatTime(reminder.nextSendAt) : "Off"}</div>}
@@ -256,7 +290,6 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
                       <>
                         <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "save")}>Save for next update</button>
                         <button className="button primary" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "send_now")}>Save update & send now</button>
-                        <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "stop")}>Stop all reminder channels</button>
                         {reminder.whatsappEnabled && <button className="button quiet" type="button" disabled={busyOrder === order.id} onClick={() => void act(order, "opt_out_whatsapp")}>Record customer opt-out for this number</button>}
                       </>
                     ) : (
@@ -281,7 +314,10 @@ export function CustomerReminderBot({ orders, compact = false }: { orders: Order
             );
           })}
         </div>
-      ) : <p className={styles.empty}>No matching orders. Search by order number or choose All orders to find an older order.</p>}
+      ) : <div className={styles.empty}>
+        <p>{search.trim() ? `No ${filterLabel === "all" ? "" : `${filterLabel} `}orders match this search.` : filter === "running" ? "No reminders are currently running." : filter === "stopped" ? "No previously started reminders are stopped." : filter === "not_started" ? "Every order has started reminders at least once." : "No orders yet."}</p>
+        {filter !== "all" && <button className="button quiet" type="button" onClick={() => setFilter("all")}>View all orders</button>}
+      </div>}
     </section>
   );
 }

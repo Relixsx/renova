@@ -72,9 +72,11 @@ test("malformed or unavailable storage does not throw or manufacture a completed
 });
 
 test("new consent records the dedicated WhatsApp number and requires the displayed notice version", () => {
-  const consent = checkoutWhatsAppConsent(false, "08000000000", { phone: "09000000001", noticeVersion: "checkout-v2" });
-  assert.equal(consent.whatsappPhone, "2349000000001"); assert.equal(consent.whatsappConsentSource, "checkout-v2");
-  assert.ok(Number.isFinite(Date.parse(consent.whatsappConsentAt)));
+  for (const noticeVersion of ["checkout-v3", "checkout-v2"]) {
+    const consent = checkoutWhatsAppConsent(false, "08000000000", { phone: "09000000001", noticeVersion });
+    assert.equal(consent.whatsappPhone, "2349000000001"); assert.equal(consent.whatsappConsentSource, noticeVersion);
+    assert.ok(Number.isFinite(Date.parse(consent.whatsappConsentAt)));
+  }
   for (const request of [null, {}, { phone: "", noticeVersion: "checkout-v2" }, { phone: "09000000001", noticeVersion: "unknown" }]) assert.throws(() => checkoutWhatsAppConsent(true, "08000000000", request));
   assert.deepEqual(checkoutWhatsAppConsent(false, "08000000000"), {});
   assert.equal(checkoutWhatsAppConsent(true, "08000000000").whatsappConsentSource, "checkout-v1");
