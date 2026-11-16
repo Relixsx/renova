@@ -50,10 +50,10 @@ beforeEach(async () => {
   calls = []; failOwner = false;
   Object.assign(process.env, { WHATSAPP_AUTOMATION_ENABLED: "true", WHATSAPP_ACCESS_TOKEN: "fake-anagen-token", WHATSAPP_PHONE_NUMBER_ID: "123456", WHATSAPP_REMINDER_TEMPLATE: "renova_delivery_update", WHATSAPP_TEMPLATE_LANGUAGE: "en", WHATSAPP_GRAPH_API_VERSION: "v25.0", FORMSPREE_ENDPOINT: "https://forms.example.invalid/anagen", RESEND_API_KEY: "fake-resend", RESEND_FROM_EMAIL: "qa@example.invalid", APP_URL: "https://renova.example.invalid", PAYSTACK_SECRET_KEY: "fake-paystack", TERMII_API_KEY: "" });
   globalThis.fetch = async (url, init) => {
-    const body = JSON.parse(init.body); calls.push({ url: String(url), body });
+    const body = JSON.parse(init.body); calls.push({ url: String(url), body, headers: init.headers });
     if (String(url).startsWith("https://graph.facebook.com/")) return Response.json({ messages: [{ id: `wamid.anagen-${calls.length}` }] });
     if (String(url) === "https://forms.example.invalid/anagen") return Response.json({ ok: !failOwner }, { status: failOwner ? 503 : 200 });
-    if (String(url) === "https://api.resend.com/emails") return Response.json({ id: "qa-email" });
+    if (String(url) === "https://api.resend.com/emails") return failOwner && body.to?.includes("airebirth5@gmail.com") ? Response.json({ error: "Fixture owner provider is unavailable" }, { status: 503 }) : Response.json({ id: "qa-email" });
     throw new Error(`Unexpected outbound request blocked: ${String(url)}`);
   };
 });
@@ -65,7 +65,7 @@ function payload(overrides = {}) {
 const request = (value, headers = {}) => new Request("https://renova.example.invalid/api/anagen/order", { method: "POST", headers: { "content-type": "application/json", origin: "https://renova.example.invalid", ...headers }, body: typeof value === "string" ? value : JSON.stringify(value) });
 const anagenOrders = () => db.select().from(schema.orders).where(eq(schema.orders.paymentMethod, "cash_on_delivery"));
 const graph = () => calls.filter((call) => call.url.startsWith("https://graph.facebook.com/"));
-const owner = () => calls.filter((call) => call.url === "https://forms.example.invalid/anagen");
+const owner = () => calls.filter((call) => call.url === "https://api.resend.com/emails" && call.body.to?.includes("airebirth5@gmail.com"));
 
 test("Anagen checkout computes all three exact bundle totals and records free delivery in Renova", async () => {
   for (const bundle of ANAGEN.bundles) {
@@ -84,10 +84,13 @@ test("Anagen checkout computes all three exact bundle totals and records free de
 test("Anagen optional email still sends owner email and one confirmation to the separate WhatsApp number", async () => {
   const result = await route.POST(request(payload())); assert.equal(result.status, 201);
   const [order] = await anagenOrders(); assert.equal(order.customerEmail, ""); assert.equal(order.whatsappPhone, "2348000000001");
-  assert.equal(owner().length, 1); assert.equal(owner()[0].body["Customer Email"], "");
-  assert.equal(owner()[0].body["WhatsApp Number"], "2348000000001"); assert.equal(owner()[0].body["Alternative Phone"], "2348000000002");
-  assert.equal(owner()[0].body["Available to Receive"], "Tomorrow"); assert.match(owner()[0].body["Product and Quantity"], /Anagen.*1 pack/);
-  assert.equal(calls.filter((call) => call.url === "https://api.resend.com/emails").length, 0);
+  assert.equal(owner().length, 1);
+  const mail = owner()[0];
+  assert.deepEqual(mail.body.to, ["airebirth5@gmail.com"]);
+  for (const text of ["Not provided", "2348000000001", "2348000000002", "Tomorrow", "Anagen", "1 pack", "₦11,200"]) assert.ok(mail.body.text.includes(text), text);
+  assert.equal(calls.filter((call) => call.url === "https://api.resend.com/emails").length, 1);
+  assert.equal(calls.filter((call) => call.url.includes("forms.example")).length, 0);
+  assert.equal(mail.headers["Idempotency-Key"], `renova-owner-order-${order.orderNumber}`);
   assert.equal(graph().length, 1); assert.equal(graph()[0].body.to, "2348000000001");
   assert.match(graph()[0].body.template.components[0].parameters[3].text, /1–2 working days/);
   const [reminder] = await db.select().from(schema.orderReminders); assert.equal(reminder.active, true); assert.equal(reminder.whatsappEnabled, true);
@@ -96,8 +99,8 @@ test("Anagen optional email still sends owner email and one confirmation to the 
 test("Anagen supplied email receives the normal Renova customer confirmation", async () => {
   const value = payload(); value.details.email = "AMINA@example.invalid";
   assert.equal((await route.POST(request(value))).status, 201);
-  const emails = calls.filter((call) => call.url === "https://api.resend.com/emails");
-  assert.equal(emails.length, 1); assert.deepEqual(emails[0].body.to, ["amina@example.invalid"]);
+  const emails = calls.filter((call) => call.url === "https://api.resend.com/emails" && call.body.to?.includes("amina@example.invalid"));
+  assert.equal(owner().length, 1); assert.equal(emails.length, 1); assert.deepEqual(emails[0].body.to, ["amina@example.invalid"]);
   assert.match(emails[0].body.html, /1–2 working days/); assert.doesNotMatch(emails[0].body.html, /3–12 working days/);
 });
 

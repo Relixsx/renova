@@ -25,7 +25,7 @@ try {
   const result=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext},fileName:file});
   const target=join(output,file.replace(/\.ts$/,'.mjs'));await mkdir(dirname(target),{recursive:true});await writeFile(target,result.outputText);
  }
- for(const file of ['db/owner-schema.mjs','app/lib/postgres-config.mjs','app/lib/owner-auth.mjs','app/lib/owner-settings.mjs','app/lib/migration-mode.mjs']){
+ for(const file of ['db/owner-schema.mjs','app/lib/postgres-config.mjs','app/lib/owner-auth.mjs','app/lib/owner-settings.mjs','app/lib/migration-mode.mjs','app/lib/owner-order-email.mjs']){
   const target=join(output,file);await mkdir(dirname(target),{recursive:true});await writeFile(target,await readFile(join(root,file),'utf8'));
  }
  const result=spawnSync(process.execPath,['--test','--test-concurrency=1','tests/aiven-owner.test.mjs','tests/aiven-migration.test.mjs'],{cwd:root,stdio:'inherit',env:{...process.env,DATABASE_URL:'',RENOVA_AIVEN_TEST_BUILD:output,NEXT_TELEMETRY_DISABLED:'1'}});

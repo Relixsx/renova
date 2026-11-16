@@ -38,9 +38,10 @@ update has new database and owner-login settings documented in AIVEN_MIGRATION.m
 - The order is saved in the existing Renova `orders` table, with the normal
   order number, admin visibility, payment-due status, email notification and
   WhatsApp queue. It is not saved in a separate CSV.
-- The owner alert uses the existing **FORMSPREE_ENDPOINT**, including the bundle,
+- The owner alert goes to **airebirth5@gmail.com** through the existing
+  **Resend HTTPS email connection**, including the bundle,
   exact amount, delivery phone, WhatsApp number, alternative phone, address and
-  availability. Customer confirmation email uses the existing Resend settings
+  availability. It does not use Formspree. Customer confirmation email uses the existing Resend settings
   when the customer supplies an email. Blank email is kept blank.
 - The WhatsApp confirmation and daily updates use the existing integration,
   consent records, approved template and full 24-hour interval. Existing stop,

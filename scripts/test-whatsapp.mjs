@@ -29,6 +29,7 @@ try {
   }
   await mkdir(join(output, "app/lib"), { recursive: true });
   await writeFile(join(output, "app/lib/anagen-offer.mjs"), await readFile(join(root, "app/lib/anagen-offer.mjs"), "utf8"));
+  await writeFile(join(output, "app/lib/owner-order-email.mjs"), await readFile(join(root, "app/lib/owner-order-email.mjs"), "utf8"));
   // Substitute database/catalogue fixtures and owner identity; run production checkout, queue, SQL,
   // formatting, payment hooks and webhook handlers with blocked provider calls.
   await writeFile(join(output, "db/index.mjs"), 'export function getDb() { return globalThis[Symbol.for("renova-whatsapp-test-db")]; }\n');
@@ -37,7 +38,7 @@ try {
   // Migration locking and maintenance are exercised by test:migration; these
   // established checkout tests keep their isolated PostgreSQL fixtures.
   await writeFile(join(output, "app/lib/store-writer.mjs"), 'export async function withStoreWriter(_request, work) { return work(); }\n');
-  const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", "tests/whatsapp.test.mjs", "tests/whatsapp-db.test.mjs", "tests/cart-checkout.test.mjs", "tests/delivery-estimate.test.mjs", "tests/reminder-message-content.test.mjs", "tests/reminder-message-migration.test.mjs", "tests/jumia-delivery-countdown.test.mjs", "tests/reminder-status.test.mjs", "tests/full-reminder-message.test.mjs", "tests/anagen.test.mjs"], {
+  const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", "tests/whatsapp.test.mjs", "tests/whatsapp-db.test.mjs", "tests/cart-checkout.test.mjs", "tests/delivery-estimate.test.mjs", "tests/reminder-message-content.test.mjs", "tests/reminder-message-migration.test.mjs", "tests/jumia-delivery-countdown.test.mjs", "tests/reminder-status.test.mjs", "tests/full-reminder-message.test.mjs", "tests/anagen.test.mjs", "tests/owner-order-email.test.mjs"], {
     cwd: root, stdio: "inherit", env: { ...process.env, DATABASE_URL: "", RENOVA_TEST_BUILD: output, RENOVA_TEST_SOURCE: root },
   });
   process.exitCode = result.status ?? 1;

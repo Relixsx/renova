@@ -3,6 +3,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { orders, products } from "../../db/schema";
 import { confirmOrderWhatsApp } from "./whatsapp-notifications";
+import { sendOwnerOrderEmail } from "./owner-order-email.mjs";
 
 function runtimeValue(name: string) {
   return process.env[name]?.trim();
@@ -11,50 +12,6 @@ function escapeHtml(value: unknown) { return String(value ?? "").replace(/[&<>"'
 
 export function paystackSecret() { return runtimeValue("PAYSTACK_SECRET_KEY"); }
 
-async function notifyOwner(order: typeof orders.$inferSelect) {
-  const endpoint = runtimeValue("FORMSPREE_ENDPOINT");
-  if (!endpoint) {
-    console.warn("FORMSPREE_ENDPOINT is not configured; owner notification skipped.");
-    return false;
-  }
-  const items = JSON.parse(order.itemsJson || "[]") as Array<{ name?: string; quantity?: number; variant?: string }>;
-  const address = JSON.parse(order.addressJson || "{}") as Record<string, unknown>;
-  const productSummary = items.map((item, index) => {
-    const variant = item.variant && item.variant !== "Standard" ? ` (${item.variant})` : "";
-    return `${index + 1}. ${item.name || "Product"}${variant} — Quantity: ${Number(item.quantity ?? 1)}`;
-  }).join("\n");
-  const deliveryAddress = [
-    address.streetAddress,
-    address.cityTown ?? address.town,
-    address.lga ?? address.localGovernment,
-    address.state ?? address.stateCode,
-  ].filter(Boolean).join(", ");
-  const isDeliveryPayment = order.paymentMethod === "cash_on_delivery";
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      _subject: `${isDeliveryPayment ? "New payment-on-delivery" : "New paid"} Renova order — ${order.orderNumber}`,
-      "Order Number": order.orderNumber,
-      "Tracking Number": order.trackingNumber || order.orderNumber,
-      "Payment Status": isDeliveryPayment ? "Payment due on delivery" : "Paid via Paystack",
-      [isDeliveryPayment ? "Amount Due" : "Amount Paid"]: `₦${(order.totalKobo / 100).toLocaleString("en-NG")}`,
-      "Customer Name": order.customerName,
-      "Customer Email": order.customerEmail,
-      "Phone Number": order.customerPhone,
-      ...(order.whatsappPhone ? { "WhatsApp Number": order.whatsappPhone } : {}),
-      ...(address.alternativePhone ? { "Alternative Phone": address.alternativePhone } : {}),
-      ...(address.availabilityDay ? { "Available to Receive": address.availabilityDay } : {}),
-      "Product and Quantity": productSummary || "No product details available",
-      "Delivery Address": deliveryAddress || "No delivery address available",
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Formspree rejected order ${order.orderNumber} (${response.status}): ${detail.slice(0, 300)}`);
-  }
-  return true;
-}
 
 async function notifyCustomer(order: typeof orders.$inferSelect) {
   const apiKey = runtimeValue("RESEND_API_KEY");
@@ -125,7 +82,7 @@ async function notifyCustomerAndRecord(order: typeof orders.$inferSelect) {
 }
 
 export async function sendOrderNotifications(order: typeof orders.$inferSelect) {
-  const results = await Promise.allSettled([notifyOwner(order), notifyCustomerAndRecord(order), confirmOrderWhatsApp(order.id)]);
+  const results = await Promise.allSettled([sendOwnerOrderEmail(order), notifyCustomerAndRecord(order), confirmOrderWhatsApp(order.id)]);
   for (const result of results) if (result.status === "rejected") console.error("Order notification failed", result.reason);
 }
 
