@@ -1,3 +1,4 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { reminderDashboardData, dispatchReminder, saveReminder, stopReminder, reminderText } from "../../../lib/customer-reminders";
 import { requireOwnerRequest } from "../../../lib/admin-auth";
 import { eq } from "drizzle-orm";
@@ -30,6 +31,7 @@ type ReminderRequest = {
 };
 
 export async function POST(request: Request) {
+  return withStoreWriter(request, async () => {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
@@ -129,4 +131,6 @@ export async function POST(request: Request) {
     console.error("Customer reminder action failed");
     return Response.json({ error: "The reminder action failed. Check the message settings and database update." }, { status: 500 });
   }
+
+  });
 }

@@ -42,6 +42,9 @@ async function notifyOwner(order: typeof orders.$inferSelect) {
       "Customer Name": order.customerName,
       "Customer Email": order.customerEmail,
       "Phone Number": order.customerPhone,
+      ...(order.whatsappPhone ? { "WhatsApp Number": order.whatsappPhone } : {}),
+      ...(address.alternativePhone ? { "Alternative Phone": address.alternativePhone } : {}),
+      ...(address.availabilityDay ? { "Available to Receive": address.availabilityDay } : {}),
       "Product and Quantity": productSummary || "No product details available",
       "Delivery Address": deliveryAddress || "No delivery address available",
     }),
@@ -59,6 +62,9 @@ async function notifyCustomer(order: typeof orders.$inferSelect) {
   // a backwards-compatible fallback for existing installations.
   const from = runtimeValue("RESEND_FROM_EMAIL") ?? runtimeValue("ORDER_FROM_EMAIL");
   if (order.customerNotifiedAt) return false;
+  // Dedicated product forms can accept an order without an email address.
+  // Owner email and WhatsApp still run; never invent a customer email.
+  if (!order.customerEmail?.trim()) return false;
   if (!apiKey) throw new Error("RESEND_API_KEY is not configured; customer confirmation was not sent.");
   if (!from) throw new Error("RESEND_FROM_EMAIL is not configured; customer confirmation was not sent.");
   if (!order.customerEmail?.includes("@")) throw new Error(`Order ${order.orderNumber} has an invalid customer email address.`);

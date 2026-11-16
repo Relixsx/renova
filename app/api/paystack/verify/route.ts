@@ -1,6 +1,8 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { markOrderPaid, paystackSecret } from "../../../lib/order-payment";
 
 export async function GET(request: Request) {
+  return withStoreWriter(request, async () => {
   const url = new URL(request.url);
   const appUrl = (process.env.APP_URL?.trim() || url.origin).replace(/\/$/, "");
   const reference = url.searchParams.get("reference") ?? "";
@@ -16,4 +18,6 @@ export async function GET(request: Request) {
     console.error("Paystack callback verification failed", error);
     return Response.redirect(`${appUrl}/checkout?payment=verification`, 303);
   }
+
+  });
 }

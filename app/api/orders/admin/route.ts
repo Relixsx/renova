@@ -1,3 +1,4 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
@@ -9,6 +10,7 @@ import { confirmOrderWhatsApp } from "../../../lib/whatsapp-notifications";
 const allowedStatuses = new Set(["confirmed", "processing", "packaged", "dispatched", "delivered", "refunded", "cancelled"]);
 
 export async function PATCH(request: Request) {
+  return withStoreWriter(request, async () => {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
@@ -27,4 +29,6 @@ export async function PATCH(request: Request) {
     console.error("Admin order update failed", error);
     return Response.json({ error: error instanceof Error ? error.message : "The order could not be updated." }, { status: 500 });
   }
+
+  });
 }

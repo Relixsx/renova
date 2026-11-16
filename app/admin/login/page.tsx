@@ -11,7 +11,7 @@ export default async function AdminLoginPage() {
     <img src="/renova-mark.svg" alt="" />
     <span className="eyebrow">Renova owner access</span>
     <h1>Sign in to manage the store.</h1>
-    <p>Use the owner account created in Neon Auth. Customer checkout does not require an account.</p>
+    <p>Use your Renova owner account. Customer checkout does not require an account.</p>
     <AdminLoginForm />
   </main>;
 }

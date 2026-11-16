@@ -1,8 +1,10 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { getDb } from "../../../../db";
 import { reviews } from "../../../../db/schema";
 import { ensureSeedData } from "../../../lib/server-catalog";
 
 export async function POST(request: Request) {
+  return withStoreWriter(request, async () => {
   try {
     const payload = (await request.json()) as Record<string, unknown>;
     const productSlug = String(payload.productSlug ?? "").trim();
@@ -17,4 +19,6 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "This review could not be submitted. It may already exist." }, { status: 400 });
   }
+
+  });
 }

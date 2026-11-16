@@ -1,3 +1,4 @@
+import { withStoreWriter } from "../../lib/store-writer";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { products, reviews } from "../../../db/schema";
@@ -93,6 +94,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  return withStoreWriter(request, async () => {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
@@ -198,9 +200,12 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  });
 }
 
 export async function PATCH(request: Request) {
+  return withStoreWriter(request, async () => {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
@@ -318,9 +323,12 @@ export async function PATCH(request: Request) {
       { status: 500 },
     );
   }
+
+  });
 }
 
 export async function DELETE(request: Request) {
+  return withStoreWriter(request, async () => {
   const denied = await requireOwnerRequest(request);
   if (denied) return denied;
   try {
@@ -356,4 +364,6 @@ export async function DELETE(request: Request) {
       { status: 500 },
     );
   }
+
+  });
 }

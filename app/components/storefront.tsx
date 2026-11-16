@@ -354,7 +354,7 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
         <div className="product-card-actions">
           <ShopperTools product={product} />
-          <button
+          {product.slug === "anagen" ? <Link className="quick-add" href="/anagen#order-form"><span>↗</span><b>Choose package</b></Link> : <button
             className="quick-add"
             onClick={() => {
               trackMetaEvent("AddToCart", {
@@ -379,7 +379,7 @@ export function ProductCard({ product }: { product: Product }) {
           >
             <span>＋</span>
             <b>Add to bag</b>
-          </button>
+          </button>}
         </div>
       </div>
     </article>

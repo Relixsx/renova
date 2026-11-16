@@ -1,3 +1,5 @@
+import { databaseTarget } from "../../../lib/postgres-config.mjs";
+import { recoverOwnerPassword } from "../../../lib/owner-recovery";
 export const dynamic = "force-dynamic";
 
 function ownerEmails() {
@@ -27,6 +29,7 @@ async function forwardToNeon(path: string, body: Record<string, unknown>, origin
 
 export async function POST(request: Request) {
   try {
+    if (databaseTarget().provider === "aiven") return recoverOwnerPassword(request);
     const body = await request.json();
     const origin = new URL(request.url).origin;
 

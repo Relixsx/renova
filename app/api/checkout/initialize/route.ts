@@ -1,3 +1,4 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { deliveryEstimateForAddress } from "../../../lib/delivery-estimate";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
@@ -9,11 +10,13 @@ import { checkoutWhatsAppConsent } from "../../../lib/whatsapp-notifications";
 type CartLine = { slug: string; quantity: number; variant?: string };
 
 export async function POST(request: Request) {
+  return withStoreWriter(request, async () => {
   try {
     const secret = paystackSecret();
     if (!secret) return Response.json({ error: "Live Paystack checkout is waiting for the store owner’s secret key." }, { status: 503 });
     const payload = (await request.json()) as { lines?: CartLine[]; details?: Record<string, string>; deliveryId?: string; whatsappOptIn?: boolean; whatsapp?: unknown };
     const details = payload.details ?? {};
+    if (payload.lines?.some((line) => line.slug === "anagen")) return Response.json({ error: "Please order Anagen at /anagen. This product is paid for on delivery." }, { status: 400 });
     const delivery = getDeliveryOption(String(payload.deliveryId ?? ""), details);
     if (!delivery || !payload.lines?.length) return Response.json({ error: "Your cart or delivery selection is incomplete." }, { status: 400 });
     if (!details.fullName || !details.email || !details.phone || !details.streetAddress || !details.stateCode || !details.lga || !details.cityTown) return Response.json({ error: "Complete the delivery address before payment." }, { status: 400 });
@@ -49,4 +52,6 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Checkout could not be started." }, { status: 500 });
   }
+
+  });
 }

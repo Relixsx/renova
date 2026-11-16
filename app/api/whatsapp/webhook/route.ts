@@ -1,3 +1,4 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { equalSecret, limitedWebhookBody, verifyWhatsAppSignature } from "../../../lib/whatsapp-webhook-security";
 import { isWhatsAppStop } from "../../../lib/whatsapp-message";
 import { optOutWhatsApp, recordWhatsAppStatus } from "../../../lib/whatsapp-notifications";
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
   try { event = JSON.parse(new TextDecoder().decode(raw)) as WhatsAppEvent; }
   catch { return new Response("Invalid JSON", { status: 400 }); }
   if (event?.object !== "whatsapp_business_account") return Response.json({ received: true });
+  return withStoreWriter(request, async () => {
   try {
     for (const entry of event.entry || []) for (const change of entry.changes || []) {
       const value = change.value;
@@ -47,4 +49,5 @@ export async function POST(request: Request) {
     console.error("WhatsApp webhook processing failed; Meta should retry.");
     return new Response("Please retry", { status: 503 });
   }
+  });
 }

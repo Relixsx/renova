@@ -5,7 +5,7 @@ export default function AdminForgotPasswordPage() {
     <img src="/renova-mark.svg" alt="" />
     <span className="eyebrow">Renova owner recovery</span>
     <h1>Reset your password.</h1>
-    <p>Enter the email connected to your Renova owner account. Neon will send a secure, time-limited recovery link.</p>
+    <p>Enter the email connected to your Renova owner account to request a secure recovery link.</p>
     <AdminForgotPasswordForm />
   </main>;
 }

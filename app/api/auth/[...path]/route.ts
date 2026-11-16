@@ -1,4 +1,5 @@
-import { getAuth } from "../../../lib/admin-auth";
+import { getAuth, getOwnerAuth } from "../../../lib/admin-auth";
+import { databaseTarget } from "../../../lib/postgres-config.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,10 @@ type AuthRouteContext = { params: Promise<{ path: string[] }> };
 
 function handle(method: AuthHandlerName) {
   return async (request: Request, context: AuthRouteContext) => {
+    if (databaseTarget().provider === "aiven") {
+      if (method !== "GET" && method !== "POST") return new Response("Method not allowed", { status: 405 });
+      return getOwnerAuth().handler(request);
+    }
     const handler = getAuth().handler()[method];
     return handler(request, context);
   };

@@ -57,8 +57,8 @@ export function AdminResetPasswordForm() {
   </div>;
 
   return <form className="admin-login-form" onSubmit={submit}>
-    <label>New password<input name="password" type="password" autoComplete="new-password" required minLength={8} /></label>
-    <label>Confirm new password<input name="confirmation" type="password" autoComplete="new-password" required minLength={8} /></label>
+    <label>New password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} /></label>
+    <label>Confirm new password<input name="confirmation" type="password" autoComplete="new-password" required minLength={12} maxLength={128} /></label>
     {error ? <p className="admin-auth-error" role="alert">{error}</p> : null}
     <button className="button espresso" type="submit" disabled={busy}>{busy ? "Updating password…" : "Create new password"}</button>
     <Link className="admin-auth-link" href="/admin/login">Return to sign in</Link>

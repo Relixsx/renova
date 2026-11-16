@@ -47,6 +47,7 @@ export default async function OfferPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (slug === "anagen") redirect("/anagen");
   const product = await getProduct(slug);
   if (!product) notFound();
   if (product.pageTemplate !== "flexible")

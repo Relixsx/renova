@@ -361,6 +361,7 @@ export type Product = {
 };
 
 export function productHref(product: Pick<Product, "slug" | "pageTemplate">) {
+  if (product.slug === "anagen") return "/anagen";
   return product.pageTemplate === "flexible"
     ? `/offers/${product.slug}`
     : `/products/${product.slug}`;

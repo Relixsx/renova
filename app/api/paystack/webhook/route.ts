@@ -1,8 +1,10 @@
+import { withStoreWriter } from "../../../lib/store-writer";
 import { markOrderPaid, paystackSecret } from "../../../lib/order-payment";
 
 function toHex(bytes: ArrayBuffer) { return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join(""); }
 
 export async function POST(request: Request) {
+  return withStoreWriter(request, async () => {
   const secret = paystackSecret();
   if (!secret) return new Response("Not configured", { status: 503 });
   const body = await request.text();
@@ -13,4 +15,6 @@ export async function POST(request: Request) {
   const event = JSON.parse(body) as { event?: string; data?: { reference?: string; amount?: number; status?: string } };
   if (event.event === "charge.success" && event.data?.reference && event.data.status === "success") await markOrderPaid(event.data.reference, Number(event.data.amount ?? 0));
   return new Response("OK");
+
+  });
 }

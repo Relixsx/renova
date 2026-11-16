@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminSignOut } from "./admin-sign-out";
+
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import {
@@ -992,7 +994,7 @@ export function AdminCatalogue({
         </nav>
         <div className="admin-sidebar-foot">
           <span className="status-dot" />
-          Private owner workspace<Link href="/">Open storefront ↗</Link>
+          Private owner workspace<Link href="/">Open storefront ↗</Link><AdminSignOut />
         </div>
       </aside>
       <main className="admin-main">

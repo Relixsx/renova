@@ -5,6 +5,10 @@ import {
 } from "@neondatabase/auth/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getOwnerDb } from "../../db";
+import { databaseTarget } from "./postgres-config.mjs";
+import { createOwnerAuth } from "./owner-auth.mjs";
+import { trustedOwnerOrigins } from "./owner-settings.mjs";
 
 function requiredSetting(name: "NEON_AUTH_BASE_URL" | "NEON_AUTH_COOKIE_SECRET") {
   const value = process.env[name]?.trim();
@@ -15,6 +19,12 @@ function requiredSetting(name: "NEON_AUTH_BASE_URL" | "NEON_AUTH_COOKIE_SECRET")
 type NeonAuth = ReturnType<typeof createNeonAuth>;
 
 let authInstance: NeonAuth | null = null;
+let localAuth: ReturnType<typeof createOwnerAuth> | null = null;
+
+export function getOwnerAuth() {
+  if (!localAuth) localAuth = createOwnerAuth(getOwnerDb());
+  return localAuth;
+}
 
 /**
  * Initialise Neon Auth only when an auth route is actually used. Keeping this
@@ -46,6 +56,13 @@ export function isOwnerEmail(email: string | null | undefined) {
 
 export async function currentUser() {
   const headerStore = await headers();
+  if (!(headerStore.get("cookie") || "").includes("session_token=")) return null;
+  if (databaseTarget().provider === "aiven") {
+    try {
+      const result = await getOwnerAuth().api.getSession({ headers: headerStore });
+      return result?.user || null;
+    } catch { console.error("Unable to validate the Renova owner session."); return null; }
+  }
   const authCookies = extractNeonAuthCookies(headerStore);
 
   if (!authCookies.includes("session_token=")) return null;
@@ -65,8 +82,8 @@ export async function currentUser() {
 
     const session = parseSessionData(await response.json());
     return session.user;
-  } catch (error) {
-    console.error("Unable to validate the Neon Auth session.", error);
+  } catch {
+    console.error("Unable to validate the Neon Auth session.");
     return null;
   }
 }
@@ -82,6 +99,10 @@ export async function requireOwnerRequest(_request?: Request) {
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });
   if (!isOwnerEmail(user.email)) {
     return Response.json({ error: "This account is not authorised for Renova administration." }, { status: 403 });
+  }
+  if (_request && !["GET", "HEAD", "OPTIONS"].includes(_request.method)) {
+    const origin = _request.headers.get("origin");
+    if (!origin || !trustedOwnerOrigins().includes(origin)) return Response.json({ error: "Submit this change from the Renova owner console." }, { status: 403 });
   }
   return null;
 }

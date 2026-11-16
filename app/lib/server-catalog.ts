@@ -1,4 +1,5 @@
 import { normalizeDeliveryCopy, normalizeStructuredDeliveryCopy } from "./delivery-estimate";
+import { migrationMode } from "./migration-mode.mjs";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "../../db";
 import {
@@ -22,6 +23,9 @@ let seedAttempted = false;
 
 export async function ensureSeedData() {
   if (seedAttempted) return;
+  // Restored stores must never be rewritten by a page view, including during
+  // the final migration freeze. Seeding is an explicit development action.
+  if (process.env.RENOVA_ALLOW_SEEDING !== "true" || migrationMode() !== "off") { seedAttempted = true; return; }
   const db = getDb();
 
   await db

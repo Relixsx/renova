@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createAuthClient } from "@neondatabase/auth/next";
+import { createAuthClient } from "better-auth/react";
 import Link from "next/link";
 
 const authClient = createAuthClient();
