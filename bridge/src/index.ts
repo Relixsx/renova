@@ -14,7 +14,7 @@ const enabled=process.env.SELLIGATE_BRIDGE_ENABLED==='true';
 const origin=new URL(process.env.RENOVA_URL||'https://shoprenova.com.ng');
 if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw new Error('RENOVA_URL must be a plain HTTPS origin.');
 const secret=process.env.SELLIGATE_BRIDGE_SECRET||'',key=process.env.SELLIGATE_BRIDGE_KEY_ID||'primary';
-if(secret.length<32)throw new Error('Configure a strong bridge service secret.');
+if(secret.length<32||/^REPLACE_/i.test(secret))throw new Error('Configure a strong bridge service secret.');
 const dataDir=resolve(process.env.SELLIGATE_DATA_DIR||'/data');mkdirSync(dataDir,{recursive:true,mode:0o700});chmodSync(dataDir,0o700);
 const releaseLock=await lockfile.lock(dataDir,{realpath:true,stale:30000,update:5000,retries:0});
 const journal=new Journal(join(dataDir,'dispatch-journal.sqlite'));

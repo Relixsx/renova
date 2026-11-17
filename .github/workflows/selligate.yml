@@ -40,6 +40,8 @@ jobs:
       - run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Resolve bridge dependency lock for validation
         run: npm install --prefix bridge --ignore-scripts --no-audit --no-fund
+      - name: Export resolved dependency lock for review
+        run: node -e 'console.log("SELLIGATE_DEPENDENCY_LOCK:" + JSON.stringify(require("./bridge/package-lock.json")))'
       - run: npm run check --prefix bridge
       - run: npx tsc --noEmit
       - name: Dispatch integration and existing store regression suite
