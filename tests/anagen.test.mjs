@@ -104,6 +104,35 @@ test("Anagen supplied email receives the normal Renova customer confirmation", a
   assert.match(emails[0].body.html, /1–2 working days/); assert.doesNotMatch(emails[0].body.html, /3–12 working days/);
 });
 
+test("compact Anagen checkout accepts an address containing the town with optional email and LGA omitted", async () => {
+  const value = payload({ quantity: 2 });
+  for (const field of ["alternativePhone", "cityTown", "email", "lga"]) delete value.details[field];
+  value.details.streetAddress = "12 Example Street, Ikeja, near the library";
+  const result = await route.POST(request(value)); assert.equal(result.status, 201);
+  const [order] = await anagenOrders(); const address = JSON.parse(order.addressJson);
+  assert.equal(order.totalKobo, 2040000); assert.equal(order.customerEmail, "");
+  assert.equal(address.streetAddress, value.details.streetAddress); assert.equal(address.state, "Lagos");
+  assert.equal(address.cityTown, ""); assert.equal(address.lga, ""); assert.equal(address.alternativePhone, "");
+  assert.equal(owner().length, 1); assert.equal(graph().length, 1);
+  assert.ok(owner()[0].body.text.includes(value.details.streetAddress));
+  assert.ok(owner()[0].body.text.includes("Lagos"));
+  assert.equal(graph()[0].body.to, "2348000000001");
+  assert.match(graph()[0].body.template.components[0].parameters[3].text, /1–2 working days/);
+  const [reminder] = await db.select().from(schema.orderReminders); assert.equal(reminder.whatsappEnabled, true);
+});
+
+test("compact Anagen retries normalize omitted legacy fields without replaying notifications or ignoring address edits", async () => {
+  const value = payload();
+  for (const field of ["alternativePhone", "cityTown", "email", "lga"]) delete value.details[field];
+  const results = await Promise.all([route.POST(request(value)), route.POST(request(value))]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 201]);
+  const retry = { ...value, details: { ...value.details, alternativePhone: "", cityTown: "", email: "", lga: "" } };
+  assert.equal((await route.POST(request(retry))).status, 200);
+  const changed = { ...retry, details: { ...retry.details, streetAddress: "A different delivery address" } };
+  assert.equal((await route.POST(request(changed))).status, 409);
+  assert.equal((await anagenOrders()).length, 1); assert.equal(owner().length, 1); assert.equal(graph().length, 1);
+});
+
 test("Anagen repeated and concurrent submissions create one order and one set of notifications", async () => {
   const value = payload({ quantity: 3 });
   const results = await Promise.all([route.POST(request(value)), route.POST(request(value)), route.POST(request(value))]);
@@ -123,6 +152,7 @@ test("Anagen validation rejects missing WhatsApp, unagreed orders, invalid quant
     { ...valid, details: { ...valid.details, stateCode: "XX" } },
     { ...valid, details: { ...valid.details, availabilityDay: "Yesterday" } },
     { ...valid, details: { ...valid.details, streetAddress: "" } },
+    { ...valid, details: { ...valid.details, cityTown: { invalid: true } } },
     { ...valid, customerConfirmedDeliveryCommitment: false },
     { ...valid, quantity: 0 }, { ...valid, quantity: 4 }, { ...valid, quantity: 1.5 }, { ...valid, quantity: "3" },
     { ...valid, idempotencyKey: "123" }, { ...valid, whatsappNoticeVersion: "unchecked" },
@@ -213,6 +243,11 @@ test("Anagen form renders a separate WhatsApp field, optional email and all Nige
   const html = renderToStaticMarkup(React.createElement(AnagenOrderForm, { stock: 50, supportPhone: "2348000000000" }));
   assert.match(html, /<input(?=[^>]*name="whatsappPhone")(?=[^>]*required)[^>]*>/); assert.match(html, /name="email"/);
   assert.doesNotMatch(html, /<input(?=[^>]*name="email")(?=[^>]*required)[^>]*>/); assert.doesNotMatch(html, /Reply STOP/);
+  assert.doesNotMatch(html, /name="(?:alternativePhone|cityTown)"/);
+  assert.doesNotMatch(html, /<select(?=[^>]*name="lga")(?=[^>]*required)[^>]*>/);
+  assert.match(html, /<input(?=[^>]*name="availabilityDay")(?=[^>]*required)(?=[^>]*value="Today")[^>]*>/);
+  assert.match(html, /<input(?=[^>]*name="availabilityDay")(?=[^>]*required)(?=[^>]*value="Tomorrow")[^>]*>/);
+  assert.match(html, /Include your town or city here/); assert.match(html, /Use delivery number/);
   assert.match(html, /FCT — Abuja/); assert.match(html, /value="LA"/); assert.match(html, /value="ZA"/);
   assert.match(html, /₦11,200/); assert.match(html, /₦20,400/); assert.match(html, /₦28,600/);
   assert.match(html, /wa\.me\/2348000000000/); assert.doesNotMatch(html, /2347032161983|1023272507453983|process_order\.php/);

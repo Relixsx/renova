@@ -57,7 +57,9 @@ export function validateAnagenOrder(input: unknown) {
     whatsappPhone: phone(fields.whatsappPhone, "WhatsApp number"),
     alternativePhone: phone(fields.alternativePhone, "alternative phone number", true),
     streetAddress: text(fields.streetAddress, "delivery address", 600),
-    cityTown: text(fields.cityTown, "city or town", 100),
+    // The compact form includes town/city in the full address. Continue accepting
+    // the separate value from older open pages so their retry fingerprints match.
+    cityTown: text(fields.cityTown, "city or town", 100, false),
     stateCode, state: state.name, lga: text(fields.lga, "local government area", 100, false),
     availabilityDay, orderSource: ANAGEN.version,
   };

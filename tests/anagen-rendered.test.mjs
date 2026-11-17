@@ -22,17 +22,55 @@ async function nextServer(mode) {
  return {fetch:path=>fetch(`http://127.0.0.1:${port}${path}`,{redirect:'manual',signal:AbortSignal.timeout(10000)}),close:async()=>{child.kill('SIGTERM');if(child.exitCode===null)await once(child,'exit');}};
 }
 
-test('native production Anagen renders the canonical URL, correct prices, order form and local media',async()=>{
+test('native production Gold and Electric Lime pages keep their URLs, shared order form and local media',async()=>{
  const server=await nextServer('off');
  try {
-  const response=await server.fetch('/anagen');assert.equal(response.status,200);
+  for(const [path,theme] of [['/anagen','gold'],['/anagen2','lime']]){
+  const response=await server.fetch(path);assert.equal(response.status,200,path);
   const html=await response.text();
   assert.match(html,/Anagen Hair Reviver/);
-  assert.match(html,/<link(?=[^>]*rel="canonical")(?=[^>]*href="https:\/\/shoprenova\.com\.ng\/anagen")[^>]*>/);
-  for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','Same Day Delivery in State Capitals','1–2 working days'])assert.ok(html.includes(text),text);
+  assert.ok(html.includes(`data-anagen-theme="${theme}"`),`${path}: intended colour variant`);
+  const main=html.match(/<main(?=[^>]*data-anagen-theme=)[^>]*>/)?.[0]||'';
+  if(theme==='lime')assert.match(main,/limeTheme/);else assert.doesNotMatch(main,/limeTheme/);
+  assert.ok(html.includes(`href="${path}"`),`${path}: product wordmark stays on this page`);
+  assert.match(html,/<img(?=[^>]*src="\/anagen\/product-studio\.webp")(?=[^>]*loading="eager")(?=[^>]*fetchPriority="high")[^>]*>/i);
+  const productBytes=(await stat(resolve('public/anagen/product-studio.webp'))).size;
+  assert.ok(productBytes>0 && productBytes<200000,'Hero product image is optimized for mobile');
+  const productPhoto=await server.fetch('/anagen/product-studio.webp');
+  assert.equal(productPhoto.status,200);assert.match(productPhoto.headers.get('content-type'),/image\/webp/);
+  const canonical=html.match(/<link(?=[^>]*rel="canonical")[^>]*href="([^"]+)"[^>]*>/)?.[1];
+  assert.equal(canonical,`https://shoprenova.com.ng${path}`);
+  const productData=[...html.matchAll(/<script type="application\/ld\+json">([^<]+)<\/script>/g)].map(match=>JSON.parse(match[1])).find(value=>value['@type']==='Product');
+  assert.ok(productData,`${path}: product structured data is present`);
+  assert.equal(productData.offers.url,`https://shoprenova.com.ng${path}`);
+  assert.equal(productData.sku,'REN-ANAGEN-10G');
+  for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','TODAY /','24-HOUR DELIVERY','subject to address &amp; dispatch confirmation','1–2 working days'])assert.ok(html.includes(text),text);
+  assert.doesNotMatch(html,/name="(?:alternativePhone|cityTown)"/);
+  assert.match(html,/<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
+  assert.ok(html.includes('id="anagen-illustrations"'));
+  assert.ok(html.includes('AI-generated illustrations, not customer photographs or evidence of Anagen results.'));
+  assert.ok(html.includes('Previous illustration') && html.includes('Next illustration'));
+  assert.equal((html.match(/alt="Before: AI-generated hairline illustration /g)||[]).length,10);
+  assert.equal((html.match(/alt="After: AI-generated hairline illustration /g)||[]).length,10);
+  assert.equal((html.match(/Illustrative example only/g)||[]).length,10);
+  for(let number=1;number<=10;number++){
+   const file=`hair-${String(number).padStart(2,'0')}.webp`;
+   const bytes=(await stat(resolve('public/anagen/illustrations',file))).size;
+   assert.ok(bytes>0 && bytes<250000,`${file}: optimized local image`);
+   assert.ok(html.includes(`/anagen/illustrations/${file}`));
+  }
+  const picture=await server.fetch('/anagen/illustrations/hair-01.webp');
+  assert.equal(picture.status,200);assert.match(picture.headers.get('content-type'),/image\/webp/);
   assert.doesNotMatch(html,/1023272507453983|2347032161983|process_order\.php|shortclicktechnologies|Reply STOP|<video|\/anagen\/[12]\.mp4/);
-  for(const file of ['raw.jpg','anagenraw.jpg','ari.jpg','hair1.jpg','hair2.jpg','hair3.jpg']){
+  for(const file of ['product-studio.webp','anagenraw.jpg','ari.jpg','hair1.jpg','hair2.jpg','hair3.jpg']){
    assert.ok((await stat(resolve('public/anagen',file))).size>0);assert.ok(html.includes('/anagen/'+file));
+  }
+  const cssPaths=[...html.matchAll(/<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+)"[^>]*>/g)].map(match=>match[1]);
+  assert.ok(cssPaths.length>0,`${path}: production stylesheets are linked`);
+  let css='';
+  for(const cssPath of cssPaths){const response=await server.fetch(cssPath);assert.equal(response.status,200);css+=await response.text();}
+  assert.match(css,/--radiant-gold:\s*(?:#ffd700|gold)/i);
+  assert.match(css,/--accent:\s*#7fff00/i);
   }
   for(const path of ['/products/anagen','/offers/anagen']){
    const redirect=await server.fetch(path);assert.ok([307,308].includes(redirect.status),`${path}: ${redirect.status}`);
@@ -48,7 +86,7 @@ test('native production Anagen renders the canonical URL, correct prices, order 
 test('native production maintenance serves a retryable page while health and owner sign-in stay available',async()=>{
  const server=await nextServer('on');
  try {
-  for(const path of ['/','/anagen','/checkout','/api/checkout/place-order','/api/orders/reminders/run','/api/whatsapp/webhook']){
+  for(const path of ['/','/anagen','/anagen2','/checkout','/api/anagen/order','/api/checkout/place-order','/api/orders/reminders/run','/api/whatsapp/webhook']){
    const response=await server.fetch(path);assert.equal(response.status,503,path);assert.equal(response.headers.get('retry-after'),'60');
   }
   assert.equal((await server.fetch('/api/health')).status,200);
