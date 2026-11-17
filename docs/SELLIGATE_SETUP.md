@@ -42,14 +42,14 @@ Render's free web filesystem is not a persistent session store. An ordinary Clou
 Check out feature/selligate-dispatch, with an up-to-date migration/neon-render parent. Preserve any uncommitted owner edits before switching branches.
 
     npm ci --legacy-peer-deps --ignore-scripts
-    npm install --prefix bridge --ignore-scripts
+    npm ci --prefix bridge --ignore-scripts
     npm run check --prefix bridge
     npx tsc --noEmit
     npm test
 
 The existing root lockfile needs legacy-peer-deps because legacy Neon Auth dependencies have conflicting peer requirements. No authentication dependency was upgraded by this feature.
 
-The first bridge install resolves a bridge/package-lock.json. Review and commit that lock after successful validation; then use npm ci --prefix bridge --ignore-scripts for repeatable installs and Docker builds. GitHub validation uploads the generated lock as an artifact. Until a tested lock is committed, do not treat the bridge image as a release.
+The bridge dependency lock is committed. It was generated and used by GitHub validation with whatsapp-web.js 1.34.8 and Puppeteer 24.38.0. Use npm ci --prefix bridge --ignore-scripts for repeatable installs. The final commit must still pass its own validation before release.
 
 Tests use fictional customers and mocked WhatsApp calls. To exercise actual concurrent PostgreSQL transactions, use the isolated CI PostgreSQL 18 service or set SELLIGATE_TEST_DATABASE_URL to a disposable database named selligate_test on localhost. The suite refuses a remote/non-test database. With no test URL it uses PGlite for offline checks.
 

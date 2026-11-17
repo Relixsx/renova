@@ -25,3 +25,16 @@ test('LIVE requires explicit owner confirmation',()=>fixture(async c=>{await c.c
 test('deployment gate independently keeps LIVE locked',()=>fixture(async c=>{await c.configure('TEST');await assert.rejects(c.tx(s=>s.configure(owner,{action:'mode',mode:'LIVE',confirmation:'ENABLE LIVE DISPATCH'})),/LIVE_READINESS/);},{liveAllowed:false,validatedBuild:false}));
 
 test('availability changes after authorisation invalidate final send permission',()=>fixture(async c=>{await c.configure();await c.place();const {job}=await c.api('claim');const a=await c.api('authorize',{jobId:job.id,claimToken:job.claimToken});await c.available(1,[]);assert.equal((await c.api('permit',{jobId:job.id,attemptToken:a.attemptToken})).allowed,false);}));
+
+test('late superseded outcome reports do not block the bridge or repeat sends',()=>fixture(async c=>{
+ await c.configure();await c.place();const {job}=await c.api('claim');const a=await c.api('authorize',{jobId:job.id,claimToken:job.claimToken});
+ await c.api('outcome',{jobId:job.id,attemptToken:a.attemptToken,result:'UNCERTAIN'});
+ await c.tx(s=>s.historyAction(owner,{action:'retry',jobId:job.id,confirmation:'I CHECKED THE GROUP AND NO MESSAGE WAS SENT'}));
+ assert.equal((await c.api('outcome',{jobId:job.id,attemptToken:a.attemptToken,result:'UNCERTAIN'})).superseded,true);
+ assert.equal((await c.jobs())[0].status,'QUEUED');
+ const messageId='true_120363000000002@g.us_LATE12345';
+ await c.api('outcome',{jobId:job.id,attemptToken:a.attemptToken,result:'SENT',messageId});
+ assert.equal((await c.jobs())[0].status,'UNCERTAIN');assert.equal((await c.control()).stopped,true);
+ await c.api('ack',{jobId:job.id,attemptToken:a.attemptToken,messageId,ack:2});
+ assert.equal((await c.jobs())[0].ack,2);assert.equal((await c.api('claim')).job,null);
+}));

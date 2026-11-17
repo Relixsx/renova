@@ -4,8 +4,10 @@
 
 - Connected repository/branch rechecked: migration/neon-render at c1495a29c2ac80a9d76825d4054e4ae89896a715.
 - Source objects were compared with their GitHub blob hashes before implementation.
-- The local coding workspace disconnected during dependency installation. No successful local compile, automated test run, browser inspection, Docker build or real WhatsApp pairing is claimed.
-- The feature includes automated tests and a GitHub validation workflow. The workflow outcome must be checked; test definitions alone do not count as passed.
+- The local coding workspace disconnected during dependency installation. Validation continued in isolated GitHub Actions infrastructure.
+- GitHub run https://github.com/Relixsx/renova/actions/runs/44185761103 passed both TypeScript projects, the dispatch suite on PostgreSQL 18, all existing store regressions, native production build and bridge Docker build at commit a4acbde814ecb948cab9af4572fb77de28f0294e.
+- Additional late-report recovery and delivery-availability checks, the committed dependency lock, offline PGlite run and browser-sandbox smoke test are being validated on the final commit. Check that final run before release.
+- No interactive browser layout review or real WhatsApp pairing is claimed.
 - No production database connection or migration was attempted.
 - No WhatsApp account was linked and no real message was sent.
 - LIVE and bridge enablement default to false/OFF.
@@ -27,7 +29,7 @@ Run npm test:selligate, then the existing npm test suite. The new suite covers:
 
 The existing regression suite also runs its customer confirmations/reminders, Aiven owner-auth/migration, checkout, product/admin source safeguards and production rendered Anagen pages.
 
-GitHub CI uses PostgreSQL 18 with fictional data and disables external WhatsApp operation. It also checks both TypeScript projects and builds the bridge image. Review any dependency-lock artifact and commit the tested lock before release.
+GitHub CI uses PostgreSQL 18 with fictional data and disables external WhatsApp operation. It also checks both TypeScript projects and builds the bridge image. The dependency lock is committed; installations and the Docker build use it.
 
 ## Manual test-group checks — owner action, not yet performed
 

@@ -120,11 +120,39 @@ export class SelligateService {
  async permit(i:Record<string,unknown>){const s=await this.settings(),j=await this.job(i.jobId);if(j.status!=='SENDING'||j.attempt_token!==i.attemptToken||new Date(j.lease_until).getTime()<=Date.now()||!await this.canRun(s,j))return {allowed:false};try{const e=await this.evaluateJob(j),a=(await this.db.query('SELECT body_hash FROM selligate.attempts WHERE token=$1',[j.attempt_token])).rows[0];return {allowed:Boolean(e.message&&a&&digest(e.message)===a.body_hash)};}catch(e){if(e instanceof DispatchError)return {allowed:false};throw e;}}
  async reject(i:Record<string,unknown>){await this.settings();const j=await this.job(i.jobId);if(j.status!=='CLAIMED'||j.claim_token!==i.claimToken)throw new DispatchError('INVALID_CLAIM',409);if(!['GROUP_UNAVAILABLE','WHATSAPP_DISCONNECTED'].includes(String(i.reason)))throw new DispatchError('INVALID_REASON');await this.db.query("UPDATE selligate.jobs SET status='FAILED',reason=$2,updated_at=now() WHERE id=$1",[j.id,i.reason]);return {ok:true};}
  async outcome(i:Record<string,unknown>){
-  await this.settings();const j=await this.job(i.jobId);if(j.attempt_token!==i.attemptToken||!['SENDING','UNCERTAIN','SENT','CANCELLED'].includes(j.status))throw new DispatchError('INVALID_ATTEMPT',409);
-  if(!['SENT','UNCERTAIN','NOT_ATTEMPTED'].includes(String(i.result)))throw new DispatchError('INVALID_OUTCOME');const messageId=typeof i.messageId==='string'&&/^[A-Za-z0-9_@.:-]{5,300}$/.test(i.messageId)?i.messageId:null;
-  if(i.result==='SENT'&&!messageId)throw new DispatchError('MESSAGE_ID_REQUIRED');if(j.status==='SENT'||(j.status==='CANCELLED'&&i.result!=='SENT'))return {ok:true};
+  await this.settings();const j=await this.job(i.jobId);
+  if(!['SENT','UNCERTAIN','NOT_ATTEMPTED'].includes(String(i.result)))throw new DispatchError('INVALID_OUTCOME');
+  const messageId=typeof i.messageId==='string'&&/^[A-Za-z0-9_@.:-]{5,300}$/.test(i.messageId)?i.messageId:null;
+  if(i.result==='SENT'&&!messageId)throw new DispatchError('MESSAGE_ID_REQUIRED');
+  if(j.attempt_token!==i.attemptToken){
+   // A report can arrive after an owner-approved retry. Consume the old report
+   // without resending; a late confirmed message stops all further dispatch.
+   const previous=(await this.db.query('SELECT * FROM selligate.attempts WHERE token=$1 AND job_id=$2',[i.attemptToken,j.id])).rows[0];
+   if(!previous)throw new DispatchError('INVALID_ATTEMPT',409);
+   if(i.result==='SENT'){
+    await this.db.query("UPDATE selligate.attempts SET status='SENT',message_id=$2,finished_at=now() WHERE token=$1",[i.attemptToken,messageId]);
+    await this.halt('bridge','LATE_PRIOR_SEND_REQUIRES_REVIEW');
+    await this.db.query("UPDATE selligate.jobs SET status='UNCERTAIN',message_id=$2,reason='LATE_PRIOR_SEND_REQUIRES_REVIEW',updated_at=now() WHERE id=$1",[j.id,messageId]);
+    await this.audit('bridge','LATE_CONFIRMED_SEND',{jobId:j.id});
+   }else if(previous.status!=='SENT'){
+    await this.db.query("UPDATE selligate.attempts SET status=$2,finished_at=now() WHERE token=$1",[i.attemptToken,i.result==='NOT_ATTEMPTED'?'CANCELLED':'UNCERTAIN']);
+   }
+   return {ok:true,superseded:true};
+  }
+  if(!['SENDING','UNCERTAIN','SENT','CANCELLED'].includes(j.status))throw new DispatchError('INVALID_ATTEMPT',409);
+  if(j.status==='SENT'||(j.status==='CANCELLED'&&i.result!=='SENT'))return {ok:true};
   const status=i.result==='NOT_ATTEMPTED'?'CANCELLED':String(i.result),reason=status==='UNCERTAIN'?'SEND_OUTCOME_AMBIGUOUS_REVIEW_GROUP':status==='CANCELLED'?'SEND_BLOCKED_BEFORE_CALL':null;
-  await this.db.query('UPDATE selligate.jobs SET status=$2,message_id=$3,reason=$4,lease_until=NULL,updated_at=now() WHERE id=$1',[j.id,status,messageId,reason]);await this.db.query('UPDATE selligate.attempts SET status=$2,message_id=$3,reason=$4,finished_at=now() WHERE token=$1',[j.attempt_token,status,messageId,reason]);await this.audit('bridge','SEND_OUTCOME',{jobId:j.id,status});return {ok:true};
+  await this.db.query('UPDATE selligate.jobs SET status=$2,message_id=$3,reason=$4,lease_until=NULL,updated_at=now() WHERE id=$1',[j.id,status,messageId,reason]);
+  await this.db.query('UPDATE selligate.attempts SET status=$2,message_id=$3,reason=$4,finished_at=now() WHERE token=$1',[j.attempt_token,status,messageId,reason]);
+  await this.audit('bridge','SEND_OUTCOME',{jobId:j.id,status});return {ok:true};
  }
- async acknowledge(i:Record<string,unknown>){const ack=Number(i.ack);if(!Number.isInteger(ack)||ack< -1||ack>4||typeof i.messageId!=='string')throw new DispatchError('INVALID_ACK');await this.settings();const j=await this.job(i.jobId);if(j.attempt_token!==i.attemptToken||j.message_id!==i.messageId)throw new DispatchError('UNRECOGNISED_MESSAGE',409);await this.db.query('INSERT INTO selligate.acks(job_id,message_id,ack) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[j.id,j.message_id,ack]);await this.db.query('UPDATE selligate.jobs SET ack=CASE WHEN ack IS NULL THEN $2 ELSE GREATEST(ack,$2) END WHERE id=$1',[j.id,ack]);return {ok:true};}
+ async acknowledge(i:Record<string,unknown>){
+  const ack=Number(i.ack);if(!Number.isInteger(ack)||ack< -1||ack>4||typeof i.messageId!=='string')throw new DispatchError('INVALID_ACK');
+  await this.settings();const j=await this.job(i.jobId);
+  const attempt=(await this.db.query('SELECT token FROM selligate.attempts WHERE token=$1 AND job_id=$2 AND message_id=$3',[i.attemptToken,j.id,i.messageId])).rows[0];
+  if(!attempt)throw new DispatchError('UNRECOGNISED_MESSAGE',409);
+  await this.db.query('INSERT INTO selligate.acks(job_id,message_id,ack) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[j.id,i.messageId,ack]);
+  if(j.message_id===i.messageId)await this.db.query('UPDATE selligate.jobs SET ack=CASE WHEN ack IS NULL THEN $2 ELSE GREATEST(ack,$2) END WHERE id=$1',[j.id,ack]);
+  return {ok:true};
+ }
 }
