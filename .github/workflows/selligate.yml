@@ -1,0 +1,54 @@
+name: Selligate dispatch validation
+on:
+  push:
+    branches: [feature/selligate-dispatch]
+  pull_request:
+    branches: [migration/neon-render]
+permissions:
+  contents: read
+concurrency:
+  group: selligate-dispatch-validation
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: renova_test
+          POSTGRES_PASSWORD: fictional_ci_password
+          POSTGRES_DB: selligate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U renova_test -d selligate_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: ''
+      SELLIGATE_LIVE_ALLOWED: 'false'
+      SELLIGATE_BRIDGE_ENABLED: 'false'
+      SELLIGATE_TEST_DATABASE_URL: postgresql://renova_test:fictional_ci_password@127.0.0.1:5432/selligate_test
+      NEXT_TELEMETRY_DISABLED: '1'
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Resolve bridge dependency lock for validation
+        run: npm install --prefix bridge --ignore-scripts --no-audit --no-fund
+      - run: npm run check --prefix bridge
+      - run: npx tsc --noEmit
+      - name: Dispatch integration and existing store regression suite
+        run: npm test
+      - name: Build isolated bridge image
+        run: docker build -f bridge/Dockerfile -t renova-selligate:test .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selligate-validated-dependency-lock
+          path: bridge/package-lock.json
+          if-no-files-found: warn
