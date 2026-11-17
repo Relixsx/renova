@@ -12,10 +12,11 @@ export async function fixture(work,gates={liveAllowed:true,validatedBuild:true})
  if(url){const parsed=new URL(url);if(!['localhost','127.0.0.1'].includes(parsed.hostname)||parsed.pathname!=='/selligate_test')throw Error('Refusing non-test database.');const {Pool}=await import('pg');pool=new Pool({connectionString:url,max:4});database=pool;}
  else {const {PGlite}=await import('@electric-sql/pglite');database=new PGlite();pool={query:(...a)=>database.query(...a),connect:async()=>({query:(...a)=>database.query(...a),release(){}})};}
  const q=(sql,values=[])=>pool.query(sql,values);
+ const setupSQL=sql=>url?q(sql):database.exec(sql);
  try{
   await q('DROP SCHEMA IF EXISTS selligate CASCADE');await q('DROP TABLE IF EXISTS public.orders CASCADE');await q('DROP TABLE IF EXISTS public.products CASCADE');
-  await q("CREATE TABLE public.products(id serial PRIMARY KEY,slug text UNIQUE NOT NULL,name text NOT NULL,sku text NOT NULL); CREATE TABLE public.orders(id serial PRIMARY KEY,order_number text UNIQUE NOT NULL,customer_name text NOT NULL,customer_phone text NOT NULL,customer_email text DEFAULT '',status text NOT NULL DEFAULT 'payment_pending',payment_status text DEFAULT 'pending',items_json text NOT NULL,address_json text NOT NULL,created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP::text);");
-  await q(await readFile('db/selligate/001-dispatch.sql','utf8'));
+  await setupSQL("CREATE TABLE public.products(id serial PRIMARY KEY,slug text UNIQUE NOT NULL,name text NOT NULL,sku text NOT NULL); CREATE TABLE public.orders(id serial PRIMARY KEY,order_number text UNIQUE NOT NULL,customer_name text NOT NULL,customer_phone text NOT NULL,customer_email text DEFAULT '',status text NOT NULL DEFAULT 'payment_pending',payment_status text DEFAULT 'pending',items_json text NOT NULL,address_json text NOT NULL,created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP::text);");
+  await setupSQL(await readFile('db/selligate/001-dispatch.sql','utf8'));
   await q("INSERT INTO public.products(slug,name,sku) VALUES('anagen','Anagen test product','TEST-ANA'),('book','Fictional book','TEST-BOOK')");
   let queue=Promise.resolve();const perform=async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const v=await fn(new SelligateService(c,gates));await c.query('COMMIT');return v;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}};const tx=fn=>{if(url)return perform(fn);const next=queue.then(()=>perform(fn));queue=next.catch(()=>{});return next;};
   const heartbeat=()=>tx(s=>s.heartbeat({instanceId,status:'CONNECTED',account:'2340000000000',groups:[{id:TEST,name:'Fictional TEST group',canSend:true},{id:PRODUCTION,name:'Fictional production fixture',canSend:true}]}));
