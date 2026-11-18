@@ -110,7 +110,10 @@ git -C "$staging" remote add origin "$REPOSITORY"
 GIT_TERMINAL_PROMPT=0 git -C "$staging" fetch --depth=1 origin "$RELEASE"
 git -C "$staging" checkout --detach --quiet FETCH_HEAD
 [[ $(git -C "$staging" rev-parse HEAD) == "$RELEASE" ]] || die 'The downloaded revision does not match the tested source.'
-[[ -s "$staging/bridge/package-lock.json" && -s "$staging/bridge/Dockerfile" ]] || die 'Required bridge source is missing.'
+[[ -s "$staging/bridge/package.json" && -s "$staging/bridge/package-lock.json" && -s "$staging/bridge/Dockerfile" ]] || die 'Required bridge source is missing.'
+# Docker copies these public manifests as root. Make them readable by the node
+# user in the image while keeping the staging directory and secrets private.
+chmod 0644 "$staging/bridge/package.json" "$staging/bridge/package-lock.json"
 cp "$staging/bridge/env.example" "$staging/bridge/.env"
 chmod 600 "$staging/bridge/.env"
 
