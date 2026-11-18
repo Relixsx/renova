@@ -33,7 +33,6 @@ function ComparisonPhotos({ src, number, crops }: { src: string; number: number;
       </div>)}
     </div>
     <div className={styles.comparisonLabels} aria-hidden="true"><b>BEFORE</b><b>AFTER</b></div>
-    <p className={styles.comparisonNote}>Illustrative example only</p>
   </div>;
 }
 
@@ -83,8 +82,8 @@ export function AnagenIllustrationGallery() {
   return <section className={`${styles.section} ${styles.container} ${styles.illustrationGallery}`} aria-labelledby="illustration-heading">
     <header className={styles.sectionIntro}>
       <p className={styles.eyebrow}>Swipe to explore</p>
-      <h2 id="illustration-heading">Before &amp; after illustrations.</h2>
-      <p id="illustration-disclosure">These 10 images are AI-generated illustrations, not customer photographs or evidence of Anagen results.</p>
+      <h2 id="illustration-heading">Before &amp; after.</h2>
+      <p id="illustration-disclosure">AI-generated examples. Not customer results.</p>
     </header>
     <div className={styles.galleryToolbar}>
       <span aria-live="polite" aria-atomic="true">{position.first === position.last ? `Image ${position.first}` : `Images ${position.first}–${position.last}`} of 10</span>
@@ -93,9 +92,10 @@ export function AnagenIllustrationGallery() {
     <div id="anagen-illustrations" ref={track} className={styles.galleryTrack} role="region" aria-label="10 before-and-after illustrations" aria-describedby="illustration-disclosure gallery-help" tabIndex={0} onScroll={updatePosition} onKeyDown={handleKey}>
       {illustrations.map(({ src, number, crops }) => <figure className={styles.galleryCard} key={src}>
         <ComparisonPhotos src={src} number={number} crops={crops} />
-        <figcaption><span>AI-generated illustration</span><b>{String(number).padStart(2, "0")} / 10</b></figcaption>
+        <figcaption><span>AI-generated example</span><b>{String(number).padStart(2, "0")} / 10</b></figcaption>
       </figure>)}
     </div>
     <p id="gallery-help" className={styles.galleryHelp}>Swipe left or right, use the arrows, or focus the gallery and press the arrow keys.</p>
   </section>;
 }
+

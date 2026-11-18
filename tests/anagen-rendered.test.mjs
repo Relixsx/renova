@@ -48,11 +48,11 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
   assert.doesNotMatch(html,/name="(?:alternativePhone|cityTown)"/);
   assert.match(html,/<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
   assert.ok(html.includes('id="anagen-illustrations"'));
-  assert.ok(html.includes('AI-generated illustrations, not customer photographs or evidence of Anagen results.'));
+  assert.ok(html.includes('AI-generated examples. Not customer results.'));
   assert.ok(html.includes('Previous illustration') && html.includes('Next illustration'));
   assert.equal((html.match(/alt="Before: AI-generated hairline illustration /g)||[]).length,10);
   assert.equal((html.match(/alt="After: AI-generated hairline illustration /g)||[]).length,10);
-  assert.equal((html.match(/Illustrative example only/g)||[]).length,10);
+  assert.equal((html.match(/AI-generated example<\/span>/g)||[]).length,10);
   for(let number=1;number<=10;number++){
    const file=`hair-${String(number).padStart(2,'0')}.webp`;
    const bytes=(await stat(resolve('public/anagen/illustrations',file))).size;
@@ -93,3 +93,4 @@ test('native production maintenance serves a retryable page while health and own
   const login=await server.fetch('/admin/login');assert.equal(login.status,200);assert.match(await login.text(),/Owner sign in|Owner sign-in|Sign in/i);
  }finally{await server.close();}
 });
+
