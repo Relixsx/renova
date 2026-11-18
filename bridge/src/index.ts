@@ -16,7 +16,8 @@ if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname
 const secret=process.env.SELLIGATE_BRIDGE_SECRET||'',key=process.env.SELLIGATE_BRIDGE_KEY_ID||'primary';
 if(secret.length<32||/^REPLACE_/i.test(secret))throw new Error('Configure a strong bridge service secret.');
 const dataDir=resolve(process.env.SELLIGATE_DATA_DIR||'/data');mkdirSync(dataDir,{recursive:true,mode:0o700});chmodSync(dataDir,0o700);
-const releaseLock=await lockfile.lock(dataDir,{realpath:true,stale:30000,update:5000,retries:0});
+// Keep the singleton lock on the writable volume when the container root is read-only.
+const releaseLock=await lockfile.lock(dataDir,{lockfilePath:join(dataDir,'.renova-bridge.lock'),realpath:true,stale:30000,update:5000,retries:0});
 const journal=new Journal(join(dataDir,'dispatch-journal.sqlite'));
 const instanceId=randomUUID();let status='DISCONNECTED',qr:string|null=null,qrAt=0,account:string|null=null,completedCommand:string|null=null,client:InstanceType<typeof Client>|null=null,starting=false,closing=false,lastSuccess=0,lastGroupsAt=0,recoveryRequired=true;
 let groups:Array<{id:string;name:string;canSend:boolean}>=[];
