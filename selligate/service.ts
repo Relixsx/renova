@@ -1,3 +1,4 @@
+import { deliveryAreasForDashboard, ROUTE_REASONS, SELLIGATE_AREAS } from './delivery-areas';
 import {randomUUID} from 'node:crypto';
 import {DispatchError,RELEASE,STATES,evaluate,fictionalOrder,formatMessage,groupId,parseOrder,validateGroups,validateStateCodes,type Mode} from './core';
 import {digest} from './protocol';
@@ -27,7 +28,7 @@ export class SelligateService {
   const products=(await this.db.query("SELECT p.id,p.slug,p.name,p.sku,COALESCE(a.states,'{}') AS states,a.updated_at,a.updated_by FROM public.products p LEFT JOIN selligate.availability a ON p.id=a.product_id ORDER BY p.name")).rows;
   const history=(await this.db.query('SELECT id,order_number,mode,status,destination,decisions,state_code,partial,reason,attempts,message_id,ack,created_at,updated_at FROM selligate.jobs ORDER BY created_at DESC LIMIT 100')).rows;
   const audit=(await this.db.query('SELECT action,actor,details,created_at FROM selligate.audit ORDER BY id DESC LIMIT 20')).rows;
-  return {settings,products,history,audit,states:STATES,release:RELEASE,connection:{status:c.fresh?c.status:'DISCONNECTED',account:c.account,heartbeatAt:c.heartbeat_at,groups:c.fresh?c.groups:[],qr:c.qr_expires_at&&new Date(c.qr_expires_at).getTime()>Date.now()?c.qr_data:null,qrExpiresAt:c.qr_expires_at,command:c.command},readiness:{connected:c.fresh&&c.status==='CONNECTED',productionGroup:this.groupReady(c,settings.production_group),rulesConfigured:products.some(p=>p.states.length>0),validatedBuild:this.gates.validatedBuild,liveAllowed:this.gates.liveAllowed,ownerApproved:Boolean(settings.live_approved_at)}};
+  return {settings,products,history,audit,states:STATES,deliveryAreas:deliveryAreasForDashboard(),release:RELEASE,connection:{status:c.fresh?c.status:'DISCONNECTED',account:c.account,heartbeatAt:c.heartbeat_at,groups:c.fresh?c.groups:[],qr:c.qr_expires_at&&new Date(c.qr_expires_at).getTime()>Date.now()?c.qr_data:null,qrExpiresAt:c.qr_expires_at,command:c.command},readiness:{connected:c.fresh&&c.status==='CONNECTED',productionGroup:this.groupReady(c,settings.production_group),rulesConfigured:products.some(p=>(p.states as string[]).some(code=>Object.hasOwn(SELLIGATE_AREAS,code))),validatedBuild:this.gates.validatedBuild,liveAllowed:this.gates.liveAllowed,ownerApproved:Boolean(settings.live_approved_at)}};
  }
  async configure(actor:string,i:Record<string,unknown>){
   const s=await this.settings();
@@ -35,7 +36,7 @@ export class SelligateService {
   if(i.action==='mode'){
    const mode=i.mode as Mode;if(!['OFF','TEST','LIVE'].includes(mode))throw new DispatchError('INVALID_MODE');
    if(mode==='LIVE'){
-    if(!this.gates.liveAllowed||!this.gates.validatedBuild||!this.groupReady(await this.connection(),s.production_group)||!Object.values(await this.rules()).some(v=>v.length))throw new DispatchError('LIVE_READINESS_INCOMPLETE',409);
+    if(!this.gates.liveAllowed||!this.gates.validatedBuild||!this.groupReady(await this.connection(),s.production_group)||!Object.values(await this.rules()).some(v=>v.some(code=>Object.hasOwn(SELLIGATE_AREAS,code))))throw new DispatchError('LIVE_READINESS_INCOMPLETE',409);
     if(i.confirmation!=='ENABLE LIVE DISPATCH')throw new DispatchError('OWNER_CONFIRMATION_REQUIRED');
    }
    await this.halt(actor,'MODE_CHANGED');await this.db.query("UPDATE selligate.settings SET mode=$1,stopped=$2,live_approved_at=CASE WHEN $1='LIVE' THEN now() ELSE NULL END,live_approved_by=CASE WHEN $1='LIVE' THEN $3 ELSE NULL END WHERE id=1",[mode,mode==='OFF',actor]);await this.audit(actor,'MODE_CHANGED',{from:s.mode,to:mode});return {ok:true};
@@ -64,8 +65,9 @@ export class SelligateService {
  }
  async simulation(actor:string,i:Record<string,unknown>){
   const s=await this.settings();const p=(await this.db.query('SELECT slug,name FROM public.products WHERE id=$1',[Number(i.productId)])).rows[0];if(!p)throw new DispatchError('PRODUCT_NOT_FOUND',404);
-  const fixture=fictionalOrder(p as {slug:string;name:string},String(i.state),Number(i.quantity),`TEST-${randomUUID().slice(0,8).toUpperCase()}`),order=parseOrder(fixture),result=evaluate(order,await this.rules());
-  const message=result.eligible.length?formatMessage(order,result,'TEST'):'No dispatch: this product is unavailable in the selected state.';
+  const fixture=fictionalOrder(p as {slug:string;name:string},String(i.state),Number(i.quantity),`TEST-${randomUUID().slice(0,8).toUpperCase()}`,i.lga),order=parseOrder(fixture),result=evaluate(order,await this.rules());
+  const reason=result.area.reason??result.decisions[0]?.reason??'UNAVAILABLE_IN_STATE';
+  const message=result.eligible.length?formatMessage(order,result,'TEST'):`No dispatch: ${ROUTE_REASONS[reason]}`;
   if(i.action==='sendTest'){
    if(s.mode!=='TEST'||s.stopped||!this.groupReady(await this.connection(),s.test_group))throw new DispatchError('TEST_MODE_AND_TEST_GROUP_REQUIRED',409);
    if(i.confirmation!=='SEND FICTIONAL TEST')throw new DispatchError('EXPLICIT_TEST_REQUEST_REQUIRED');if(!result.eligible.length)throw new DispatchError('NOT_ELIGIBLE');
@@ -111,11 +113,11 @@ export class SelligateService {
   const s=await this.settings();await this.expire();if(!await this.canRun(s))return {job:null};
   const j=(await this.db.query("SELECT * FROM selligate.jobs WHERE status='QUEUED' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED")).rows[0];if(!j)return {job:null};
   if(!await this.canRun(s,j)){await this.db.query("UPDATE selligate.jobs SET status='CANCELLED',reason='STALE_MODE_OR_DESTINATION',updated_at=now() WHERE id=$1",[j.id]);return {job:null};}
-  try{const e=await this.evaluateJob(j);if(!e.message){await this.db.query("UPDATE selligate.jobs SET status='SKIPPED',reason='NO_ELIGIBLE_ITEMS',updated_at=now() WHERE id=$1",[j.id]);return {job:null};}const token=randomUUID();await this.db.query("UPDATE selligate.jobs SET status='CLAIMED',claim_token=$2,lease_until=now()+interval '45 seconds',updated_at=now() WHERE id=$1",[j.id,token]);return {job:{id:j.id,mode:j.mode,destination:j.destination,claimToken:token,generation:j.generation}};}catch(e){if(!(e instanceof DispatchError))throw e;await this.fail(j.id,e);return {job:null};}
+  try{const e=await this.evaluateJob(j);if(!e.message){await this.db.query("UPDATE selligate.jobs SET status='SKIPPED',reason=$2,updated_at=now() WHERE id=$1",[j.id,e.result.area.reason??'NO_ELIGIBLE_ITEMS']);return {job:null};}const token=randomUUID();await this.db.query("UPDATE selligate.jobs SET status='CLAIMED',claim_token=$2,lease_until=now()+interval '45 seconds',updated_at=now() WHERE id=$1",[j.id,token]);return {job:{id:j.id,mode:j.mode,destination:j.destination,claimToken:token,generation:j.generation}};}catch(e){if(!(e instanceof DispatchError))throw e;await this.fail(j.id,e);return {job:null};}
  }
  async authorize(i:Record<string,unknown>){
   const s=await this.settings(),j=await this.job(i.jobId);if(j.status!=='CLAIMED'||j.claim_token!==i.claimToken||new Date(j.lease_until).getTime()<=Date.now()||!await this.canRun(s,j))throw new DispatchError('SEND_NOT_AUTHORISED',409);
-  try{const e=await this.evaluateJob(j);if(!e.message){await this.db.query("UPDATE selligate.jobs SET status='SKIPPED',reason='NO_ELIGIBLE_ITEMS',updated_at=now() WHERE id=$1",[j.id]);return {allowed:false};}const token=randomUUID(),bodyHash=digest(e.message);await this.db.query("INSERT INTO selligate.attempts(token,job_id,number,status,body_hash) VALUES($1,$2,$3,'SENDING',$4)",[token,j.id,j.attempts+1,bodyHash]);await this.db.query("UPDATE selligate.jobs SET status='SENDING',attempt_token=$2,attempts=attempts+1,lease_until=now()+interval '2 minutes',updated_at=now() WHERE id=$1",[j.id,token]);return {allowed:true,attemptToken:token,destination:j.destination,message:e.message,bodyHash,mode:j.mode,generation:j.generation};}catch(e){if(!(e instanceof DispatchError))throw e;await this.fail(j.id,e);return {allowed:false};}
+  try{const e=await this.evaluateJob(j);if(!e.message){await this.db.query("UPDATE selligate.jobs SET status='SKIPPED',reason=$2,updated_at=now() WHERE id=$1",[j.id,e.result.area.reason??'NO_ELIGIBLE_ITEMS']);return {allowed:false};}const token=randomUUID(),bodyHash=digest(e.message);await this.db.query("INSERT INTO selligate.attempts(token,job_id,number,status,body_hash) VALUES($1,$2,$3,'SENDING',$4)",[token,j.id,j.attempts+1,bodyHash]);await this.db.query("UPDATE selligate.jobs SET status='SENDING',attempt_token=$2,attempts=attempts+1,lease_until=now()+interval '2 minutes',updated_at=now() WHERE id=$1",[j.id,token]);return {allowed:true,attemptToken:token,destination:j.destination,message:e.message,bodyHash,mode:j.mode,generation:j.generation};}catch(e){if(!(e instanceof DispatchError))throw e;await this.fail(j.id,e);return {allowed:false};}
  }
  async permit(i:Record<string,unknown>){const s=await this.settings(),j=await this.job(i.jobId);if(j.status!=='SENDING'||j.attempt_token!==i.attemptToken||new Date(j.lease_until).getTime()<=Date.now()||!await this.canRun(s,j))return {allowed:false};try{const e=await this.evaluateJob(j),a=(await this.db.query('SELECT body_hash FROM selligate.attempts WHERE token=$1',[j.attempt_token])).rows[0];return {allowed:Boolean(e.message&&a&&digest(e.message)===a.body_hash)};}catch(e){if(e instanceof DispatchError)return {allowed:false};throw e;}}
  async reject(i:Record<string,unknown>){await this.settings();const j=await this.job(i.jobId);if(j.status!=='CLAIMED'||j.claim_token!==i.claimToken)throw new DispatchError('INVALID_CLAIM',409);if(!['GROUP_UNAVAILABLE','WHATSAPP_DISCONNECTED'].includes(String(i.reason)))throw new DispatchError('INVALID_REASON');await this.db.query("UPDATE selligate.jobs SET status='FAILED',reason=$2,updated_at=now() WHERE id=$1",[j.id,i.reason]);return {ok:true};}

@@ -11,9 +11,9 @@ test('current availability is rechecked immediately before send authorisation',(
 test('parallel workers never claim one job twice',()=>fixture(async c=>{await c.configure();await c.place();const [a,b]=await Promise.all([c.api('claim'),c.api('claim')]);assert.equal([a,b].filter(x=>x.job).length,1);}));
 test('emergency STOP cancels queued jobs and revokes permission for authorised sends',()=>fixture(async c=>{await c.configure();await c.place();const {job}=await c.api('claim');const a=await c.api('authorize',{jobId:job.id,claimToken:job.claimToken});await c.tx(s=>s.configure(owner,{action:'stop'}));assert.equal((await c.api('permit',{jobId:job.id,attemptToken:a.attemptToken})).allowed,false);await c.place();assert.equal((await c.jobs()).length,1);}));
 test('LIVE to OFF prevents new jobs and preserves history',()=>fixture(async c=>{await c.configure();await c.place();await c.tx(s=>s.configure(owner,{action:'mode',mode:'OFF'}));await c.place();const jobs=await c.jobs();assert.equal(jobs.length,1);assert.equal(jobs[0].status,'CANCELLED');}));
-test('TEST cannot queue customer orders and needs explicit fictional-send approval',()=>fixture(async c=>{await c.configure('TEST');await c.place();assert.equal((await c.jobs()).length,0);await assert.rejects(c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',quantity:1})),/EXPLICIT_TEST_REQUEST/);const v=await c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',quantity:1,confirmation:'SEND FICTIONAL TEST'}));assert.equal(v.dryRun,false);assert.equal((await c.jobs())[0].destination,TEST);}));
-test('TEST jobs never become LIVE jobs after mode changes',()=>fixture(async c=>{await c.configure('TEST');await c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',quantity:1,confirmation:'SEND FICTIONAL TEST'}));await c.tx(s=>s.configure(owner,{action:'mode',mode:'LIVE',confirmation:'ENABLE LIVE DISPATCH'}));const j=(await c.jobs())[0];assert.equal(j.mode,'TEST');assert.equal(j.destination,TEST);assert.equal(j.status,'CANCELLED');assert.equal((await c.api('claim')).job,null);}));
-test('dry run works while OFF and creates neither orders nor jobs',()=>fixture(async c=>{await c.available();const v=await c.tx(s=>s.simulation(owner,{action:'simulate',productId:1,state:'LA',quantity:2}));assert.equal(v.dryRun,true);assert.equal(v.result.eligible.length,1);assert.equal((await c.jobs()).length,0);assert.equal((await c.q('SELECT count(*)::int n FROM public.orders')).rows[0].n,0);}));
+test('TEST cannot queue customer orders and needs explicit fictional-send approval',()=>fixture(async c=>{await c.configure('TEST');await c.place();assert.equal((await c.jobs()).length,0);await assert.rejects(c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',lga:'Ikeja',quantity:1})),/EXPLICIT_TEST_REQUEST/);const v=await c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',lga:'Ikeja',quantity:1,confirmation:'SEND FICTIONAL TEST'}));assert.equal(v.dryRun,false);assert.equal((await c.jobs())[0].destination,TEST);}));
+test('TEST jobs never become LIVE jobs after mode changes',()=>fixture(async c=>{await c.configure('TEST');await c.tx(s=>s.simulation(owner,{action:'sendTest',productId:1,state:'LA',lga:'Ikeja',quantity:1,confirmation:'SEND FICTIONAL TEST'}));await c.tx(s=>s.configure(owner,{action:'mode',mode:'LIVE',confirmation:'ENABLE LIVE DISPATCH'}));const j=(await c.jobs())[0];assert.equal(j.mode,'TEST');assert.equal(j.destination,TEST);assert.equal(j.status,'CANCELLED');assert.equal((await c.api('claim')).job,null);}));
+test('dry run works while OFF and creates neither orders nor jobs',()=>fixture(async c=>{await c.available();const v=await c.tx(s=>s.simulation(owner,{action:'simulate',productId:1,state:'LA',lga:'Ikeja',quantity:2}));assert.equal(v.dryRun,true);assert.equal(v.result.eligible.length,1);assert.equal((await c.jobs()).length,0);assert.equal((await c.q('SELECT count(*)::int n FROM public.orders')).rows[0].n,0);}));
 test('equal test and production group selections are rejected',()=>fixture(async c=>{await c.heartbeat();await assert.rejects(c.tx(s=>s.configure(owner,{action:'groups',testGroup:TEST,productionGroup:TEST})),/GROUPS_MUST_DIFFER/);}));
 test('unrecognised, inaccessible and stale group configurations fail safely',()=>fixture(async c=>{await c.heartbeat();await assert.rejects(c.tx(s=>s.configure(owner,{action:'groups',testGroup:'120363000009999@g.us'})),/GROUP_NOT_VALIDATED/);await c.q("UPDATE selligate.connection SET groups_at=now()-interval '1 minute'");await assert.rejects(c.tx(s=>s.configure(owner,{action:'groups',testGroup:TEST})),/GROUP_NOT_VALIDATED/);}));
 test('disconnection stops sending and reconnect cancels backlog until owner resume',()=>fixture(async c=>{await c.configure();await c.place();await c.tx(s=>s.heartbeat({instanceId,status:'DISCONNECTED',groups:[]}));assert.equal((await c.api('claim')).job,null);await c.heartbeat();const d=await c.tx(s=>s.dashboard());assert.equal(d.settings.stopped,true);assert.equal((await c.jobs())[0].status,'CANCELLED');}));
@@ -37,4 +37,36 @@ test('late superseded outcome reports do not block the bridge or repeat sends',(
  assert.equal((await c.jobs())[0].status,'UNCERTAIN');assert.equal((await c.control()).stopped,true);
  await c.api('ack',{jobId:job.id,attemptToken:a.attemptToken,messageId,ack:2});
  assert.equal((await c.jobs())[0].ack,2);assert.equal((await c.api('claim')).job,null);
+}));
+
+test('Oye is skipped without deleting the order, and a correction to Oye revokes the final send',()=>fixture(async c=>{
+ await c.configure();
+ await c.available(1,['EK']);
+ const oye=await c.place({state:'EK',lga:'',streetAddress:'Fictional road, Oye-Ekiti, Ekiti State'});
+ assert.equal((await c.api('claim')).job,null);
+ const rejected=(await c.jobs())[0];
+ assert.equal(rejected.status,'SKIPPED');
+ assert.equal(rejected.reason,'SELLIGATE_LGA_NOT_COVERED');
+ assert.equal((await c.q('SELECT count(*)::int AS count FROM public.orders WHERE id=$1',[oye.id])).rows[0].count,1);
+ const ado=await c.place({state:'EK',lga:'Ado Ekiti'});
+ const {job}=await c.api('claim');
+ assert.ok(job);
+ const allowed=await c.api('authorize',{jobId:job.id,claimToken:job.claimToken});
+ assert.equal(allowed.allowed,true);
+ assert.match(allowed.message,/LGA: Ado Ekiti/);
+ assert.equal((await c.api('permit',{jobId:job.id,attemptToken:allowed.attemptToken})).allowed,true);
+ await c.q('UPDATE public.orders SET address_json=$2 WHERE id=$1',[ado.id,JSON.stringify({stateCode:'EK',lga:'Oye',streetAddress:'Fictional street, Oye Ekiti'})]);
+ assert.equal((await c.api('permit',{jobId:job.id,attemptToken:allowed.attemptToken})).allowed,false);
+}));
+
+test('OFF preview compares Ado Ekiti and Oye without queueing a message',()=>fixture(async c=>{
+ await c.available(1,['EK']);
+ const preview=lga=>c.tx(s=>s.simulation(owner,{action:'simulate',productId:1,state:'EK',lga,quantity:1}));
+ const a=await preview('Ado Ekiti'),b=await preview('Oye');
+ assert.equal(a.dryRun,true);
+ assert.match(a.message,/TEST ONLY[\s\S]*LGA: Ado Ekiti/);
+ assert.equal(b.result.area.reason,'SELLIGATE_LGA_NOT_COVERED');
+ assert.match(b.message,/No dispatch:.*outside/);
+ assert.equal((await c.jobs()).length,0);
+ assert.equal((await c.q('SELECT count(*)::int AS count FROM public.orders')).rows[0].count,0);
 }));

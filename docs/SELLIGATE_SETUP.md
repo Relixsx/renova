@@ -19,7 +19,7 @@ After deployment and migration, open /admin/selligate from the existing owner co
 
 1. OFF: no sending jobs from customer orders, no sends. Offline simulations still work.
 2. TEST: only a fictional test explicitly requested by the owner can enter the TEST queue. Actual sending is to the selected test group only.
-3. LIVE: only new placed-order events enter the LIVE queue. Every item must be available in its own product configuration for the customer's delivery state.
+3. LIVE: only new placed-order events enter the LIVE queue. Every item must be available in its product configuration for the delivery state, and the order must match an identifiable, covered LGA. See [delivery areas](SELLIGATE_DELIVERY_AREAS.md).
 4. STOP: cancels queued/claimed jobs and blocks send permission. An already-initiated external send cannot be recalled.
 5. Reconnect: requires the owner to resume new dispatches. Cancelled backlog is never automatically replayed.
 
@@ -87,7 +87,7 @@ Keep existing database, authentication, payment and customer-notification variab
 | --- | --- |
 | SELLIGATE_BRIDGE_KEYS | Private JSON key map, e.g. {"primary":"YOUR_PRIVATE_RANDOM_SECRET"} |
 | SELLIGATE_LIVE_ALLOWED | false during setup and fictional tests |
-| SELLIGATE_VALIDATED_BUILD | Leave empty until the automated suite has passed; then selligate-v1 |
+| SELLIGATE_VALIDATED_BUILD | Leave empty until the automated suite has passed; then selligate-v2 |
 
 Generate a long random bridge secret privately, for example with openssl rand -hex 32. The same value goes into the bridge environment. It must never be put in browser JavaScript.
 
@@ -150,7 +150,7 @@ If group permissions or membership change, dispatch fails safely. No fallback gr
 ## 8. Fictional testing
 
 1. Leave SELLIGATE_LIVE_ALLOWED=false.
-2. Preview an available-state and unavailable-state simulation while OFF.
+2. Preview an eligible LGA and an excluded LGA while OFF. With Ekiti stock configured, use Ado Ekiti and Oye for the same product; only Ado Ekiti should qualify.
 3. Select TEST and verify the test group destination.
 4. Resume new dispatches if stopped.
 5. Click “Send fictional test only” and confirm.
@@ -164,7 +164,7 @@ Do not insert artificial orders into the production orders table. The test labor
 
 This step is not authorised or performed by the implementation.
 
-After successful automated and real test-group verification, the owner may set SELLIGATE_VALIDATED_BUILD=selligate-v1 and SELLIGATE_LIVE_ALLOWED=true on the tested Renova release. In the authenticated owner console, select LIVE and type ENABLE LIVE DISPATCH. Verify the production group and product coverage first.
+After successful automated and real test-group verification, the owner may set SELLIGATE_VALIDATED_BUILD=selligate-v2 and SELLIGATE_LIVE_ALLOWED=true on the tested Renova release. In the authenticated owner console, select LIVE and type ENABLE LIVE DISPATCH. Verify the production group and product coverage first.
 
 This enables only future placed-order events. It does not replay orders received while OFF or stopped. Owner approval is audited. Changing the destination clears prior LIVE approval and activates STOP.
 

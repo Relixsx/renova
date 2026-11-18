@@ -1,5 +1,6 @@
 import { getAllStates } from "ng-geo-data";
-export const RELEASE = "selligate-v1";
+import { checkDeliveryArea, ROUTE_REASONS } from './delivery-areas';
+export const RELEASE = "selligate-v2";
 export const STATES = getAllStates().map(({code,name}) => ({code,name}));
 export type Mode = "OFF" | "TEST" | "LIVE";
 export class DispatchError extends Error { constructor(public code:string,public status=400){super(code);} }
@@ -13,7 +14,7 @@ export function deliveryState(a:Record<string,unknown>){const v=a.stateCode??a.s
 export function validateStateCodes(v:unknown):string[]{if(!Array.isArray(v)||v.length>37||v.some(c=>!STATES.some(s=>s.code===c)))throw new DispatchError('INVALID_STATE_CODES');return [...new Set(v as string[])].sort();}
 export type Item={slug:string;name:string;variant:string;quantity:number;packQuantity?:number};
 export type Order={number:string;customer:string;phone:string;date:string;address:Record<string,unknown>;items:Item[]};
-export type Decision={index:number;slug:string;name:string;quantity:number;eligible:boolean;reason:string};
+export type Decision={index:number;slug:string;name:string;quantity:number;eligible:boolean;reason:keyof typeof ROUTE_REASONS};
 function text(v:unknown,max:number,required=false):string {if(typeof v!=='string'||v.length>max||(required&&!v.trim())){if(!required&&v==null)return '';throw new DispatchError('MALFORMED_ORDER');}return v.replace(/[\u0000-\u001f\u007f*_~`@]/g,' ').replace(/\s+/g,' ').trim();}
 export function parseOrder(r:Record<string,unknown>):Order {
  const address=object(r.address_json??r.addressJson);let items=r.items_json??r.itemsJson;
@@ -22,14 +23,27 @@ export function parseOrder(r:Record<string,unknown>):Order {
  return {number:text(r.order_number??r.orderNumber,100,true),customer:text(r.customer_name??r.customerName,150,true),phone:text(r.customer_phone??r.customerPhone,32,true),date:text(String(r.created_at??r.createdAt??''),100,true),address,
  items:items.map(v=>{const i=object(v);if(!Number.isSafeInteger(i.quantity)||Number(i.quantity)<1||Number(i.quantity)>1000)throw new DispatchError('MALFORMED_ORDER');if(i.packQuantity!=null&&(!Number.isSafeInteger(i.packQuantity)||Number(i.packQuantity)<1||Number(i.packQuantity)>1000))throw new DispatchError('MALFORMED_ORDER');return {slug:text(i.slug,180,true),name:text(i.name,240,true),variant:text(i.variant,200),quantity:Number(i.quantity),...(i.packQuantity?{packQuantity:Number(i.packQuantity)}:{})};})};
 }
-export function evaluate(o:Order,rules:Record<string,string[]>){const state=deliveryState(o.address);const decisions:Decision[]=o.items.map((i,index)=>{const available=rules[i.slug];const eligible=Boolean(state&&available?.includes(state));return {index,slug:i.slug,name:i.name,quantity:i.quantity,eligible,reason:!state?'INVALID_DELIVERY_STATE':!available?.length?'NO_AVAILABILITY_CONFIGURATION':eligible?'AVAILABLE_IN_STATE':'UNAVAILABLE_IN_STATE'};});const eligible=o.items.filter((_,i)=>decisions[i].eligible);return {state,decisions,eligible,partial:eligible.length>0&&eligible.length<o.items.length};}
+export function evaluate(o:Order,rules:Record<string,string[]>) {
+ const state=deliveryState(o.address);
+ const conflictingState=state!==null&&[o.address.stateCode,o.address.state_code,o.address.state,o.address.stateName].some(value=>{
+  const other=deliveryState({state:value});return other!==null&&other!==state;
+ });
+ const area=checkDeliveryArea(state,o.address,conflictingState);
+ const decisions:Decision[]=o.items.map((i,index)=>{
+  const available=rules[i.slug];
+  const eligible=Boolean(!area.reason&&state&&Array.isArray(available)&&available.includes(state));
+  return {index,slug:i.slug,name:i.name,quantity:i.quantity,eligible,reason:area.reason??(!Array.isArray(available)||!available.length?'NO_AVAILABILITY_CONFIGURATION':eligible?'AVAILABLE_IN_COVERED_LGA':'UNAVAILABLE_IN_STATE')};
+ });
+ const eligible=o.items.filter((_,i)=>decisions[i].eligible);
+ return {state,area,decisions,eligible,partial:eligible.length>0&&eligible.length<o.items.length};
+}
 export function formatMessage(o:Order,r:ReturnType<typeof evaluate>,mode:Mode){
  if(mode==='OFF'||!r.eligible.length||!r.state)throw new DispatchError('NOT_ELIGIBLE');const a=o.address;
- const extra=[['LGA',a.lga??a.localGovernment],['City / town',a.cityTown??a.town],['Landmark',a.landmark],['Delivery instructions',a.deliveryInstructions??a.instructions??a.deliveryNote],['Availability',a.availabilityDay??a.deliveryAvailability??a.availability??a.receiveWhen]].flatMap(([k,v])=>v?[`${k}: ${text(v,600)}`]:[]);
+ const extra=[['LGA',r.area.lga],['City / town',a.cityTown??a.town],['Landmark',a.landmark],['Delivery instructions',a.deliveryInstructions??a.instructions??a.deliveryNote],['Availability',a.availabilityDay??a.deliveryAvailability??a.availability??a.receiveWhen]].flatMap(([k,v])=>v?[`${k}: ${text(v,600)}`]:[]);
  const body=[mode==='TEST'?'*TEST ONLY — FICTIONAL ORDER*':'*NEW RENOVA FULFILMENT ORDER*',...(r.partial?['*PARTIAL FULFILMENT REQUEST — eligible items only*']:[]),`Dispatch reference: ${o.number}`,`Customer: ${o.customer}`,`Delivery phone: ${o.phone}`,'',...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name}`,`Variant: ${i.variant||'Standard'}`,`Quantity: ${i.quantity}${i.packQuantity?` bundle(s); ${i.packQuantity} packs per bundle`:''}`,'']),`Delivery State: ${STATES.find(s=>s.code===r.state)?.name} (${r.state})`,...extra,`Delivery Address: ${text(a.streetAddress??a.address,800,true)}`,`Order Date: ${o.date}`,'Source: Renova Store','','*Action Required: Selligate Fulfilment*'].join('\n');
  // One actionable request; oversized messages require manual review, never truncation.
  if(body.length>7000)throw new DispatchError('MESSAGE_TOO_LONG_MANUAL_REVIEW');return body;
 }
 export function groupId(v:unknown):string{if(typeof v!=='string'||!/^\d{5,25}(?:-\d{5,20})?@g\.us$/.test(v))throw new DispatchError('INVALID_GROUP_ID');return v;}
 export function validateGroups(t:string|null,p:string|null){if(t)groupId(t);if(p)groupId(p);if(t&&t===p)throw new DispatchError('GROUPS_MUST_DIFFER');}
-export function fictionalOrder(p:{slug:string;name:string},state:string,quantity:number,number='TEST-PREVIEW'){if(!STATES.some(s=>s.code===state)||!Number.isSafeInteger(quantity)||quantity<1||quantity>10)throw new DispatchError('INVALID_SIMULATION');return {order_number:number,customer_name:'Fictional Renova Test Customer',customer_phone:'+2340000000000',created_at:new Date().toISOString(),address_json:{stateCode:state,streetAddress:'TEST ONLY — fictional address; do not deliver',cityTown:'Fictional town',lga:'Test area'},items_json:[{slug:p.slug,name:p.name,quantity,variant:'TEST — Standard'}]};}
+export function fictionalOrder(p:{slug:string;name:string},state:string,quantity:number,number='TEST-PREVIEW',lga?:unknown){if(!STATES.some(s=>s.code===state)||!Number.isSafeInteger(quantity)||quantity<1||quantity>10||(lga!=null&&(typeof lga!=='string'||lga.length>140)))throw new DispatchError('INVALID_SIMULATION');return {order_number:number,customer_name:'Fictional Renova Test Customer',customer_phone:'+2340000000000',created_at:new Date().toISOString(),address_json:{stateCode:state,streetAddress:'TEST ONLY — fictional address; do not deliver',cityTown:'Fictional town',lga},items_json:[{slug:p.slug,name:p.name,quantity,variant:'TEST — Standard'}]};}

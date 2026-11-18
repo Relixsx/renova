@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 const root=process.cwd();await mkdir(join(root,'node_modules/.cache'),{recursive:true});
 const output=await mkdtemp(join(root,'node_modules/.cache/selligate-'));
 try{
- await build({entryPoints:{core:'selligate/core.ts',service:'selligate/service.ts',protocol:'selligate/protocol.ts',runner:'bridge/src/runner.ts',journal:'bridge/src/journal.ts'},bundle:true,platform:'node',format:'esm',packages:'external',outdir:output,outExtension:{'.js':'.mjs'},logLevel:'warning'});
+ await build({entryPoints:{core:'selligate/core.ts',areas:'selligate/delivery-areas.ts',service:'selligate/service.ts',protocol:'selligate/protocol.ts',runner:'bridge/src/runner.ts',journal:'bridge/src/journal.ts'},bundle:true,platform:'node',format:'esm',packages:'external',outdir:output,outExtension:{'.js':'.mjs'},logLevel:'warning'});
  await build({entryPoints:{admin:'app/api/selligate/admin/route.ts',bridge:'app/api/selligate/bridge/route.ts'},bundle:true,platform:'node',format:'esm',packages:'external',outdir:output,outExtension:{'.js':'.mjs'},logLevel:'warning',plugins:[{name:'isolated-owner-and-database',setup(b){
   b.onResolve({filter:/admin-auth$/},()=>({path:'owner',namespace:'fixtures'}));
   b.onResolve({filter:/^(?:\.\.\/)+db$/},()=>({path:'db',namespace:'fixtures'}));

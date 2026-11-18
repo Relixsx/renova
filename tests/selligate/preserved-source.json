@@ -6,6 +6,7 @@
   "app/api/paystack/webhook/route.ts": "2e0a60f9a024bacb8dfe3d7979d7152e1ecadb1f",
   "app/lib/customer-reminders.ts": "4cdf117969068f0fa6f4cd10f1332f1fedab8d40",
   "app/lib/order-payment.ts": "2cfc89756ca43a950060cb6128d72df508d8aa44",
+  "app/lib/owner-order-email.mjs": "0c0b698f5f08fd106841ebbc5a29362983883a9d",
   "app/lib/reminder-message-content.ts": "73fb2a0c849cb80349ba6b3daa9a36852424e325",
   "app/lib/reminder-message-settings.ts": "8342094f04f26b0fda7aac9fdafed958458cf901",
   "app/lib/reminder-status.ts": "9d7a73fa441bde21cea81bbe48b5170f0bd1afeb",
