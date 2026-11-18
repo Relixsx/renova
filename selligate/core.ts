@@ -13,14 +13,16 @@ export function canonicalState(v:unknown):string|null {
 export function deliveryState(a:Record<string,unknown>){const v=a.stateCode??a.state_code??a.state??a.stateName;return canonicalState(v&&typeof v==='object'?(v as Record<string,unknown>).code??(v as Record<string,unknown>).name:v);}
 export function validateStateCodes(v:unknown):string[]{if(!Array.isArray(v)||v.length>37||v.some(c=>!STATES.some(s=>s.code===c)))throw new DispatchError('INVALID_STATE_CODES');return [...new Set(v as string[])].sort();}
 export type Item={slug:string;name:string;variant:string;quantity:number;packQuantity?:number};
-export type Order={number:string;customer:string;phone:string;date:string;address:Record<string,unknown>;items:Item[]};
+export type Order={number:string;customer:string;phone:string;whatsappPhone:string;date:string;address:Record<string,unknown>;items:Item[]};
 export type Decision={index:number;slug:string;name:string;quantity:number;eligible:boolean;reason:keyof typeof ROUTE_REASONS};
 function text(v:unknown,max:number,required=false):string {if(typeof v!=='string'||v.length>max||(required&&!v.trim())){if(!required&&v==null)return '';throw new DispatchError('MALFORMED_ORDER');}return v.replace(/[\u0000-\u001f\u007f*_~`@]/g,' ').replace(/\s+/g,' ').trim();}
 export function parseOrder(r:Record<string,unknown>):Order {
  const address=object(r.address_json??r.addressJson);let items=r.items_json??r.itemsJson;
  if(typeof items==='string'){try{items=JSON.parse(items);}catch{throw new DispatchError('MALFORMED_ORDER');}}
  if(!Array.isArray(items)||!items.length||items.length>50)throw new DispatchError('MALFORMED_ORDER');
- return {number:text(r.order_number??r.orderNumber,100,true),customer:text(r.customer_name??r.customerName,150,true),phone:text(r.customer_phone??r.customerPhone,32,true),date:text(String(r.created_at??r.createdAt??''),100,true),address,
+ const whatsapp=r.whatsapp_phone??r.whatsappPhone;
+ const whatsappPhone=typeof whatsapp==='string'&&/^\+?[1-9]\d{9,14}$/.test(whatsapp.trim())?whatsapp.trim():'';
+ return {number:text(r.order_number??r.orderNumber,100,true),customer:text(r.customer_name??r.customerName,150,true),phone:text(r.customer_phone??r.customerPhone,32,true),whatsappPhone,date:text(String(r.created_at??r.createdAt??''),100,true),address,
  items:items.map(v=>{const i=object(v);if(!Number.isSafeInteger(i.quantity)||Number(i.quantity)<1||Number(i.quantity)>1000)throw new DispatchError('MALFORMED_ORDER');if(i.packQuantity!=null&&(!Number.isSafeInteger(i.packQuantity)||Number(i.packQuantity)<1||Number(i.packQuantity)>1000))throw new DispatchError('MALFORMED_ORDER');return {slug:text(i.slug,180,true),name:text(i.name,240,true),variant:text(i.variant,200),quantity:Number(i.quantity),...(i.packQuantity?{packQuantity:Number(i.packQuantity)}:{})};})};
 }
 export function evaluate(o:Order,rules:Record<string,string[]>) {
@@ -38,9 +40,43 @@ export function evaluate(o:Order,rules:Record<string,string[]>) {
  return {state,area,decisions,eligible,partial:eligible.length>0&&eligible.length<o.items.length};
 }
 export function formatMessage(o:Order,r:ReturnType<typeof evaluate>,mode:Mode){
- if(mode==='OFF'||!r.eligible.length||!r.state)throw new DispatchError('NOT_ELIGIBLE');const a=o.address;
- const extra=[['LGA',r.area.lga],['City / town',a.cityTown??a.town],['Landmark',a.landmark],['Delivery instructions',a.deliveryInstructions??a.instructions??a.deliveryNote],['Availability',a.availabilityDay??a.deliveryAvailability??a.availability??a.receiveWhen]].flatMap(([k,v])=>v?[`${k}: ${text(v,600)}`]:[]);
- const body=[mode==='TEST'?'*TEST ONLY — FICTIONAL ORDER*':'*NEW RENOVA FULFILMENT ORDER*',...(r.partial?['*PARTIAL FULFILMENT REQUEST — eligible items only*']:[]),`Dispatch reference: ${o.number}`,`Customer: ${o.customer}`,`Delivery phone: ${o.phone}`,'',...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name}`,`Variant: ${i.variant||'Standard'}`,`Quantity: ${i.quantity}${i.packQuantity?` bundle(s); ${i.packQuantity} packs per bundle`:''}`,'']),`Delivery State: ${STATES.find(s=>s.code===r.state)?.name} (${r.state})`,...extra,`Delivery Address: ${text(a.streetAddress??a.address,800,true)}`,`Order Date: ${o.date}`,'Source: Renova Store','','*Action Required: Selligate Fulfilment*'].join('\n');
+ if(mode==='OFF'||!r.eligible.length||!r.state)throw new DispatchError('NOT_ELIGIBLE');
+ const a=o.address;
+ const testHeader='*TEST ONLY — FICTIONAL ORDER*';
+ const deliveryStateLine=`Delivery State: ${STATES.find(s=>s.code===r.state)?.name} (${r.state})`;
+ const addressLine=`Delivery Address: ${text(a.streetAddress??a.address,800,true)}`;
+ const availability=a.availabilityDay??a.deliveryAvailability??a.availability??a.receiveWhen;
+ const field=(label:string,value:unknown)=>value?[`${label}: ${text(value,600)}`]:[];
+ const anagenOnly=!r.partial&&r.eligible.every(i=>i.slug==='anagen');
+ const lines=anagenOnly?[
+  ...(mode==='TEST'?[testHeader,'']:[]),
+  'NEW Anagen ORDER',
+  `Customer: ${o.customer}`,
+  `Delivery phone: ${o.phone}`,
+  o.whatsappPhone?`WhatsApp no: ${o.whatsappPhone}`:'WhatsApp no:',
+  '',
+  ...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name}`,`Quantity: ${i.quantity*(i.packQuantity??1)}`,'']),
+  deliveryStateLine,
+  ...field('LGA',r.area.lga),
+  ...field('Availability',availability),
+  addressLine,
+  `Order Date: ${o.date}`,
+  '',
+  'THANK YOU',
+ ]:[
+  mode==='TEST'?testHeader:'*NEW RENOVA FULFILMENT ORDER*',
+  ...(r.partial?['*PARTIAL FULFILMENT REQUEST — eligible items only*']:[]),
+  `Dispatch reference: ${o.number}`,`Customer: ${o.customer}`,`Delivery phone: ${o.phone}`,'',
+  ...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name}`,`Variant: ${i.variant||'Standard'}`,`Quantity: ${i.quantity}${i.packQuantity?` bundle(s); ${i.packQuantity} packs per bundle`:''}`,'']),
+  deliveryStateLine,
+  ...field('LGA',r.area.lga),
+  ...field('City / town',a.cityTown??a.town),
+  ...field('Landmark',a.landmark),
+  ...field('Delivery instructions',a.deliveryInstructions??a.instructions??a.deliveryNote),
+  ...field('Availability',availability),
+  addressLine,`Order Date: ${o.date}`,'Source: Renova Store','','*Action Required: Selligate Fulfilment*',
+ ];
+ const body=lines.join('\n');
  // One actionable request; oversized messages require manual review, never truncation.
  if(body.length>7000)throw new DispatchError('MESSAGE_TOO_LONG_MANUAL_REVIEW');return body;
 }

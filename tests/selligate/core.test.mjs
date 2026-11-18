@@ -10,11 +10,42 @@ test('missing or invalid delivery state never uses phone or city to infer state'
 test('explicit invalid state code does not fall back to a different state name',()=>{const r=row('XX');r.address_json.state='Lagos';assert.equal(evaluate(parseOrder(r),{anagen:['LA']}).state,null);});
 test('product-specific mixed order records every decision and only eligible items',()=>{const o=parseOrder(row('LA',[{slug:'anagen',name:'Eligible hair product',quantity:2,variant:'Standard'},{slug:'book',name:'Unavailable book',quantity:1}]));const r=evaluate(o,{anagen:['LA'],book:['KN']});const m=formatMessage(o,r,'LIVE');assert.equal(r.decisions.length,2);assert.equal(r.partial,true);assert.match(m,/PARTIAL FULFILMENT/);assert.match(m,/Eligible hair product/);assert.doesNotMatch(m,/Unavailable book/);});
 test('missing state records exclusion for every item',()=>{const o=parseOrder(row(null));assert.equal(evaluate(o,{anagen:['LA']}).decisions[0].reason,'INVALID_DELIVERY_STATE');});
-test('test message is labelled fictional and contains no payment data or email',()=>{const r=fictionalOrder({slug:'anagen',name:'Test product'},'LA',2,'TEST-PREVIEW','Ikeja');r.customer_email='never-share@example.test';r.payment_secret='secret';const o=parseOrder(r),m=formatMessage(o,evaluate(o,{anagen:['LA']}),'TEST');assert.match(m,/TEST ONLY/);assert.doesNotMatch(m,/never-share|payment_secret|secret/);});
-test('bundles preserve pack quantities and variant without pricing changes',()=>{const r=row();r.items_json[0].packQuantity=3;r.items_json[0].variant='6 sachets';const o=parseOrder(r);assert.match(formatMessage(o,evaluate(o,{anagen:['LA']}),'LIVE'),/3 packs per bundle/);});
+test('test message is labelled fictional and contains no payment data or email',()=>{const r=fictionalOrder({slug:'anagen',name:'Test product'},'LA',2,'TEST-PREVIEW','Ikeja');r.customer_email='never-share@example.test';r.payment_secret='secret';const o=parseOrder(r),m=formatMessage(o,evaluate(o,{anagen:['LA']}),'TEST');assert.match(m,/^\*TEST ONLY — FICTIONAL ORDER\*/);assert.doesNotMatch(m,/never-share|payment_secret|secret/);});
+test('Anagen fulfilment message uses the short layout and the separate WhatsApp number',()=>{
+ const r=row('EK',[{slug:'anagen',name:'Anagen Organic Hair Growth Treatment — 1 pack',quantity:1,packQuantity:1,variant:'2 sachets · 1 pack'}]);
+ r.customer_phone='12025550101';
+ r.whatsapp_phone='12025550102';
+ r.address_json={stateCode:'EK',lga:'Ado Ekiti',availabilityDay:'Today',streetAddress:'Fictional address, Ado Ekiti'};
+ const o=parseOrder(r);
+ assert.equal(formatMessage(o,evaluate(o,{anagen:['EK']}),'LIVE'),[
+  'NEW Anagen ORDER',
+  'Customer: Fictional customer',
+  'Delivery phone: 12025550101',
+  'WhatsApp no: 12025550102',
+  '',
+  '1. Anagen Organic Hair Growth Treatment — 1 pack',
+  'Quantity: 1',
+  '',
+  'Delivery State: Ekiti (EK)',
+  'LGA: Ado Ekiti',
+  'Availability: Today',
+  'Delivery Address: Fictional address, Ado Ekiti',
+  'Order Date: 2026-11-17T10:00:00Z',
+  '',
+  'THANK YOU',
+ ].join('\n'));
+});
+test('Anagen two- and three-pack checkouts show packs, not bundle count, and leave missing WhatsApp blank',()=>{
+ for(const packs of [2,3]){
+  const r=row('LA',[{slug:'anagen',name:`Anagen Organic Hair Growth Treatment — ${packs} packs`,quantity:1,packQuantity:packs,variant:'Bundle'}]);
+  const o=parseOrder(r),message=formatMessage(o,evaluate(o,{anagen:['LA']}),'LIVE');
+  assert.match(message,/^WhatsApp no:$/m);
+  assert.ok(message.includes(`— ${packs} packs\nQuantity: ${packs}\n`));
+ }
+});
 test('OFF formatter and unavailable orders cannot create messages',()=>{const o=parseOrder(row());assert.throws(()=>formatMessage(o,evaluate(o,{anagen:['LA']}),'OFF'));assert.throws(()=>formatMessage(o,evaluate(o,{}),'TEST'));});
 test('rejects malformed JSON, missing items and unsafe quantities',()=>{for(const items of ['bad',[],[{}],[{slug:'a',name:'A',quantity:-1}],[{slug:'a',name:'A',quantity:1.2}]])assert.throws(()=>parseOrder(row('LA',items)));});
-test('overlong message is rejected as one request instead of truncating fulfilment data',()=>{const o=parseOrder(row('LA',Array.from({length:30},()=>({slug:'anagen',name:'A'.repeat(200),variant:'B'.repeat(180),quantity:1}))));assert.throws(()=>formatMessage(o,evaluate(o,{anagen:['LA']}),'LIVE'),/MESSAGE_TOO_LONG/);});
+test('overlong message is rejected as one request instead of truncating fulfilment data',()=>{const o=parseOrder(row('LA',Array.from({length:40},()=>({slug:'anagen',name:'A'.repeat(200),variant:'B'.repeat(180),quantity:1}))));assert.throws(()=>formatMessage(o,evaluate(o,{anagen:['LA']}),'LIVE'),/MESSAGE_TOO_LONG/);});
 test('rejects unknown state codes and equal or non-group destinations',()=>{assert.throws(()=>validateStateCodes(['Lagos']));assert.throws(()=>validateGroups('120363000000001@g.us','120363000000001@g.us'));assert.throws(()=>validateGroups('2340000000000@c.us',null));assert.deepEqual(validateStateCodes(['LA','LA','FC']),['FC','LA']);});
 test('customer text cannot inject new WhatsApp sections',()=>{const r=row();r.customer_name='Fake\n*NEW ORDER*';const o=parseOrder(r),m=formatMessage(o,evaluate(o,{anagen:['LA']}),'TEST');assert.doesNotMatch(m,/Customer: Fake\n/);});
 
