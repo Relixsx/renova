@@ -40,3 +40,13 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# Private linked-device credentials and dispatch journal
+/bridge/node_modules/
+/bridge/.env
+/bridge/data/
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

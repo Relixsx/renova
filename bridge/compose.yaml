@@ -1,0 +1,22 @@
+services:
+  selligate:
+    build:
+      context: ..
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      SELLIGATE_DATA_DIR: /data
+      PORT: 8787
+    volumes:
+      - selligate-session:/data
+    # Chromium sandbox support. Use an isolated VPS, never a shared privileged host.
+    cap_add: [SYS_ADMIN]
+    shm_size: 512mb
+    read_only: true
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    # No inbound public port or WhatsApp-sending endpoint.
+volumes:
+  selligate-session:

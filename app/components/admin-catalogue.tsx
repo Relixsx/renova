@@ -991,6 +991,7 @@ export function AdminCatalogue({
               })}
             </div>
           ))}
+          <div className="admin-nav-group"><small>Fulfilment</small><Link href="/admin/selligate"><span aria-hidden="true">⇄</span>Selligate automation</Link></div>
         </nav>
         <div className="admin-sidebar-foot">
           <span className="status-dot" />

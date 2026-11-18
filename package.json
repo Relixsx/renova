@@ -10,7 +10,7 @@
     "dev": "next dev --hostname 0.0.0.0 --port 5173",
     "build": "next build --webpack",
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-10000}",
-    "test": "npm run test:whatsapp && npm run test:migration && npm run verify:cumulative && npm run build && npm run test:production",
+    "test": "npm run test:selligate && npm run test:whatsapp && npm run test:migration && npm run verify:cumulative && npm run build && npm run test:production",
     "test:whatsapp": "node scripts/test-whatsapp.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
@@ -22,7 +22,8 @@
     "dev:worker": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build:worker": "bash scripts/build-verified.sh",
     "test:migration": "node scripts/test-aiven-migration.mjs",
-    "test:production": "node --test tests/anagen-rendered.test.mjs"
+    "test:production": "node --test tests/anagen-rendered.test.mjs",
+    "test:selligate": "node scripts/test-selligate.mjs"
   },
   "dependencies": {
     "@better-auth/core": "1.7.25",

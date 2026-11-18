@@ -1,0 +1,77 @@
+name: Selligate dispatch validation
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [migration/neon-render]
+permissions:
+  contents: read
+concurrency:
+  group: selligate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: renova_test
+          POSTGRES_PASSWORD: fictional_ci_password
+          POSTGRES_DB: selligate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U renova_test -d selligate_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: ''
+      SELLIGATE_LIVE_ALLOWED: 'false'
+      SELLIGATE_BRIDGE_ENABLED: 'false'
+      SELLIGATE_TEST_DATABASE_URL: postgresql://renova_test:fictional_ci_password@127.0.0.1:5432/selligate_test
+      NEXT_TELEMETRY_DISABLED: '1'
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check AWS host preparation without changing the runner
+        run: |
+          bash -n scripts/selligate/prepare-aws-host.sh
+          bash scripts/selligate/prepare-aws-host.sh --help
+          if bash scripts/selligate/prepare-aws-host.sh --prepare unexpected; then
+            echo 'Unexpected arguments must be rejected before host changes.'
+            exit 1
+          fi
+          if output=$(sudo bash scripts/selligate/prepare-aws-host.sh --prepare 2>&1); then
+            echo 'The installer must refuse this shared runner with a PostgreSQL container.'
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          [[ "$output" == *'Docker containers already exist.'* ]]
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Install locked bridge dependencies
+        run: npm ci --prefix bridge --ignore-scripts --no-audit --no-fund
+      - run: npm run check --prefix bridge
+      - run: npx tsc --noEmit
+      - name: Offline dispatch tests
+        env:
+          SELLIGATE_TEST_DATABASE_URL: ''
+        run: npm run test:selligate
+      - name: Dispatch integration and existing store regression suite
+        run: npm test
+      - name: Build isolated bridge image
+        run: docker build -f bridge/Dockerfile -t renova-selligate:test .
+      - name: Verify Chromium sandbox startup without WhatsApp
+        run: >-
+          docker run --rm --read-only --cap-add=SYS_ADMIN
+          --tmpfs /tmp:uid=1000,gid=1000,mode=1777
+          --entrypoint node renova-selligate:test
+          -e 'require("puppeteer").launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:["--disable-dev-shm-usage"]}).then(async browser=>{console.log("Chromium sandbox started; no WhatsApp connection opened.");await browser.close();}).catch(error=>{console.error(error.message);process.exit(1);})'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selligate-validated-dependency-lock
+          path: bridge/package-lock.json
+          if-no-files-found: warn
