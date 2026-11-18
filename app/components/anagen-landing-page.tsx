@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AnagenOrderForm, AnagenBundleLink } from "./anagen-order-form";
-import { AnagenIllustrationGallery } from "./anagen-illustration-gallery";
+import { AnagenComparisonGallery } from "./anagen-comparison-gallery";
 import { ProductMetaTracker } from "./product-meta-tracker";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
 import { absoluteUrl } from "../lib/site";
@@ -88,7 +88,7 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
       ["hair2.jpg", "My front edges grew back after mixing Anagen with my hair butter."], ["hair1.jpg", "Stopped my severe hair issue within a few weeks."], ["hair3.jpg", "Hair growth filled up completely. Very solid natural product."],
     ].map(([file,quote],index) => <figure key={file}><img src={`/anagen/${file}`} alt={`Supplier-provided Anagen result ${index + 1}`} width="600" height="500" loading="lazy" decoding="async" /><figcaption>“{quote}”</figcaption></figure>)}</div><p className={styles.resultsNote}>Supplier-provided images and testimonials. Individual results vary.</p></div></section>
 
-    <AnagenIllustrationGallery />
+    <AnagenComparisonGallery />
 
     <section className={`${styles.section} ${styles.container}`} id="packages"><header className={styles.sectionIntro}><p className={styles.eyebrow}>Special promo offer</p><h2>Choose your Anagen package.</h2><p>Free doorstep delivery with every package. Pay when you receive it.</p></header><div className={styles.packageGrid}>{ANAGEN.bundles.map((offer) => <article key={offer.packs} className={offer.packs === 2 ? styles.featuredPackage : ""}><span className={styles.packageLabel}>{offer.savingKobo ? `Save ₦${(offer.savingKobo / 100).toLocaleString("en-NG")}` : "Start your routine"}</span><h3>{offer.label} of Anagen</h3><p>{offer.packs * 2} sachets + application guide</p><strong>₦{(offer.totalKobo / 100).toLocaleString("en-NG")}</strong>{offer.packs === 1 && <s>₦15,000</s>}<small><Icon name="truck" /> Free doorstep delivery</small><AnagenBundleLink packs={offer.packs} className={styles.button}>Choose your package <Icon name="arrow" /></AnagenBundleLink></article>)}</div></section>
 

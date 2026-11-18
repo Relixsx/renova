@@ -158,9 +158,8 @@
 .submitButton { color: #242424; box-shadow: none; }
 .secondaryButton { color: #414141; background: #fff; border-color: #FFD700; box-shadow: none; }
 .secondaryButton:hover { background: #fff; }
-.illustrationGallery { box-sizing: border-box; margin-block: 28px 42px; padding: 32px clamp(14px, 3vw, 32px); border: 0; border-radius: 16px; background: var(--section-wash); }
-.illustrationGallery .sectionIntro { margin-bottom: 22px; }
-.illustrationGallery .sectionIntro > p:last-child { font-size: 13px; color: #656565; }
+.comparisonGallery { box-sizing: border-box; margin-block: 28px 42px; padding: 32px clamp(14px, 3vw, 32px); border: 0; border-radius: 16px; background: var(--section-wash); }
+.comparisonGallery .sectionIntro { margin-bottom: 22px; }
 .galleryToolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; color: #656565; font-size: 13px; }
 .galleryToolbar > div { display: flex; gap: 9px; }
 .galleryToolbar button { display: grid; place-items: center; width: 46px; height: 44px; border: 1px solid #FFD700; border-radius: 10px; color: #242424; background: var(--accent); box-shadow: none; font-size: 22px; cursor: pointer; border-color: #FFD700; }
@@ -169,9 +168,6 @@
 .galleryTrack { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 20px) / 2.4); gap: 20px; min-width: 0; padding: 2px 1px 14px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: var(--accent) #fff; }
 .galleryCard { min-width: 0; overflow: hidden; border: 1px solid #e6e6e6; border-radius: 14px; background: #fff; scroll-snap-align: start; scroll-snap-stop: normal; }
 .galleryCard img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; }
-.galleryCard figcaption { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 12px 14px; border-top: 1px solid #e8e8e8; color: #414141; font-size: 12px; line-height: 1.5; }
-.galleryCard figcaption > span { padding: 4px 7px; border-radius: 5px; background: #fff; }
-.galleryCard figcaption > b { color: #656565; font-size: 11px; font-weight: 600; }
 .galleryHelp { margin-top: 12px !important; color: #656565; font-size: 12px; line-height: 1.7; text-align: center; }
 @media (max-width: 700px) {
   .announcement strong { font-size: 14px; }
@@ -179,8 +175,6 @@
   .phoneHelp > .fieldHint { flex-basis: 100%; padding-top: 4px; }
   .availability legend { font-size: 12px; }
   .galleryTrack { grid-auto-columns: calc(100% - 25px); gap: 13px; }
-  .galleryCard figcaption { padding: 11px 10px; gap: 7px; font-size: 11px; }
-  .illustrationGallery .sectionIntro > p:last-child { font-size: 12px; }
   .galleryHelp { font-size: 11px; }
 }
 
@@ -262,14 +256,7 @@
 @media (prefers-reduced-motion: reduce) { .heroButton, .submitButton { animation: none; box-shadow: inset 0 1px 0 #ffffffb3, 0 0 12px #ffd70080; } .heroButton::after, .submitButton::after { animation: none; display: none; } }
 
 /* Neutral comparison frames: photographs are unchanged and retain their order. */
-.comparisonFrame { padding: 12px 10px 8px; background: #fff; color: #111; }
-.galleryCard .comparisonTitle { margin: 0 0 12px; color: #111; font-size: clamp(18px, 2vw, 27px); line-height: 1.15; font-weight: 800; text-align: center; letter-spacing: -.02em; }
-.comparisonPhotos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 7px; background: #fff; }
-.comparisonPhoto { position: relative; min-width: 0; overflow: hidden; border-radius: 10% / 9.5%; background: #fff; }
-.galleryCard .comparisonPhoto > img { position: absolute; display: block; max-width: none; aspect-ratio: auto; object-fit: fill; border-radius: 0; }
-.comparisonLabels { display: grid; grid-template-columns: 1fr 1fr; margin-top: 9px; color: #111; font-size: clamp(12px, 1.3vw, 18px); line-height: 1.5; font-weight: 800; text-align: center; }
-.comparisonLabels > b:first-child { border-right: 1px solid #dedede; }
-.galleryCard, .galleryCard figcaption { background: #fff; color: #111; }
+.galleryCard { background: #fff; color: #111; }
 
 /* Electric Lime is isolated to /anagen2; Gold remains the default. */
 .page.limeTheme { --accent: #7FFF00; --gold: #7FFF00; --section-tint: #EDFFD8; --section-wash: #F8FFF0; --section-edge: #D4ECBA; --gold-fill: linear-gradient(115deg, #7FFF00 0%, #D1FFAE 48%, #7FFF00 100%); }

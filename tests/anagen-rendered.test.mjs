@@ -47,19 +47,17 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
   for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','TODAY /','24-HOUR DELIVERY','subject to address &amp; dispatch confirmation','1–2 working days'])assert.ok(html.includes(text),text);
   assert.doesNotMatch(html,/name="(?:alternativePhone|cityTown)"/);
   assert.match(html,/<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
-  assert.ok(html.includes('id="anagen-illustrations"'));
-  assert.ok(html.includes('AI-generated examples. Not customer results.'));
-  assert.ok(html.includes('Previous illustration') && html.includes('Next illustration'));
-  assert.equal((html.match(/alt="Before: AI-generated hairline illustration /g)||[]).length,10);
-  assert.equal((html.match(/alt="After: AI-generated hairline illustration /g)||[]).length,10);
-  assert.equal((html.match(/AI-generated example<\/span>/g)||[]).length,10);
-  for(let number=1;number<=10;number++){
-   const file=`hair-${String(number).padStart(2,'0')}.webp`;
-   const bytes=(await stat(resolve('public/anagen/illustrations',file))).size;
+  assert.ok(html.includes('id="anagen-comparisons"'));
+  assert.ok(html.includes('Previous photo') && html.includes('Next photo'));
+  assert.equal((html.match(/alt="Before-and-after hair comparison supplied by Renova, photo /g)||[]).length,9);
+  assert.doesNotMatch(html,/AI-generated|Illustrative example only|\/anagen\/illustrations\//);
+  for(let number=1;number<=9;number++){
+   const file=`photo-${String(number).padStart(2,'0')}.webp`;
+   const bytes=(await stat(resolve('public/anagen/customer-gallery',file))).size;
    assert.ok(bytes>0 && bytes<250000,`${file}: optimized local image`);
-   assert.ok(html.includes(`/anagen/illustrations/${file}`));
+   assert.ok(html.includes(`/anagen/customer-gallery/${file}`));
   }
-  const picture=await server.fetch('/anagen/illustrations/hair-01.webp');
+  const picture=await server.fetch('/anagen/customer-gallery/photo-01.webp');
   assert.equal(picture.status,200);assert.match(picture.headers.get('content-type'),/image\/webp/);
   assert.doesNotMatch(html,/1023272507453983|2347032161983|process_order\.php|shortclicktechnologies|Reply STOP|<video|\/anagen\/[12]\.mp4/);
   for(const file of ['product-studio.webp','anagenraw.jpg','ari.jpg','hair1.jpg','hair2.jpg','hair3.jpg']){
