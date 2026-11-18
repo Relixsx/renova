@@ -97,6 +97,8 @@ The existing migration maintenance mode still takes precedence over new endpoint
 
 ## 5. Bridge setup
 
+For the existing AWS Free account and an Ubuntu Lightsail or EC2 instance, follow [SELLIGATE_AWS.md](SELLIGATE_AWS.md) first. The preparation helper builds and checks the pinned bridge without starting it. Continue the backup, migration and OFF setup here before pairing.
+
 On the isolated host, check out this implementation and use the tested dependency lock:
 
     cp bridge/env.example bridge/.env

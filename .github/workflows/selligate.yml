@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -32,6 +32,20 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
       - uses: actions/checkout@v4
+      - name: Check AWS host preparation without changing the runner
+        run: |
+          bash -n scripts/selligate/prepare-aws-host.sh
+          bash scripts/selligate/prepare-aws-host.sh --help
+          if bash scripts/selligate/prepare-aws-host.sh --prepare unexpected; then
+            echo 'Unexpected arguments must be rejected before host changes.'
+            exit 1
+          fi
+          if output=$(sudo bash scripts/selligate/prepare-aws-host.sh --prepare 2>&1); then
+            echo 'The installer must refuse this shared runner with a PostgreSQL container.'
+            exit 1
+          fi
+          printf '%s\n' "$output"
+          [[ "$output" == *'Docker containers already exist.'* ]]
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
