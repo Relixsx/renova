@@ -48,21 +48,24 @@ export function formatMessage(o:Order,r:ReturnType<typeof evaluate>,mode:Mode){
  const availability=a.availabilityDay??a.deliveryAvailability??a.availability??a.receiveWhen;
  const field=(label:string,value:unknown)=>value?[`${label}: ${text(value,600)}`]:[];
  const anagenOnly=!r.partial&&r.eligible.every(i=>i.slug==='anagen');
+ const anagenDate=o.date.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/i,'$1 $2');
+ const packSuffix=/\s*[—–-]\s*\d+\s+packs?$/i;
  const lines=anagenOnly?[
   ...(mode==='TEST'?[testHeader,'']:[]),
-  'NEW Anagen ORDER',
+  '*NEW ANAGEN ORDER*',
+  '',
   `Customer: ${o.customer}`,
   `Delivery phone: ${o.phone}`,
   o.whatsappPhone?`WhatsApp no: ${o.whatsappPhone}`:'WhatsApp no:',
   '',
-  ...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name}`,`Quantity: ${i.quantity*(i.packQuantity??1)}`,'']),
+  ...r.eligible.flatMap((i,n)=>[`${n+1}. ${i.name.replace(packSuffix,'')}`,`Quantity: ${i.quantity*(i.packQuantity??1)}`,'']),
   deliveryStateLine,
   ...field('LGA',r.area.lga),
   ...field('Availability',availability),
   addressLine,
-  `Order Date: ${o.date}`,
+  `Order Date: ${anagenDate}`,
   '',
-  'THANK YOU',
+  'Thanks',
  ]:[
   mode==='TEST'?testHeader:'*NEW RENOVA FULFILMENT ORDER*',
   ...(r.partial?['*PARTIAL FULFILMENT REQUEST — eligible items only*']:[]),

@@ -11,36 +11,39 @@ test('explicit invalid state code does not fall back to a different state name',
 test('product-specific mixed order records every decision and only eligible items',()=>{const o=parseOrder(row('LA',[{slug:'anagen',name:'Eligible hair product',quantity:2,variant:'Standard'},{slug:'book',name:'Unavailable book',quantity:1}]));const r=evaluate(o,{anagen:['LA'],book:['KN']});const m=formatMessage(o,r,'LIVE');assert.equal(r.decisions.length,2);assert.equal(r.partial,true);assert.match(m,/PARTIAL FULFILMENT/);assert.match(m,/Eligible hair product/);assert.doesNotMatch(m,/Unavailable book/);});
 test('missing state records exclusion for every item',()=>{const o=parseOrder(row(null));assert.equal(evaluate(o,{anagen:['LA']}).decisions[0].reason,'INVALID_DELIVERY_STATE');});
 test('test message is labelled fictional and contains no payment data or email',()=>{const r=fictionalOrder({slug:'anagen',name:'Test product'},'LA',2,'TEST-PREVIEW','Ikeja');r.customer_email='never-share@example.test';r.payment_secret='secret';const o=parseOrder(r),m=formatMessage(o,evaluate(o,{anagen:['LA']}),'TEST');assert.match(m,/^\*TEST ONLY — FICTIONAL ORDER\*/);assert.doesNotMatch(m,/never-share|payment_secret|secret/);});
-test('Anagen fulfilment message uses the short layout and the separate WhatsApp number',()=>{
+test('Anagen fulfilment message uses the bold heading, clean product name and seconds-only date',()=>{
  const r=row('EK',[{slug:'anagen',name:'Anagen Organic Hair Growth Treatment — 1 pack',quantity:1,packQuantity:1,variant:'2 sachets · 1 pack'}]);
  r.customer_phone='12025550101';
  r.whatsapp_phone='12025550102';
+ r.created_at='2026-11-17 10:00:00.135856+00';
  r.address_json={stateCode:'EK',lga:'Ado Ekiti',availabilityDay:'Today',streetAddress:'Fictional address, Ado Ekiti'};
  const o=parseOrder(r);
  assert.equal(formatMessage(o,evaluate(o,{anagen:['EK']}),'LIVE'),[
-  'NEW Anagen ORDER',
+  '*NEW ANAGEN ORDER*',
+  '',
   'Customer: Fictional customer',
   'Delivery phone: 12025550101',
   'WhatsApp no: 12025550102',
   '',
-  '1. Anagen Organic Hair Growth Treatment — 1 pack',
+  '1. Anagen Organic Hair Growth Treatment',
   'Quantity: 1',
   '',
   'Delivery State: Ekiti (EK)',
   'LGA: Ado Ekiti',
   'Availability: Today',
   'Delivery Address: Fictional address, Ado Ekiti',
-  'Order Date: 2026-11-17T10:00:00Z',
+  'Order Date: 2026-11-17 10:00:00',
   '',
-  'THANK YOU',
+  'Thanks',
  ].join('\n'));
 });
-test('Anagen two- and three-pack checkouts show packs, not bundle count, and leave missing WhatsApp blank',()=>{
+test('Anagen two- and three-pack checkouts keep the pack count only on the quantity line',()=>{
  for(const packs of [2,3]){
   const r=row('LA',[{slug:'anagen',name:`Anagen Organic Hair Growth Treatment — ${packs} packs`,quantity:1,packQuantity:packs,variant:'Bundle'}]);
   const o=parseOrder(r),message=formatMessage(o,evaluate(o,{anagen:['LA']}),'LIVE');
   assert.match(message,/^WhatsApp no:$/m);
-  assert.ok(message.includes(`— ${packs} packs\nQuantity: ${packs}\n`));
+  assert.ok(message.includes(`1. Anagen Organic Hair Growth Treatment\nQuantity: ${packs}\n`));
+  assert.match(message,/^Order Date: 2026-11-17 10:00:00$/m);
  }
 });
 test('OFF formatter and unavailable orders cannot create messages',()=>{const o=parseOrder(row());assert.throws(()=>formatMessage(o,evaluate(o,{anagen:['LA']}),'OFF'));assert.throws(()=>formatMessage(o,evaluate(o,{}),'TEST'));});
