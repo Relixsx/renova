@@ -279,3 +279,36 @@
 .announcement small { max-width: 460px; margin: 6px auto 0; color: #fff; font-size: 12px; line-height: 1.45; font-weight: 500; }
 @media (max-width: 700px) { .announcement { gap: 11px; padding: 13px 16px; } .announcement small { font-size: 11px; } }
 @media (max-width: 350px) { .announcement { gap: 9px; padding: 12px; } .announcement > svg { width: 26px; height: 26px; flex-basis: 26px; } .announcement strong { font-size: 10px; column-gap: 7px; } .announcement .deliveryHeadline { font-size: 20px; } .announcement small { font-size: 10px; } }
+
+/* Keep the gold ad landing page focused on packages and checkout. */
+.page[data-anagen-layout="compact"] .heroGrid {
+  grid-template-areas: "intro media" "heading media" "copy media" "purchase media";
+}
+.page[data-anagen-layout="compact"] .heroHeading { font-size: clamp(32px, 4.5vw, 56px); }
+.page[data-anagen-layout="compact"] :global(#packages) { scroll-margin-top: 96px; padding-block: 36px 24px; }
+.page[data-anagen-layout="compact"] .packageGrid article { gap: 12px; padding: 18px; }
+.page[data-anagen-layout="compact"] .packageGrid article > strong { margin: 0; font-size: 26px; }
+.page[data-anagen-layout="compact"] .orderSection { padding-bottom: 24px; }
+.quickDetails { padding-block: 0 36px; }
+.quickDetails details { border-top: 1px solid #dedede; padding: 14px 0; }
+.quickDetails summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.quickDetails p { margin-block: 8px 12px; line-height: 1.55; }
+@media (max-width: 700px) {
+  .page[data-anagen-layout="compact"] .heroGrid {
+    grid-template-areas: "intro" "heading" "media" "purchase" "copy";
+    gap: 10px;
+  }
+  .page[data-anagen-layout="compact"] .hero { padding-block: 18px; }
+  .page[data-anagen-layout="compact"] .heroHeading { font-size: clamp(26px, 7vw, 36px); }
+  .page[data-anagen-layout="compact"] .heroMedia { max-width: 225px; justify-self: center; }
+  .page[data-anagen-layout="compact"] .heroMedia figcaption { display: none; }
+  .page[data-anagen-layout="compact"] :global(#packages) { padding-block: 22px 12px; }
+  .page[data-anagen-layout="compact"] :global(#packages) .sectionIntro { margin-bottom: 14px; }
+  .page[data-anagen-layout="compact"] .packageGrid { gap: 8px; }
+  .page[data-anagen-layout="compact"] .packageGrid article {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; text-align: left; gap: 6px 12px; padding: 10px 12px;
+  }
+  .page[data-anagen-layout="compact"] .packageGrid h3 { font-size: 16px; }
+  .page[data-anagen-layout="compact"] .packageGrid article > strong { font-size: 19px; }
+  .page[data-anagen-layout="compact"] .packageGrid .button { grid-column: 1 / -1; min-height: 44px; }
+}

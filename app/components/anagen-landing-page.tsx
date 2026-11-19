@@ -49,9 +49,10 @@ const benefits = [
 ];
 
 export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime"; path: LandingPath }) {
+  const compact = variant === "gold";
   const supportPhone = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").replace(/\D/g, "");
   const jsonLd = { "@context": "https://schema.org", "@type": "Product", name: ANAGEN.name, sku: ANAGEN.sku, brand: { "@type": "Brand", name: "Anagen" }, description: "10g herbal hair-care blend; two sachets and an application guide per pack.", image: [absoluteUrl("/anagen/product-studio.webp"), absoluteUrl("/anagen/ari.jpg")], offers: { "@type": "Offer", url: absoluteUrl(path), price: "11200.00", priceCurrency: "NGN" } };
-  return <main className={`${styles.page}${variant === "lime" ? ` ${styles.limeTheme}` : ""}`} data-anagen-theme={variant}>
+  return <main className={`${styles.page}${variant === "lime" ? ` ${styles.limeTheme}` : ""}`} data-anagen-theme={variant} data-anagen-layout={compact ? "compact" : "original"}>
     <ProductMetaTracker slug={ANAGEN.slug} name={ANAGEN.name} value={11200} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
     <div className={styles.announcement}><Icon name="truck" /><span><strong>TODAY / <span className={styles.deliveryHeadline}>24-HOUR DELIVERY</span></strong><small>State capitals · subject to address &amp; dispatch confirmation</small></span></div>
@@ -59,15 +60,16 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
 
     <section className={styles.hero}><div className={`${styles.container} ${styles.heroGrid}`}>
       <div className={styles.heroIntro}><span className={styles.heroBadge}><Icon name="leaf" /> 100% natural herbal formula</span><p className={styles.heroEyebrow}>Anagen Hair Reviver</p></div>
-      <h1 className={styles.heroHeading}>Reclaim your edge.<br />Embrace your strand in just <em>14 days.</em></h1>
+      <h1 className={styles.heroHeading}>{compact ? "Herbal hair care for your daily routine" : <>Reclaim your edge.<br />Embrace your strand in just <em>14 days.</em></>}</h1>
       <figure className={styles.heroMedia}><div className={styles.imageFrame}><img src="/anagen/product-studio.webp" alt="Anagen Hair Reviver silver resealable pack with herbal sachets, presented on a white background" width="1024" height="1024" loading="eager" fetchPriority="high" decoding="async" /></div><figcaption>2 sachets + application guide in every pack</figcaption></figure>
-      <p className={styles.heroCopy}>Give your hair a fresh start with Anagen — a potent mix of traditional herbs in solid form. Mix it directly with your preferred hair cream or oil.</p>
-      <div className={styles.heroIngredients}><strong>Pure herbal hair food. No water or fillers.</strong><p>🌱 Fenugreek &amp; amla for stronger, fuller-looking hair</p><p>🌿 Rosemary &amp; moringa for your scalp-care routine</p><small>A concentrated blend. A little goes a long way.</small></div>
+      <p className={styles.heroCopy}>{compact ? "Mix the concentrated herbal blend with your usual hair cream or oil. Every pack includes two sachets and an application guide." : <>Give your hair a fresh start with Anagen — a potent mix of traditional herbs in solid form. Mix it directly with your preferred hair cream or oil.</>}</p>
+      {!compact && <div className={styles.heroIngredients}><strong>Pure herbal hair food. No water or fillers.</strong><p>🌱 Fenugreek &amp; amla for stronger, fuller-looking hair</p><p>🌿 Rosemary &amp; moringa for your scalp-care routine</p><small>A concentrated blend. A little goes a long way.</small></div>}
       <div className={styles.heroPurchase}>
-        <AnagenBundleLink packs={1} className={styles.heroButton}>Get yours today — ₦11,200 <Icon name="arrow" /></AnagenBundleLink><div className={styles.heroTrust}><span><Icon name="check" /> Pay on delivery</span><span><Icon name="check" /> Free doorstep shipping</span></div>
+        {compact ? <a href="#packages" className={styles.heroButton}>Choose a pack — from ₦11,200 <Icon name="arrow" /></a> : <AnagenBundleLink packs={1} className={styles.heroButton}>Get yours today — ₦11,200 <Icon name="arrow" /></AnagenBundleLink>}<div className={styles.heroTrust}><span><Icon name="check" /> Pay on delivery</span><span><Icon name="check" /> Free doorstep shipping</span></div>
       </div>
     </div></section>
 
+    {!compact && <>
     <section className={styles.badgeStrip} aria-label="Anagen highlights"><div className={styles.container}>{([
       ["leaf", "Natural blend", "Traditional botanical ingredients"], ["spark", "14-day results", "Supplier-reported visible changes"], ["box", "Easy to use", "Mix with your hair cream or oil"], ["shield", "For men & women", "Hair and beard care"],
     ] as const).map(([icon,title,description]) => <article key={title}><Icon name={icon} /><h2>{title}</h2><p>{description}</p></article>)}</div></section>
@@ -90,14 +92,23 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
 
     <AnagenComparisonGallery />
 
-    <section className={`${styles.section} ${styles.container}`} id="packages"><header className={styles.sectionIntro}><p className={styles.eyebrow}>Special promo offer</p><h2>Choose your Anagen package.</h2><p>Free doorstep delivery with every package. Pay when you receive it.</p></header><div className={styles.packageGrid}>{ANAGEN.bundles.map((offer) => <article key={offer.packs} className={offer.packs === 2 ? styles.featuredPackage : ""}><span className={styles.packageLabel}>{offer.savingKobo ? `Save ₦${(offer.savingKobo / 100).toLocaleString("en-NG")}` : "Start your routine"}</span><h3>{offer.label} of Anagen</h3><p>{offer.packs * 2} sachets + application guide</p><strong>₦{(offer.totalKobo / 100).toLocaleString("en-NG")}</strong>{offer.packs === 1 && <s>₦15,000</s>}<small><Icon name="truck" /> Free doorstep delivery</small><AnagenBundleLink packs={offer.packs} className={styles.button}>Choose your package <Icon name="arrow" /></AnagenBundleLink></article>)}</div></section>
-
+    </>}
+    <section className={`${styles.section} ${styles.container}`} id="packages"><header className={styles.sectionIntro}>{!compact && <p className={styles.eyebrow}>Special promo offer</p>}<h2>Choose your Anagen package.</h2><p>Free doorstep delivery with every package. Pay when you receive it.</p></header><div className={styles.packageGrid}>{ANAGEN.bundles.map((offer) => <article key={offer.packs} className={offer.packs === 2 ? styles.featuredPackage : ""}>{!compact && <span className={styles.packageLabel}>{offer.savingKobo ? `Save ₦${(offer.savingKobo / 100).toLocaleString("en-NG")}` : "Start your routine"}</span>}<h3>{offer.label} of Anagen</h3>{!compact && <p>{offer.packs * 2} sachets + application guide</p>}<strong>₦{(offer.totalKobo / 100).toLocaleString("en-NG")}</strong>{!compact && offer.packs === 1 && <s>₦15,000</s>}{!compact && <small><Icon name="truck" /> Free doorstep delivery</small>}<AnagenBundleLink packs={offer.packs} className={styles.button}>{compact ? `Choose ${offer.label}` : "Choose your package"} <Icon name="arrow" /></AnagenBundleLink></article>)}</div></section>
+    {!compact && <>
     <section className={`${styles.section} ${styles.container}`}><div className={styles.contents}><img src="/anagen/ari.jpg" alt="Anagen pack contents and application guide" width="800" height="800" loading="lazy" decoding="async" /><div><p className={styles.eyebrow}>Inside your pack</p><h2>Everything you need to get started.</h2><article><Icon name="box" /><div><h3>2 sachets of Anagen natural mix</h3><p>A concentrated herbal blend divided into two sachets in every pack.</p></div></article><article><Icon name="check" /><div><h3>A step-by-step procedure guide</h3><p>Printed instructions explaining how to mix and apply the formula with your hair cream or oil.</p></div></article></div></div></section>
 
 
     <section className={`${styles.section} ${styles.narrow}`}><div className={styles.deliveryNotice}><Icon name="truck" /><div><h2>A quick delivery note.</h2><p>We offer <strong>same-day delivery in state capitals</strong>, free doorstep delivery nationwide and payment on delivery. Please place an order when you are ready to receive and pay for it.</p><div><span><strong>Lagos:</strong> 1–2 working days</span><span><strong>Outside Lagos:</strong> 1–2 working days</span></div><small>Your selected availability helps our team arrange delivery. We will confirm the delivery time with you.</small></div></div></section>
 
+    </>}
     <section id="order-form" className={`${styles.section} ${styles.narrow} ${styles.orderSection}`}><AnagenOrderForm supportPhone={supportPhone} /></section>
+    {compact && (
+    <section className={`${styles.section} ${styles.narrow} ${styles.quickDetails}`} aria-label="Product and delivery details">
+      <details><summary>Ingredients and how to use</summary><p>Fenugreek seed, amla berry, moringa and rosemary are part of the herbal blend. Mix with your usual hair cream or oil and follow the application guide in your pack.</p></details>
+      <details><summary>Delivery and payment</summary><p>Doorstep delivery is free. Pay when your order arrives. Estimated delivery is {ANAGEN.estimate}; same-day delivery in state capitals is subject to confirmation.</p></details>
+      <details><summary>Supplier before-and-after photos</summary><p>Photos supplied by the supplier. Individual results vary.</p><div className={styles.resultsGrid}>{["hair2.jpg", "hair1.jpg", "hair3.jpg"].map((file, index) => <figure key={file}><img src={`/anagen/${file}`} alt={`Supplier-provided hair comparison ${index + 1}`} width="600" height="500" loading="lazy" decoding="async" /></figure>)}</div></details>
+    </section>
+    )}
     <footer className={styles.footer}><Link href="/shop" className={styles.footerBrand}>RENOVA</Link><p>Anagen herbal hair care, available at Renova.</p><nav aria-label="Footer"><Link href="/shop">Shop Renova</Link><Link href="/track-order">Track an order</Link><Link href="/privacy">Privacy</Link><Link href="/returns">Returns</Link><Link href="/terms">Terms</Link><a href="mailto:support@shoprenova.com.ng">Contact support</a></nav><small>© {new Date().getFullYear()} Renova. All rights reserved.</small></footer>
   </main>;
 }

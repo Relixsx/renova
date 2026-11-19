@@ -47,6 +47,11 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
   for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','TODAY /','24-HOUR DELIVERY','subject to address &amp; dispatch confirmation','1–2 working days'])assert.ok(html.includes(text),text);
   assert.doesNotMatch(html,/name="(?:alternativePhone|cityTown)"/);
   assert.match(html,/<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
+  if (theme === 'gold') {
+   const packages=html.indexOf('id="packages"'), form=html.indexOf('id="order-form"'), proof=html.indexOf('Supplier before-and-after photos');
+   assert.ok(packages>=0 && form>packages && proof>form,'Package selection and checkout precede optional proof');
+   assert.doesNotMatch(html,/id="anagen-comparisons"|Reclaim your edge|14 days/);
+  } else {
   assert.ok(html.includes('id="anagen-comparisons"'));
   assert.ok(html.includes('Previous photo') && html.includes('Next photo'));
   assert.equal((html.match(/alt="Before-and-after hair comparison supplied by Renova, photo /g)||[]).length,9);
@@ -57,10 +62,11 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
    assert.ok(bytes>0 && bytes<250000,`${file}: optimized local image`);
    assert.ok(html.includes(`/anagen/customer-gallery/${file}`));
   }
+  }
   const picture=await server.fetch('/anagen/customer-gallery/photo-01.webp');
   assert.equal(picture.status,200);assert.match(picture.headers.get('content-type'),/image\/webp/);
   assert.doesNotMatch(html,/1023272507453983|2347032161983|process_order\.php|shortclicktechnologies|Reply STOP|<video|\/anagen\/[12]\.mp4/);
-  for(const file of ['product-studio.webp','anagenraw.jpg','ari.jpg','hair1.jpg','hair2.jpg','hair3.jpg']){
+  for(const file of (theme === 'gold' ? ['product-studio.webp','hair1.jpg','hair2.jpg','hair3.jpg'] : ['product-studio.webp','anagenraw.jpg','ari.jpg','hair1.jpg','hair2.jpg','hair3.jpg'])){
    assert.ok((await stat(resolve('public/anagen',file))).size>0);assert.ok(html.includes('/anagen/'+file));
   }
   const cssPaths=[...html.matchAll(/<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+)"[^>]*>/g)].map(match=>match[1]);
