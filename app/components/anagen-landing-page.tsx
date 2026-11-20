@@ -49,6 +49,7 @@ const benefits = [
 ];
 
 export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime"; path: LandingPath }) {
+  const showSupportingSections = path !== "/anagen";
   const supportPhone = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").replace(/\D/g, "");
   const jsonLd = { "@context": "https://schema.org", "@type": "Product", name: ANAGEN.name, sku: ANAGEN.sku, brand: { "@type": "Brand", name: "Anagen" }, description: "10g herbal hair-care blend; two sachets and an application guide per pack.", image: [absoluteUrl("/anagen/product-studio.webp"), absoluteUrl("/anagen/ari.jpg")], offers: { "@type": "Offer", url: absoluteUrl(path), price: "11200.00", priceCurrency: "NGN" } };
   return <main className={`${styles.page}${variant === "lime" ? ` ${styles.limeTheme}` : ""}`} data-anagen-theme={variant}>
@@ -72,7 +73,9 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
       ["leaf", "Natural blend", "Traditional botanical ingredients"], ["spark", "14-day results", "Supplier-reported visible changes"], ["box", "Easy to use", "Mix with your hair cream or oil"], ["shield", "For men & women", "Hair and beard care"],
     ] as const).map(([icon,title,description]) => <article key={title}><Icon name={icon} /><h2>{title}</h2><p>{description}</p></article>)}</div></section>
 
-    <section className={`${styles.section} ${styles.container}`}><div className={styles.valueBanner}><Icon name="box" /><div><span className={styles.yellowLabel}>No half measures</span><h2>Why every pack contains 2 sachets.</h2><p>Each Anagen pack comes with <strong>two sachets of natural hair mix</strong>, plus a printed application guide. You receive the full pack — ready to add to the hair-care routine you already know.</p></div></div></section>
+    {showSupportingSections && (
+      <section className={`${styles.section} ${styles.container}`}><div className={styles.valueBanner}><Icon name="box" /><div><span className={styles.yellowLabel}>No half measures</span><h2>Why every pack contains 2 sachets.</h2><p>Each Anagen pack comes with <strong>two sachets of natural hair mix</strong>, plus a printed application guide. You receive the full pack — ready to add to the hair-care routine you already know.</p></div></div></section>
+    )}
 
     <section className={`${styles.section} ${styles.container}`} id="about-anagen"><header className={styles.sectionIntro}><p className={styles.eyebrow}>A closer look</p><h2>What makes Anagen so special?</h2><p>A 10g concentrated mix of traditional herbs, made to fit into your everyday hair-care routine.</p></header><div className={styles.productDetails}><img src="/anagen/anagenraw.jpg" alt="A closer look at the Anagen hair-care blend" width="800" height="800" loading="lazy" decoding="async" /><div>{[
       ["Versatile application", "Mix Anagen with your preferred hair cream, pomade or oil. Follow the application guide included in your pack."],
@@ -80,7 +83,9 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
       ["14-day visible results", "Our supplier reports visible baby hair and fuller-looking growth within two weeks of consistent use. Individual results vary."],
     ].map(([title,body]) => <article key={title}><span><Icon name="leaf" /></span><div><h3>{title}</h3><p>{body}</p></div></article>)}</div></div></section>
 
-    <section className={`${styles.section} ${styles.ingredientsSection}`} id="anagen-ingredients"><div className={styles.container}><header className={styles.sectionIntro}><p className={styles.eyebrow}>Natural ingredients</p><h2>Powered by traditional herbs.</h2><p>The botanical ingredients behind your Anagen blend.</p></header><div className={styles.ingredientGrid}>{ingredients.map(([title,subtitle,body]) => <article key={title}><span><Icon name="leaf" /></span><h3>{title}</h3><small>{subtitle}</small><p>{body}</p></article>)}</div></div></section>
+    {showSupportingSections && (
+      <section className={`${styles.section} ${styles.ingredientsSection}`} id="anagen-ingredients"><div className={styles.container}><header className={styles.sectionIntro}><p className={styles.eyebrow}>Natural ingredients</p><h2>Powered by traditional herbs.</h2><p>The botanical ingredients behind your Anagen blend.</p></header><div className={styles.ingredientGrid}>{ingredients.map(([title,subtitle,body]) => <article key={title}><span><Icon name="leaf" /></span><h3>{title}</h3><small>{subtitle}</small><p>{body}</p></article>)}</div></div></section>
+    )}
 
     <section className={`${styles.section} ${styles.container}`}><div className={styles.benefits}><header className={styles.sectionIntro}><p className={styles.eyebrow}>Your hair-care journey</p><h2>The benefits, at a glance.</h2></header><div>{benefits.map(([title,body]) => <article key={title}><Icon name="check" /><h3>{title}</h3><p>{body}</p></article>)}</div></div></section>
 
@@ -95,7 +100,9 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
     <section className={`${styles.section} ${styles.container}`}><div className={styles.contents}><img src="/anagen/ari.jpg" alt="Anagen pack contents and application guide" width="800" height="800" loading="lazy" decoding="async" /><div><p className={styles.eyebrow}>Inside your pack</p><h2>Everything you need to get started.</h2><article><Icon name="box" /><div><h3>2 sachets of Anagen natural mix</h3><p>A concentrated herbal blend divided into two sachets in every pack.</p></div></article><article><Icon name="check" /><div><h3>A step-by-step procedure guide</h3><p>Printed instructions explaining how to mix and apply the formula with your hair cream or oil.</p></div></article></div></div></section>
 
 
-    <section className={`${styles.section} ${styles.narrow}`}><div className={styles.deliveryNotice}><Icon name="truck" /><div><h2>A quick delivery note.</h2><p>We offer <strong>same-day delivery in state capitals</strong>, free doorstep delivery nationwide and payment on delivery. Please place an order when you are ready to receive and pay for it.</p><div><span><strong>Lagos:</strong> 1–2 working days</span><span><strong>Outside Lagos:</strong> 1–2 working days</span></div><small>Your selected availability helps our team arrange delivery. We will confirm the delivery time with you.</small></div></div></section>
+    {showSupportingSections && (
+      <section className={`${styles.section} ${styles.narrow}`}><div className={styles.deliveryNotice}><Icon name="truck" /><div><h2>A quick delivery note.</h2><p>We offer <strong>same-day delivery in state capitals</strong>, free doorstep delivery nationwide and payment on delivery. Please place an order when you are ready to receive and pay for it.</p><div><span><strong>Lagos:</strong> 1–2 working days</span><span><strong>Outside Lagos:</strong> 1–2 working days</span></div><small>Your selected availability helps our team arrange delivery. We will confirm the delivery time with you.</small></div></div></section>
+    )}
 
     <section id="order-form" className={`${styles.section} ${styles.narrow} ${styles.orderSection}`}><AnagenOrderForm supportPhone={supportPhone} /></section>
     <footer className={styles.footer}><Link href="/shop" className={styles.footerBrand}>RENOVA</Link><p>Anagen herbal hair care, available at Renova.</p><nav aria-label="Footer"><Link href="/shop">Shop Renova</Link><Link href="/track-order">Track an order</Link><Link href="/privacy">Privacy</Link><Link href="/returns">Returns</Link><Link href="/terms">Terms</Link><a href="mailto:support@shoprenova.com.ng">Contact support</a></nav><small>© {new Date().getFullYear()} Renova. All rights reserved.</small></footer>

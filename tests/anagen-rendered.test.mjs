@@ -44,7 +44,8 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
   assert.ok(productData,`${path}: product structured data is present`);
   assert.equal(productData.offers.url,`https://shoprenova.com.ng${path}`);
   assert.equal(productData.sku,'REN-ANAGEN-10G');
-  for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','TODAY /','24-HOUR DELIVERY','subject to address &amp; dispatch confirmation','1–2 working days'])assert.ok(html.includes(text),text);
+  for(const text of ['id="order-form"','name="whatsappPhone"','name="availabilityDay"','₦11,200','₦20,400','₦28,600','TODAY /','24-HOUR DELIVERY','subject to address &amp; dispatch confirmation'])assert.ok(html.includes(text),text);
+  if(theme==='lime')assert.ok(html.includes('1–2 working days'),'Electric Lime delivery note');
   assert.doesNotMatch(html,/name="(?:alternativePhone|cityTown)"/);
   assert.match(html,/<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
   assert.ok(html.includes('id="anagen-comparisons"'));
