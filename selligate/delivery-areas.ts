@@ -43,6 +43,7 @@ export const ROUTE_REASONS = {
   CONFLICTING_DELIVERY_STATE: 'The delivery address contains conflicting states.',
   SELLIGATE_STATE_NOT_COVERED: 'Selligate is not configured to dispatch in this state.',
   DELIVERY_LGA_REQUIRED: 'The delivery LGA could not be identified. Confirm it before manual fulfilment.',
+  AMBIGUOUS_DELIVERY_LGA: 'The delivery address matches more than one LGA. Confirm it before manual fulfilment.',
   INVALID_DELIVERY_LGA: 'The selected LGA does not belong to this state or is not recognised.',
   CONFLICTING_DELIVERY_LGA: 'The delivery LGA and the address disagree.',
   SELLIGATE_LGA_NOT_COVERED: 'This LGA is outside Renova’s Selligate delivery area.',
@@ -52,7 +53,7 @@ export const ROUTE_REASONS = {
 } as const;
 
 type BlockedReason = Exclude<keyof typeof ROUTE_REASONS, 'NO_AVAILABILITY_CONFIGURATION' | 'UNAVAILABLE_IN_STATE' | 'AVAILABLE_IN_COVERED_LGA'>;
-export type DeliveryArea = { lga: string | null; reason: BlockedReason | null };
+export type DeliveryArea = { lga: string | null; reason: BlockedReason | null; fromAddressLookup?: true };
 
 const normal = (value: string) => value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const stateNames = new Map(getAllStates().map(({code, name}) => [code, normal(name)]));
@@ -97,11 +98,14 @@ function localityHints(state: string, addr: Record<string, unknown>): string[] {
   const townParts = [addr.cityTown, addr.town, addr.city];
   const streets = [addr.streetAddress, addr.address].filter((part): part is string => typeof part === 'string' && part.length <= 1000);
   const parts = [...townParts, ...streets.flatMap(part => part.split(/[,;\n]/u))];
-  const preciseEndings = [...lgaIndex(state).keys(), ...Object.keys(aliases[state] ?? {})].filter(name => name.includes(' ') && name !== stateName);
+  // Port Harcourt in a postal address also describes suburbs in Obio/Akpor.
+  // Keep an explicit "Port Harcourt LGA" or "Port Harcourt City" as evidence.
+  const broadCity = state === 'RI' ? 'port harcourt' : '';
+  const preciseEndings = [...lgaIndex(state).keys(), ...Object.keys(aliases[state] ?? {})].filter(name => name.includes(' ') && name !== stateName && name !== broadCity);
   for (const part of parts) {
     if (typeof part !== 'string' || part.length > 1000) continue;
     const key = normal(part);
-    if (!key || key === stateName || key === `${stateName} state`) continue;
+    if (!key || key === stateName || key === `${stateName} state` || key === broadCity) continue;
     const match = canonicalLga(state, part);
     if (match) hits.add(match);
     // The Anagen form can leave its LGA field blank. A precise locality at the

@@ -103,9 +103,47 @@ test('city restrictions and statewide coverage stay distinct',()=>{
   assert.equal(checkDeliveryArea(state,{lga}).reason,'SELLIGATE_LGA_NOT_COVERED',`${state} ${lga}`);
  }
  assert.equal(checkDeliveryArea('FC',{streetAddress:'Fictional address, Abuja'}).reason,'DELIVERY_LGA_REQUIRED');
+ assert.equal(checkDeliveryArea('RI',{streetAddress:'Fictional address, Port Harcourt'}).reason,'DELIVERY_LGA_REQUIRED');
  assert.equal(checkDeliveryArea('RI',{streetAddress:'Fictional address, Port Harcourt City'}).lga,'Port Harcourt');
  assert.equal(checkDeliveryArea('LA',{streetAddress:'Fictional address Lagos Mainland Lagos State'}).lga,'Lagos Mainland');
  assert.equal(canonicalLga('EK','constructor'),null);
  assert.equal(checkDeliveryArea('BY',{}).reason,'DELIVERY_LGA_REQUIRED');
  assert.equal(checkDeliveryArea('AD',{lga:'Yola North'}).reason,'SELLIGATE_STATE_NOT_COVERED');
+});
+
+test('full addresses without a selected LGA identify mapped neighbourhoods in different states',()=>{
+ for(const [state,streetAddress,lga] of [
+  ['LA','12 Example Street, Maryland, Lagos','Ikeja'],
+  ['LA','12 Example Street Yaba Lagos State','Lagos Mainland'],
+  ['KD','12 Example Rd Barnawa Kaduna','Kaduna South'],
+  ['FC','12 Example Close, Gwarinpa, Abuja','Municipal Area Council'],
+  ['RI','12 Example Street, Rumuolumeni, Port Harcourt, Rivers','Obio/Akpor'],
+  ['EK','12 Example Road, Erinfun, Ekiti State','Ado Ekiti'],
+ ]){
+  const order=parseOrder({...row(state),address_json:{stateCode:state,streetAddress}});
+  const routed=evaluate(order,{anagen:[state]});
+  assert.deepEqual(routed.area,{lga,reason:null,fromAddressLookup:true},streetAddress);
+  assert.equal(routed.decisions[0].addressLga,lga);
+  assert.ok(formatMessage(order,routed,'LIVE').includes('LGA: '+lga));
+  assert.equal(evaluate(order,{anagen:[]}).eligible.length,0);
+ }
+});
+
+test('address lookup does not prefer a covered LGA over a verified non-covered place or an ambiguous match',()=>{
+ const street=streetAddress=>evaluate(parseOrder({...row('KD'),address_json:{stateCode:'KD',streetAddress}}),{anagen:['KD']});
+ assert.deepEqual(street('12 Example Rd Sabon Tasha Kaduna').area,{lga:'Chikun',reason:'SELLIGATE_LGA_NOT_COVERED',fromAddressLookup:true});
+ assert.equal(street('12 Example Road, Kawo, Kaduna').area.reason,'AMBIGUOUS_DELIVERY_LGA');
+ assert.equal(street('12 Example Road, Barnawa, Sabon Tasha, Kaduna').eligible.length,0);
+ const lagos=parseOrder({...row('LA'),address_json:{stateCode:'LA',streetAddress:'12 Example Road, Abule Egba, Lagos'}});
+ assert.equal(evaluate(lagos,{anagen:['LA']}).area.reason,'AMBIGUOUS_DELIVERY_LGA');
+});
+
+test('an unconfirmed street or another state stays manual and a selected LGA is not replaced',()=>{
+ const route=(streetAddress,lga)=>evaluate(parseOrder({...row('LA'),address_json:{stateCode:'LA',streetAddress,lga}}),{anagen:['LA']});
+ for(const address of ['12 Maryland Road, Lagos','12 Example Road, near Maryland, Lagos','12 Example Road, Lekki, Lagos','12 Example Road, Lagos']){
+  assert.equal(route(address).area.reason,'DELIVERY_LGA_REQUIRED',address);
+ }
+ assert.equal(route('12 Example Road, Maryland, Ogun State').area.reason,'CONFLICTING_DELIVERY_STATE');
+ assert.equal(route('12 Example Road, Maryland, Lagos','Kaduna South').area.reason,'INVALID_DELIVERY_LGA');
+ assert.deepEqual(route('12 Example Road, Maryland, Lagos','Ikorodu').area,{lga:'Ikorodu',reason:'SELLIGATE_LGA_NOT_COVERED'});
 });

@@ -70,3 +70,29 @@ test('OFF preview compares Ado Ekiti and Oye without queueing a message',()=>fix
  assert.equal((await c.jobs()).length,0);
  assert.equal((await c.q('SELECT count(*)::int AS count FROM public.orders')).rows[0].count,0);
 }));
+
+test('an order with a blank LGA uses address evidence and checks the address again before permission to send',()=>fixture(async c=>{
+ await c.configure();
+ const order=await c.place({lga:'',streetAddress:'12 Example Road, Maryland, Lagos'});
+ const {job}=await c.api('claim');
+ assert.ok(job);
+ const send=await c.api('authorize',{jobId:job.id,claimToken:job.claimToken});
+ assert.match(send.message,/LGA: Ikeja/);
+ assert.equal((await c.jobs())[0].decisions[0].addressLga,'Ikeja');
+ assert.equal((await c.api('permit',{jobId:job.id,attemptToken:send.attemptToken})).allowed,true);
+ await c.q('UPDATE public.orders SET address_json=$2 WHERE id=$1',[order.id,JSON.stringify({stateCode:'LA',streetAddress:'12 Example Road, Igbogbo, Lagos'})]);
+ assert.equal((await c.api('permit',{jobId:job.id,attemptToken:send.attemptToken})).allowed,false);
+ const decisions=(await c.jobs())[0].decisions;
+ assert.equal(decisions[0].addressLga,'Ikorodu');
+ assert.equal(decisions[0].reason,'SELLIGATE_LGA_NOT_COVERED');
+}));
+
+test('a custom test address can preview the lookup while OFF and cannot queue a WhatsApp test',()=>fixture(async c=>{
+ await c.available();
+ const input={productId:1,state:'LA',lga:'',quantity:1,previewAddress:'12 Example Road, Maryland, Lagos'};
+ const v=await c.tx(s=>s.simulation(owner,{...input,action:'simulate'}));
+ assert.equal(v.dryRun,true);
+ assert.match(v.message,/TEST ONLY[\s\S]*LGA: Ikeja/);
+ await assert.rejects(c.tx(s=>s.simulation(owner,{...input,action:'sendTest',confirmation:'SEND FICTIONAL TEST'})),/CUSTOM_ADDRESS_PREVIEW_ONLY/);
+ assert.equal((await c.jobs()).length,0);
+}));

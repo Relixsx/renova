@@ -1,5 +1,6 @@
 import { getAllStates } from "ng-geo-data";
 import { checkDeliveryArea, ROUTE_REASONS } from './delivery-areas';
+import { inferAddressLga } from './address-localities';
 export const RELEASE = "selligate-v2";
 export const STATES = getAllStates().map(({code,name}) => ({code,name}));
 export type Mode = "OFF" | "TEST" | "LIVE";
@@ -14,7 +15,7 @@ export function deliveryState(a:Record<string,unknown>){const v=a.stateCode??a.s
 export function validateStateCodes(v:unknown):string[]{if(!Array.isArray(v)||v.length>37||v.some(c=>!STATES.some(s=>s.code===c)))throw new DispatchError('INVALID_STATE_CODES');return [...new Set(v as string[])].sort();}
 export type Item={slug:string;name:string;variant:string;quantity:number;packQuantity?:number};
 export type Order={number:string;customer:string;phone:string;whatsappPhone:string;date:string;address:Record<string,unknown>;items:Item[]};
-export type Decision={index:number;slug:string;name:string;quantity:number;eligible:boolean;reason:keyof typeof ROUTE_REASONS};
+export type Decision={index:number;slug:string;name:string;quantity:number;eligible:boolean;reason:keyof typeof ROUTE_REASONS;addressLga?:string};
 function text(v:unknown,max:number,required=false):string {if(typeof v!=='string'||v.length>max||(required&&!v.trim())){if(!required&&v==null)return '';throw new DispatchError('MALFORMED_ORDER');}return v.replace(/[\u0000-\u001f\u007f*_~`@]/g,' ').replace(/\s+/g,' ').trim();}
 export function parseOrder(r:Record<string,unknown>):Order {
  const address=object(r.address_json??r.addressJson);let items=r.items_json??r.itemsJson;
@@ -30,11 +31,19 @@ export function evaluate(o:Order,rules:Record<string,string[]>) {
  const conflictingState=state!==null&&[o.address.stateCode,o.address.state_code,o.address.state,o.address.stateName].some(value=>{
   const other=deliveryState({state:value});return other!==null&&other!==state;
  });
- const area=checkDeliveryArea(state,o.address,conflictingState);
+ let area=checkDeliveryArea(state,o.address,conflictingState);
+ if(state&&area.reason==='DELIVERY_LGA_REQUIRED'){
+  const inferred=inferAddressLga(state,o.address);
+  if(inferred&&'reason' in inferred)area={lga:null,reason:inferred.reason};
+  else if(inferred){
+   const checked=checkDeliveryArea(state,{...o.address,lga:inferred.lga},conflictingState);
+   area={...checked,fromAddressLookup:true};
+  }
+ }
  const decisions:Decision[]=o.items.map((i,index)=>{
   const available=rules[i.slug];
   const eligible=Boolean(!area.reason&&state&&Array.isArray(available)&&available.includes(state));
-  return {index,slug:i.slug,name:i.name,quantity:i.quantity,eligible,reason:area.reason??(!Array.isArray(available)||!available.length?'NO_AVAILABILITY_CONFIGURATION':eligible?'AVAILABLE_IN_COVERED_LGA':'UNAVAILABLE_IN_STATE')};
+  return {index,slug:i.slug,name:i.name,quantity:i.quantity,eligible,reason:area.reason??(!Array.isArray(available)||!available.length?'NO_AVAILABILITY_CONFIGURATION':eligible?'AVAILABLE_IN_COVERED_LGA':'UNAVAILABLE_IN_STATE'),...(area.fromAddressLookup&&area.lga?{addressLga:area.lga}:{})};
  });
  const eligible=o.items.filter((_,i)=>decisions[i].eligible);
  return {state,area,decisions,eligible,partial:eligible.length>0&&eligible.length<o.items.length};

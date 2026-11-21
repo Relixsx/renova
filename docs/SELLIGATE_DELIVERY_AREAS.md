@@ -49,7 +49,23 @@ The broad city entries keep a conservative core: Lagos uses 16 listed LGAs, Abuj
 1. In Product availability, save Ekiti for Anagen only if stock is actually available there.
 2. In Test laboratory choose Ekiti, Ado Ekiti and one pack. Run the dry-run preview. The route should qualify.
 3. Leave product and state unchanged, choose Oye and preview again. It should show that the LGA is outside the delivery area. Neither preview creates an order or sends a message.
-4. Real orders with an unrecognised LGA, a missing LGA that cannot be inferred from the address, or conflicting location details remain for the owner to handle. The app checks a valid selected LGA and uses clear locality hints when the form omits it. An ambiguous city name is not a geocoder.
+4. If Kaduna is already saved for the product, select Kaduna and leave Delivery LGA blank. Try the fictional address `12 Example Road, Barnawa, Kaduna` to see Kaduna South. Then try `12 Example Road, Sabon Tasha, Kaduna` to see Chikun excluded. Use a fictional street and a real neighbourhood for these previews.
+
+## Address lookup when checkout leaves the LGA blank
+
+After checking the existing LGA fields and locality hints, Renova searches the address and town fields against a local Nigerian settlement and ward index. Each lookup is limited to the selected state and includes all LGAs in that state. Renova still checks the full list of covered LGAs and the product's saved stock states before dispatching. A provided LGA still uses the original checks.
+
+Dispatch History shows the identified LGA when the index resolved it. A road name alone, a broad city name, a different written state, or evidence pointing to multiple LGAs can leave an order for manual review. Renova does not send order details to a search or AI service, and publishing the lookup does not replay old jobs.
+
+The bundled `selligate/data/grid3-address-index.json.gz` adapts [GRID3 NGA – Settlement Names](https://data.grid3.org/datasets/GRID3::grid3-nga-settlement-names/about). Credit: eHealth Africa, Proxy Logics, and Oak Ridge National Laboratory (ORNL), *Settlement Points in Nigeria* (2020), GRID3. The source is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Renova keeps the names and LGA labels, normalises spelling, and removes coordinates, editor details and other unused fields. The dataset does not verify individual houses or street numbers.
+
+To refresh the index, download the CSV from the GRID3 source. From the Renova checkout, run:
+
+```sh
+node --input-type=module -e 'import { getAllStates, getLGAsByState } from "ng-geo-data"; console.log(JSON.stringify(getAllStates().map(s => ({...s, lgas: getLGAsByState(s.code)}))));' > /tmp/renova-lga-catalogue.json
+python3 scripts/selligate/build-address-index.py /path/to/grid3-settlements.csv /tmp/renova-lga-catalogue.json selligate/data/grid3-address-index.json.gz
+npm run test:selligate
+```
 
 ## Geographic references
 

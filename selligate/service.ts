@@ -65,7 +65,12 @@ export class SelligateService {
  }
  async simulation(actor:string,i:Record<string,unknown>){
   const s=await this.settings();const p=(await this.db.query('SELECT slug,name FROM public.products WHERE id=$1',[Number(i.productId)])).rows[0];if(!p)throw new DispatchError('PRODUCT_NOT_FOUND',404);
-  const fixture=fictionalOrder(p as {slug:string;name:string},String(i.state),Number(i.quantity),`TEST-${randomUUID().slice(0,8).toUpperCase()}`,i.lga),order=parseOrder(fixture),result=evaluate(order,await this.rules());
+  if(i.previewAddress!=null&&(typeof i.previewAddress!=='string'||i.previewAddress.length>600))throw new DispatchError('INVALID_PREVIEW_ADDRESS');
+  const previewAddress=typeof i.previewAddress==='string'?i.previewAddress.trim():'';
+  if(previewAddress&&i.action!=='simulate')throw new DispatchError('CUSTOM_ADDRESS_PREVIEW_ONLY');
+  const fixture=fictionalOrder(p as {slug:string;name:string},String(i.state),Number(i.quantity),`TEST-${randomUUID().slice(0,8).toUpperCase()}`,i.lga);
+  if(previewAddress)fixture.address_json.streetAddress=previewAddress;
+  const order=parseOrder(fixture),result=evaluate(order,await this.rules());
   const reason=result.area.reason??result.decisions[0]?.reason??'UNAVAILABLE_IN_STATE';
   const message=result.eligible.length?formatMessage(order,result,'TEST'):`No dispatch: ${ROUTE_REASONS[reason]}`;
   if(i.action==='sendTest'){
