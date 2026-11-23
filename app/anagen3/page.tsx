@@ -58,6 +58,8 @@ const customerPhotos = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => ({
   alt: `Before and after hair comparison ${number}, shared with Renova`,
 }));
 
+const [heroComparison, routineComparison] = customerPhotos;
+
 const supplierPhotos = [
   { src: "/anagen/hair1.jpg", width: 246, height: 132, alt: "Before and after views of the top of the scalp, shared by Anagen’s supplier" },
   { src: "/anagen/hair2.jpg", width: 246, height: 144, alt: "Before and after photos of the crown, shared by Anagen’s supplier" },
@@ -109,12 +111,11 @@ export default function Anagen3Page() {
           <div className={styles.heroGrid}>
             <figure className={styles.heroPhoto}>
               <div className={styles.packPhoto}>
-                <img src={heroImage} srcSet="/anagen3/pack-540.webp 540w, /anagen3/pack-860.webp 860w" sizes="(max-width: 720px) 54vw, 360px" width="860" height="860" fetchPriority="high" alt="Actual Anagen Hair Reviver pouch in silver packaging" />
+                <img src={heroImage} srcSet="/anagen3/pack-540.webp 540w, /anagen3/pack-860.webp 860w" sizes="(max-width: 720px) clamp(198px, 62vw, 320px), clamp(285px, 40.5vw, 470px)" width="860" height="860" fetchPriority="high" alt="Actual Anagen Hair Reviver pouch in silver packaging" />
               </div>
-              <div className={styles.applyPhoto}>
-                <img src="/anagen3/application-540.webp" width="540" height="540" alt="Illustration of a woman smoothing hair cream along her temple" />
-              </div>
-              <figcaption>Application illustration</figcaption>
+              <a className={styles.heroComparison} href={heroComparison.src} title="View full-size photo">
+                <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="Before and after hair photos of a man, shared with Renova" />
+              </a>
             </figure>
 
             <ul className={styles.heroBenefits}>
@@ -152,12 +153,9 @@ export default function Anagen3Page() {
         </div>
       </section>
 
-      <section className={`${styles.container} ${styles.section} ${styles.application}`} aria-labelledby="use-heading">
-        <figure className={styles.applicationPhoto}>
-          <img src="/anagen3/application-900.webp" srcSet="/anagen3/application-540.webp 540w, /anagen3/application-900.webp 900w" sizes="(max-width: 720px) calc(100vw - 36px), 550px" width="900" height="900" loading="lazy" decoding="async" alt="Illustration of applying hair cream along the front hairline" />
-          <figcaption>Application illustration</figcaption>
-        </figure>
-        <div className={styles.applicationCopy}>
+      <section className={`${styles.container} ${styles.section} ${styles.routine}`} aria-labelledby="use-heading">
+        <ComparisonPhoto {...routineComparison} alt="Before and after hair photos of a man with a beard, shared with Renova" />
+        <div className={styles.routineCopy}>
           <h2 id="use-heading">Keep the hair routine you know. <em>Add Anagen.</em></h2>
           <p>Anagen is a dry herbal blend you mix into the cream or oil you already use. The printed guide walks you through preparing the mix and applying it.</p>
           <ul className={styles.mixingList}>

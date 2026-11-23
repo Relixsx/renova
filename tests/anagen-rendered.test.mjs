@@ -90,13 +90,19 @@ test('native production Anagen 3 serves an independent page with the shared chec
   const html = await response.text();
   for (const text of [
    'https://shoprenova.com.ng/anagen3', 'id="anagen3-primary"', 'id="order-form"',
-   'Anagen Hair Reviver', 'Two sealed sachets', 'Application illustration', 'Pay on delivery',
+   'Anagen Hair Reviver', 'Two sealed sachets', 'Pay on delivery',
    'Before &amp; after photos', 'Photos shared by Anagen’s supplier', 'What comes in your pack',
    '₦11,200', '₦20,400', '₦28,600', 'Save ₦2,000', 'Save ₦5,000',
    'name="fullName"', 'name="phone"', 'name="whatsappPhone"', 'name="streetAddress"',
    'name="stateCode"', 'name="availabilityDay"', 'name="commitment"', 'data-anagen-funnel="anagen3"',
    'Use my delivery number for WhatsApp', 'Place my order — pay on delivery',
   ]) assert.ok(html.includes(text), text);
+  const hero = html.match(/<section[^>]*aria-labelledby="anagen3-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
+  const heroSources = [...hero.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
+  assert.deepEqual(heroSources, ["/anagen3/pack-860.webp", "/anagen/customer-gallery/photo-01.webp"]);
+  const routine = html.match(/<section[^>]*aria-labelledby="use-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
+  assert.match(routine, /<img\b[^>]*\ssrc="\/anagen\/customer-gallery\/photo-07\.webp"/);
+  assert.doesNotMatch(html, /application illustration|\/anagen3\/application-\d+\.webp/i);
   const gallery = html.match(/<section id="customer-photos"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
   const photoSources = [...gallery.matchAll(/<img\b[^>]*\ssrc="(\/anagen\/[^"]+)"/g)].map(([, src]) => src);
   const menFirst = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`);
@@ -106,7 +112,7 @@ test('native production Anagen 3 serves an independent page with the shared chec
   assert.ok((html.match(/href="#order-form"/g) || []).length >= 7, "The order form is reachable from throughout the funnel");
   assert.doesNotMatch(html, /choicemartng\.com|shopibesta\.com/);
   assert.match(html, /<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
-  for (const asset of ['pack-540.webp', 'pack-860.webp', 'application-540.webp', 'application-900.webp', 'concern-edges.webp', 'concern-breakage.webp', 'concern-scalp.webp', 'blend.webp', 'sachets.webp', 'pouch.webp']) {
+  for (const asset of ['pack-540.webp', 'pack-860.webp', 'concern-edges.webp', 'concern-breakage.webp', 'concern-scalp.webp', 'blend.webp', 'sachets.webp', 'pouch.webp']) {
    assert.ok(html.includes(`/anagen3/${asset}`), asset);
    const image = await server.fetch(`/anagen3/${asset}`);
    assert.equal(image.status, 200);
