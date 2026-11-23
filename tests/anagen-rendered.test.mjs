@@ -99,7 +99,10 @@ test('native production Anagen 3 serves an independent page with the shared chec
   ]) assert.ok(html.includes(text), text);
   const hero = html.match(/<section[^>]*aria-labelledby="anagen3-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
   const heroSources = [...hero.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
-  assert.deepEqual(heroSources, ["/anagen3/pack-860.webp", "/anagen/customer-gallery/photo-01.webp"]);
+  const heroComparison = "/anagen/customer-gallery/photo-01.webp";
+  assert.deepEqual(heroSources, ["/anagen3/pack-860.webp", heroComparison, heroComparison]);
+  assert.ok(hero.includes(`href="${heroComparison}"`), "The hero comparison links to the original");
+  assert.match(hero, /<span>Before<\/span>[\s\S]*<span>After<\/span>/);
   const routine = html.match(/<section[^>]*aria-labelledby="use-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
   assert.match(routine, /<img\b[^>]*\ssrc="\/anagen\/customer-gallery\/photo-07\.webp"/);
   assert.doesNotMatch(html, /application illustration|\/anagen3\/application-\d+\.webp/i);

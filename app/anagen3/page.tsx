@@ -113,8 +113,15 @@ export default function Anagen3Page() {
               <div className={styles.packPhoto}>
                 <img src={heroImage} srcSet="/anagen3/pack-540.webp 540w, /anagen3/pack-860.webp 860w" sizes="(max-width: 720px) clamp(198px, 62vw, 320px), clamp(285px, 40.5vw, 470px)" width="860" height="860" fetchPriority="high" alt="Actual Anagen Hair Reviver pouch in silver packaging" />
               </div>
-              <a className={styles.heroComparison} href={heroComparison.src} title="View full-size photo">
-                <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="Before and after hair photos of a man, shared with Renova" />
+              <a className={styles.heroComparison} href={heroComparison.src} aria-label="View the full-size before and after hair photos of a man, shared with Renova">
+                <span className={styles.heroPortrait}>
+                  <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="" />
+                  <span>Before</span>
+                </span>
+                <span className={styles.heroPortrait}>
+                  <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="" />
+                  <span>After</span>
+                </span>
               </a>
             </figure>
 
