@@ -2,6 +2,8 @@ import { withStoreWriter } from "../../../lib/store-writer";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders, products } from "../../../../db/schema";
+import { anagenCampaignSource, readAnagenCampaign } from "../../../lib/anagen-campaign";
+import { availableAnagenStock } from "../../../lib/anagen-catalogue";
 import { ANAGEN } from "../../../lib/anagen-offer.mjs";
 import { AnagenOrderError, digestAnagenValue, validateAnagenOrder } from "../../../lib/anagen-order";
 import { sendOrderNotifications } from "../../../lib/order-payment";
@@ -17,7 +19,7 @@ export async function POST(request: Request) {
     if (new TextEncoder().encode(raw).byteLength > 16000) throw new AnagenOrderError("Your order details are too long.", 413);
     let payload: unknown;
     try { payload = JSON.parse(raw); } catch { throw new AnagenOrderError("Check your order details."); }
-    const { key, bundle, details, consent } = validateAnagenOrder(payload);
+    const { key, bundle, details, consent, funnel, campaign } = validateAnagenOrder(payload);
     const orderNumber = `REN-ANA-${(await digestAnagenValue(key)).slice(0, 24).toUpperCase()}`;
     const fingerprint = await digestAnagenValue(JSON.stringify({ packs: bundle.packs, details }));
     const db = getDb();
@@ -30,12 +32,13 @@ export async function POST(request: Request) {
     };
     if (existing) return responseForExisting(existing);
     const [product] = await db.select().from(products).where(eq(products.slug, ANAGEN.slug)).limit(1);
-    if (!product || product.sku !== ANAGEN.sku || !product.isPublished || product.paymentMode !== "cash_on_delivery" || product.priceKobo !== ANAGEN.bundles[0].totalKobo) {
+    const stock = availableAnagenStock(product);
+    if (!product || stock === null) {
       throw new AnagenOrderError("Anagen ordering is temporarily unavailable. Please contact Renova.", 409);
     }
     // Use the store's existing catalogue availability workflow; count packs,
     // rather than treating a three-pack bundle as one available pack.
-    if (product.stock < bundle.packs) throw new AnagenOrderError("That pack quantity is currently unavailable. Choose a smaller bundle or contact Renova.", 409);
+    if (stock < bundle.packs) throw new AnagenOrderError("That pack quantity is currently unavailable. Choose a smaller bundle or contact Renova.", 409);
     const item = {
       slug: product.slug, sku: product.sku,
       name: `${product.name} — ${bundle.label}`,
@@ -45,12 +48,18 @@ export async function POST(request: Request) {
       // fractional per-pack kobo value or a misleading 3 × ₦11,200 total.
       unitPriceKobo: bundle.totalKobo, imageUrl: product.imageUrl,
     };
+    const landingSource = anagenCampaignSource(request, funnel);
+    const campaignAttribution = funnel ? readAnagenCampaign(campaign) : {};
     const [created] = await db.insert(orders).values({
       orderNumber, customerName: details.fullName, customerEmail: details.email,
       customerPhone: details.phone, ...consent,
       status: "confirmed", paymentStatus: "payment_due_on_delivery", paymentMethod: "cash_on_delivery",
       totalKobo: bundle.totalKobo, itemsJson: JSON.stringify([item]),
-      addressJson: JSON.stringify({ ...details, anagenRequestFingerprint: fingerprint }),
+      addressJson: JSON.stringify({
+        ...details, anagenRequestFingerprint: fingerprint,
+        ...(landingSource ? { funnel: landingSource } : {}),
+        ...(Object.keys(campaignAttribution).length ? { campaignAttribution } : {}),
+      }),
       shippingJson: JSON.stringify({ id: "anagen-doorstep", name: ANAGEN.shippingName, priceKobo: 0, label: "Free delivery", detail: ANAGEN.estimate }),
       estimatedDelivery: ANAGEN.estimate, trackingNumber: orderNumber,
     }).onConflictDoNothing({ target: orders.orderNumber }).returning();

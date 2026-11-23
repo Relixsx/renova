@@ -8,13 +8,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 await mkdir(join(root, "node_modules/.cache"), { recursive: true });
 const output = await mkdtemp(join(root, "node_modules/.cache/renova-whatsapp-test-"));
 const files = ["app/lib/jumia-delivery-countdown.ts", "app/components/reminder-message-editor.tsx", "app/lib/reminder-message-content.ts", "app/lib/reminder-message-settings.ts", "app/lib/catalog.ts", "app/lib/catalog-expanded.ts", "app/api/chat/route.ts", "app/api/orders/track/route.ts", "db/schema.ts", "app/lib/delivery-estimate.ts", "app/lib/whatsapp-order-controls.ts", "app/lib/checkout.ts", "app/lib/checkout-whatsapp.ts", "app/lib/cart-storage.ts", "app/api/checkout/place-order/route.ts", "app/api/checkout/initialize/route.ts", "app/lib/whatsapp-message.ts", "app/lib/whatsapp-delivery.ts", "app/lib/whatsapp-notifications.ts", "app/lib/whatsapp-webhook-security.ts", "app/lib/customer-reminders.ts", "app/lib/order-payment.ts", "app/api/whatsapp/webhook/route.ts", "app/api/orders/reminders/run/route.ts", "app/api/orders/reminders/route.ts"];
-files.push("app/api/anagen/order/route.ts", "app/lib/anagen-order.ts", "app/lib/meta-pixel.ts", "app/components/anagen-order-form.tsx", "app/lib/reminder-status.ts", "app/components/reminder-status-filters.tsx", "app/components/customer-reminder-bot.tsx", "app/components/order-whatsapp-control.tsx");
+files.push("app/api/anagen/order/route.ts", "app/api/anagen/availability/route.ts", "app/lib/anagen-order.ts", "app/lib/anagen-catalogue.ts", "app/lib/anagen-campaign.ts", "app/lib/anagen3-analytics.ts", "app/lib/meta-pixel.ts", "app/components/anagen-order-form.tsx", "app/lib/reminder-status.ts", "app/components/reminder-status-filters.tsx", "app/components/customer-reminder-bot.tsx", "app/components/order-whatsapp-control.tsx");
 try {
   for (const file of files) {
     let source = await readFile(join(root, file), "utf8");
     // Next's navigation component is supplied by the framework in production;
     // the isolated React form test only needs its accessible anchor output.
     source = source.replace('import Link from "next/link";', 'import { jsx as testAnchor } from "react/jsx-runtime"; const Link = ({ children, ...props }) => testAnchor("a", { ...props, children });');
+    source = source.replace('import { unstable_cache } from "next/cache";', 'const unstable_cache = (read) => read;');
     source = source.replace(/import styles from "[^"\n]+\.module\.css";/g, 'const styles = new Proxy({}, { get: (_target, name) => String(name) });');
     source = source.replace(/from\s+["'](\.[^"']+)["']/g, (whole, path) => {
       const target = resolve(dirname(join(root, file)), path);

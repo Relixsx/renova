@@ -13,6 +13,7 @@ const root = process.env.RENOVA_TEST_SOURCE, build = process.env.RENOVA_TEST_BUI
 const load = (file) => import(pathToFileURL(join(build, file.replace(/\.tsx?$/, ".mjs"))));
 const schema = await load("db/schema.ts");
 const route = await load("app/api/anagen/order/route.ts");
+const availability = await load("app/api/anagen/availability/route.ts");
 const track = await load("app/api/orders/track/route.ts");
 const wa = await load("app/lib/whatsapp-notifications.ts");
 const reminders = await load("app/lib/customer-reminders.ts");
@@ -142,6 +143,64 @@ test("Anagen repeated and concurrent submissions create one order and one set of
   const again = await route.POST(request(value)); assert.equal(again.status, 200); assert.equal((await again.json()).alreadyReceived, true);
   const changed = { ...value, quantity: 2 }; const conflict = await route.POST(request(changed)); assert.equal(conflict.status, 409); assert.equal((await conflict.json()).code, "REFERENCE_USED");
   assert.equal(owner().length, 1); assert.equal((await anagenOrders()).length, 1);
+});
+
+test("Anagen 3 uses the shared checkout and saves bounded attribution once, without changing legacy order-source logic", async () => {
+  const value = payload({ funnel: "anagen3", quantity: 2, campaign: {
+    utm_source: " facebook ", utm_campaign: "edges-nov", utm_content: "creative-A",
+    utm_medium: "customer@example.invalid", utm_term: "x".repeat(81), arbitrary: "ignore",
+  } });
+  delete value.details.lga;
+  const result = await route.POST(request(value));
+  assert.equal(result.status, 201);
+  const body = await result.json();
+  assert.deepEqual([body.packs, body.totalKobo], [2, 2040000]);
+  const retry = await route.POST(request({ ...value, campaign: { utm_campaign: "different" } }));
+  assert.equal(retry.status, 200);
+  assert.equal((await retry.json()).alreadyReceived, true);
+  const [order] = await anagenOrders();
+  const address = JSON.parse(order.addressJson);
+  assert.equal(address.funnel, "anagen3");
+  assert.equal(address.orderSource, ANAGEN.version);
+  assert.equal(address.lga, "");
+  assert.deepEqual(address.campaignAttribution, { utm_source: "facebook", utm_campaign: "edges-nov", utm_content: "creative-A" });
+  assert.equal(order.paymentStatus, "payment_due_on_delivery");
+  assert.equal(owner().length, 1);
+  assert.equal(graph().length, 1);
+
+  for (const name of ["anagen", "anagen2"]) {
+    const response = await route.POST(request(payload(), { referer: `https://renova.example.invalid/${name}?ignored=1` }));
+    assert.equal(response.status, 201);
+    const { orderNumber } = await response.json();
+    const [control] = await db.select().from(schema.orders).where(eq(schema.orders.orderNumber, orderNumber));
+    const controlAddress = JSON.parse(control.addressJson);
+    assert.equal(controlAddress.funnel, name);
+    assert.equal(controlAddress.orderSource, ANAGEN.version);
+    assert.equal(controlAddress.campaignAttribution, undefined);
+  }
+});
+
+test("Anagen 3 accepts an optional LGA, rejects a mismatched LGA and rejects unknown funnel identifiers", async () => {
+  for (const value of [
+    payload({ funnel: "anagen-other" }),
+    payload({ funnel: "anagen3", details: { ...payload().details, stateCode: "EK", lga: "Ikeja" } }),
+  ]) assert.equal((await route.POST(request(value))).status, 400);
+  assert.equal((await anagenOrders()).length, 0);
+  assert.equal(calls.length, 0);
+  const accepted = await route.POST(request(payload({ funnel: "anagen3" })));
+  assert.equal(accepted.status, 201);
+});
+
+test("public Anagen availability returns at most three eligible packs and checks the same catalogue rules as checkout", async () => {
+  assert.deepEqual(await (await availability.GET()).json(), { capacity: 3 });
+  await db.update(schema.products).set({ stock: 2 }).where(eq(schema.products.slug, ANAGEN.slug));
+  assert.deepEqual(await (await availability.GET()).json(), { capacity: 2 });
+  assert.equal((await route.POST(request(payload({ funnel: "anagen3", quantity: 3 })))).status, 409);
+  await db.update(schema.products).set({ stock: 0 }).where(eq(schema.products.slug, ANAGEN.slug));
+  assert.deepEqual(await (await availability.GET()).json(), { capacity: 0 });
+  await db.update(schema.products).set({ isPublished: false }).where(eq(schema.products.slug, ANAGEN.slug));
+  assert.deepEqual(await (await availability.GET()).json(), { capacity: null });
+  assert.equal((await anagenOrders()).length, 0);
 });
 
 test("Anagen validation rejects missing WhatsApp, unagreed orders, invalid quantities and malformed input before saving", async () => {
