@@ -1,3 +1,4 @@
+import { readAnagenCampaign } from "../../../lib/anagen-campaign";
 import { normalizeDeliveryCopy, standardDeliveryEstimate } from "../../../lib/delivery-estimate";
 import ExcelJS from "exceljs";
 import { desc } from "drizzle-orm";
@@ -137,7 +138,8 @@ export async function GET(request: Request) {
       ["Street Address", 34], ["City / Town", 19], ["LGA", 19], ["State", 16],
       ["Delivery Instructions", 30], ["Delivery Method", 24], ["Delivery Details", 31],
       ["Estimated Delivery", 21], ["Tracking Number", 24], ["Customer Notified (WAT)", 24],
-      ["Last Updated (WAT)", 23],
+      ["Last Updated (WAT)", 23], ["Anagen Funnel", 17], ["UTM Source", 19], ["UTM Medium", 19],
+      ["UTM Campaign", 26], ["UTM Content", 24], ["UTM Term", 22],
     ] as const;
 
     sheet.columns = columns.map(([header, width]) => ({ header, width }));
@@ -170,6 +172,7 @@ export async function GET(request: Request) {
       const items = parseJson<OrderItem[]>(order.itemsJson, []);
       const address = parseJson<Record<string, unknown>>(order.addressJson, {});
       const shipping = parseJson<Record<string, unknown>>(order.shippingJson, {});
+      const campaign = readAnagenCampaign(address.campaignAttribution);
       const quantity = items.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
       const subtotalKobo = items.reduce(
         (sum, item) => sum + (Number(item.unitPriceKobo) || 0) * Math.max(0, Number(item.quantity) || 0),
@@ -205,6 +208,8 @@ export async function GET(request: Request) {
         text(order.trackingNumber),
         watDate(order.customerNotifiedAt),
         watDate(order.updatedAt),
+        text(address.funnel), campaign.utm_source, campaign.utm_medium,
+        campaign.utm_campaign, campaign.utm_content, campaign.utm_term,
       ]);
 
       row.height = Math.max(26, Math.min(72, productLines.length * 18));

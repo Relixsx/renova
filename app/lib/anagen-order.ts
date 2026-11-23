@@ -1,4 +1,4 @@
-import { getAllStates } from "ng-geo-data";
+import { getAllStates, getLGAsByState } from "ng-geo-data";
 import { ANAGEN } from "./anagen-offer.mjs";
 import { CHECKOUT_WHATSAPP_NOTICE_VERSION, checkoutWhatsAppConsent } from "./checkout-whatsapp";
 import { phoneForWhatsApp } from "./whatsapp-message";
@@ -34,6 +34,8 @@ export async function digestAnagenValue(value: string) {
 export function validateAnagenOrder(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new AnagenOrderError("Check your order details.");
   const payload = input as Record<string, unknown>;
+  if (payload.funnel !== undefined && payload.funnel !== "anagen3") throw new AnagenOrderError("Refresh this page and try again.");
+  const funnel: "anagen3" | undefined = payload.funnel === "anagen3" ? "anagen3" : undefined;
   if (payload.website) throw new AnagenOrderError("Your order could not be submitted.");
   if (payload.offerVersion !== ANAGEN.version) throw new AnagenOrderError("Refresh this page to review the current Anagen offer.", 409);
   if (payload.customerConfirmedDeliveryCommitment !== true) throw new AnagenOrderError("Confirm that you intend to receive and pay for this order.");
@@ -63,10 +65,13 @@ export function validateAnagenOrder(input: unknown) {
     stateCode, state: state.name, lga: text(fields.lga, "local government area", 100, false),
     availabilityDay, orderSource: ANAGEN.version,
   };
+  if (funnel && details.lga && !getLGAsByState(stateCode).some((area) => area.name === details.lga)) {
+    throw new AnagenOrderError("Choose a local government area in your delivery state, or leave it blank.");
+  }
   let consent;
   try {
     consent = checkoutWhatsAppConsent(undefined, details.phone, { phone: details.whatsappPhone, noticeVersion: payload.whatsappNoticeVersion });
   } catch { throw new AnagenOrderError("Review the WhatsApp order update notice and enter your WhatsApp number."); }
   if (payload.whatsappNoticeVersion !== CHECKOUT_WHATSAPP_NOTICE_VERSION) throw new AnagenOrderError("Refresh the page to review your order update details.", 409);
-  return { key: key.toLowerCase(), bundle, details, consent };
+  return { key: key.toLowerCase(), bundle, details, consent, funnel, campaign: payload.campaign };
 }
