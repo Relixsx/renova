@@ -91,15 +91,18 @@ test('native production Anagen 3 serves an independent page with the shared chec
   for (const text of [
    'https://shoprenova.com.ng/anagen3', 'id="anagen3-primary"', 'id="order-form"',
    'Anagen Hair Reviver', 'Two sealed sachets', 'Application illustration', 'Pay on delivery',
-   'Before &amp; after photos', 'See six more comparisons', 'What comes in your pack',
+   'Before &amp; after photos', 'Photos shared by Anagen’s supplier', 'What comes in your pack',
    '₦11,200', '₦20,400', '₦28,600', 'Save ₦2,000', 'Save ₦5,000',
    'name="fullName"', 'name="phone"', 'name="whatsappPhone"', 'name="streetAddress"',
    'name="stateCode"', 'name="availabilityDay"', 'name="commitment"', 'data-anagen-funnel="anagen3"',
    'Use my delivery number for WhatsApp', 'Place my order — pay on delivery',
   ]) assert.ok(html.includes(text), text);
-  for (let number = 1; number <= 9; number++) {
-   assert.ok(html.includes(`/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`));
-  }
+  const gallery = html.match(/<section id="customer-photos"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
+  const photoSources = [...gallery.matchAll(/<img\b[^>]*\ssrc="(\/anagen\/[^"]+)"/g)].map(([, src]) => src);
+  const menFirst = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`);
+  assert.deepEqual(photoSources, [...menFirst, "/anagen/hair1.jpg", "/anagen/hair2.jpg", "/anagen/hair3.jpg"]);
+  assert.doesNotMatch(gallery, /<details\b/, "All comparisons are visible without expanding the gallery");
+  assert.deepEqual([...gallery.matchAll(/<a href="(\/anagen\/[^"]+)"/g)].map(([, href]) => href), photoSources);
   assert.ok((html.match(/href="#order-form"/g) || []).length >= 7, "The order form is reachable from throughout the funnel");
   assert.doesNotMatch(html, /choicemartng\.com|shopibesta\.com/);
   assert.match(html, /<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);

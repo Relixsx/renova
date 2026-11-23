@@ -51,10 +51,24 @@ const steps: { icon: IconName; title: string; text: string }[] = [
   { icon: "wallet", title: "Pay when it arrives", text: "Pay the total shown on your order when you receive it." },
 ];
 
-function CustomerPhoto({ number }: { number: number }) {
-  const file = `photo-${String(number).padStart(2, "0")}.webp`;
+const customerPhotos = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => ({
+  src: `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`,
+  width: 1080,
+  height: 810,
+  alt: `Before and after hair comparison ${number}, shared with Renova`,
+}));
+
+const supplierPhotos = [
+  { src: "/anagen/hair1.jpg", width: 246, height: 132, alt: "Before and after views of the top of the scalp, shared by Anagen’s supplier" },
+  { src: "/anagen/hair2.jpg", width: 246, height: 144, alt: "Before and after photos of the crown, shared by Anagen’s supplier" },
+  { src: "/anagen/hair3.jpg", width: 246, height: 141, alt: "Before and after photos of the side hairline, shared by Anagen’s supplier" },
+];
+
+function ComparisonPhoto({ src, width, height, alt }: { src: string; width: number; height: number; alt: string }) {
   return <figure className={styles.proofPhoto}>
-    <img src={`/anagen/customer-gallery/${file}`} width="1080" height="810" alt={`Before and after hair comparison ${number}, shared with Renova`} loading="lazy" decoding="async" />
+    <a href={src} title="View full-size photo">
+      <img src={src} width={width} height={height} alt={alt} loading="lazy" decoding="async" />
+    </a>
   </figure>;
 }
 
@@ -116,6 +130,7 @@ export default function Anagen3Page() {
                 <span><Icon name="wallet" /> Pay on delivery</span>
                 <span><Icon name="truck" /> Free doorstep delivery</span>
               </div>
+              <a className={styles.heroProofLink} href="#customer-photos">See all {customerPhotos.length + supplierPhotos.length} comparisons <Icon name="arrow" /></a>
             </div>
           </div>
         </div>
@@ -158,17 +173,17 @@ export default function Anagen3Page() {
         <div className={`${styles.container} ${styles.section}`}>
           <header className={styles.sectionHeading}>
             <h2 id="proof-heading">Before &amp; after photos</h2>
-            <p>Photos shared by Anagen customers. Individual experiences vary.</p>
+            <p>Photos shared by Anagen customers. Select a photo to see it full size. Individual experiences vary.</p>
           </header>
-          <div className={styles.proofGrid} role="region" aria-label="Featured before and after photos" tabIndex={0}>
-            {[1, 4, 7].map(number => <CustomerPhoto key={number} number={number} />)}
+          <div className={styles.proofGrid} role="region" aria-label="Customer before and after photos">
+            {customerPhotos.map(photo => <ComparisonPhoto key={photo.src} {...photo} />)}
           </div>
-          <details className={styles.morePhotos}>
-            <summary>See six more comparisons</summary>
-            <div className={styles.proofGrid} role="region" aria-label="Additional before and after photos" tabIndex={0}>
-              {[2, 3, 5, 6, 8, 9].map(number => <CustomerPhoto key={number} number={number} />)}
+          <div className={styles.supplierProof} role="region" aria-labelledby="supplier-proof-heading">
+            <h3 id="supplier-proof-heading">Photos shared by Anagen’s supplier</h3>
+            <div className={styles.proofGrid}>
+              {supplierPhotos.map(photo => <ComparisonPhoto key={photo.src} {...photo} />)}
             </div>
-          </details>
+          </div>
           <div className={styles.centerAction}><OrderLink /></div>
         </div>
       </section>
