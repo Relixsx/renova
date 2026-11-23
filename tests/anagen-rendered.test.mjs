@@ -90,15 +90,20 @@ test('native production Anagen 3 serves an independent page with the shared chec
   const html = await response.text();
   for (const text of [
    'https://shoprenova.com.ng/anagen3', 'id="anagen3-primary"', 'id="order-form"',
-   'Two sealed sachets', 'Illustrative lifestyle image', 'Pay on delivery',
+   'Anagen Hair Reviver', 'Two sealed sachets', 'Application illustration', 'Pay on delivery',
+   'Before &amp; after photos', 'See six more comparisons', 'What comes in your pack',
    '₦11,200', '₦20,400', '₦28,600', 'Save ₦2,000', 'Save ₦5,000',
    'name="fullName"', 'name="phone"', 'name="whatsappPhone"', 'name="streetAddress"',
    'name="stateCode"', 'name="availabilityDay"', 'name="commitment"', 'data-anagen-funnel="anagen3"',
    'Use my delivery number for WhatsApp', 'Place my order — pay on delivery',
   ]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /anagen-comparisons|before-and-after hair comparison/i);
+  for (let number = 1; number <= 9; number++) {
+   assert.ok(html.includes(`/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`));
+  }
+  assert.ok((html.match(/href="#order-form"/g) || []).length >= 7, "The order form is reachable from throughout the funnel");
+  assert.doesNotMatch(html, /choicemartng\.com|shopibesta\.com/);
   assert.match(html, /<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
-  for (const asset of ['pack-540.webp', 'pack-860.webp', 'routine-540.webp', 'routine-900.webp', 'blend.webp', 'sachets.webp', 'pouch.webp']) {
+  for (const asset of ['pack-540.webp', 'pack-860.webp', 'application-540.webp', 'application-900.webp', 'concern-edges.webp', 'concern-breakage.webp', 'concern-scalp.webp', 'blend.webp', 'sachets.webp', 'pouch.webp']) {
    assert.ok(html.includes(`/anagen3/${asset}`), asset);
    const image = await server.fetch(`/anagen3/${asset}`);
    assert.equal(image.status, 200);
