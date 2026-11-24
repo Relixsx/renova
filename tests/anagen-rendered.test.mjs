@@ -115,14 +115,15 @@ test('native production Anagen 3 serves an independent page with the shared chec
   const testimonials = html.match(/<section id="customer-testimonials"[^>]*>[\s\S]*?<\/section>/);
   assert.ok(testimonials, "Customer testimonials are rendered on Anagen 3");
   assert.match(html.slice(testimonials.index + testimonials[0].length), /^\s*<section id="order-form"/);
-  assert.equal((testimonials[0].match(/<blockquote\b/g) || []).length, 5);
-  for (const quote of [
-   "the hair fall has reduced",
-   "Even me I can see the hairline getting better",
-   "My front hair is coming back gradually",
-   "My hair is fuller now and the breakage reduced",
-   "The product worked as intended",
-  ]) assert.ok(testimonials[0].includes(quote), quote);
+  const testimonialPaths = [1, 2, 3, 4, 5].map(number => `/anagen3/testimonials/whatsapp-${number}.png`);
+  assert.deepEqual([...testimonials[0].matchAll(/<a href="(\/anagen3\/testimonials\/[^"]+)"/g)].map(([, src]) => src), testimonialPaths);
+  assert.equal((testimonials[0].match(/<img\b/g) || []).length, 5);
+  assert.doesNotMatch(testimonials[0], /<blockquote\b/);
+  for (const path of testimonialPaths) {
+   const original = await server.fetch(path);
+   assert.equal(original.status, 200, path);
+   assert.match(original.headers.get('content-type'), /image\/png/);
+  }
   assert.ok(hero.includes('href="#customer-testimonials"'), "The first screen links to the testimonials");
   assert.ok((html.match(/href="#order-form"/g) || []).length >= 7, "The order form is reachable from throughout the funnel");
   assert.doesNotMatch(html, /choicemartng\.com|shopibesta\.com/);

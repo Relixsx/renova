@@ -216,28 +216,34 @@
 .testimonials { background: var(--mint); border-top: 1px solid var(--line); }
 .testimonials h2 { color: var(--forest); max-width: 23ch; }
 .testimonialGrid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: clamp(12px, 2vw, 22px);
+  --testimonial-gap: clamp(12px, 2vw, 22px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--testimonial-gap);
   padding: 0;
   list-style: none;
 }
 .testimonialCard {
-  grid-column: span 2;
+  flex: 0 0 calc((100% - 2 * var(--testimonial-gap)) / 3);
   min-width: 0;
-  padding: clamp(20px, 3vw, 38px);
-  border: 1px solid var(--line);
-  border-radius: 14px 30px 14px 14px;
-  background: #fff;
-  color: var(--forest);
+  max-width: 440px;
 }
-.testimonialCard:nth-child(-n+2) { grid-column: span 3; }
-.testimonialCard:first-child { background: var(--forest); border-color: var(--forest); color: #fff; }
-.testimonialCard blockquote { display: flex; flex-direction: column; gap: 18px; height: 100%; margin: 0; }
-.testimonialQuote { font-size: clamp(22px, 2.1vw, 30px); font-weight: 760; letter-spacing: -.026em; line-height: 1.35; }
-.testimonialQuote p + p { margin-top: 9px; }
-.testimonialCard .testimonialFollowUp { margin-top: auto; padding-top: 13px; border-top: 1px solid var(--line); color: var(--leaf); font-size: clamp(17px, 1.65vw, 19px); font-weight: 670; }
-.testimonialCard:first-child .testimonialFollowUp { color: var(--on-forest); border-color: var(--outline); }
+.testimonialCard a {
+  display: block;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 7px 19px #10382619;
+  cursor: zoom-in;
+}
+.testimonialCard a:hover { border-color: var(--leaf); }
+.testimonialCard img { width: 100%; height: auto; }
+
+@media (max-width: 980px) {
+  .testimonialCard { flex-basis: calc((100% - var(--testimonial-gap)) / 2); }
+}
 
 .checkoutGrid { display: grid; grid-template-columns: minmax(0, .63fr) minmax(0, 1fr); align-items: start; gap: clamp(21px, 6vw, 74px); }
 .checkoutInfo { padding-top: 24px; }
@@ -369,8 +375,7 @@
   .bundleButton { min-height: 50px; padding: 8px 14px; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 12px; }
   .checkoutInfo { padding-top: 0; }
-  .testimonialGrid { grid-template-columns: minmax(0, 1fr); }
-  .testimonialCard, .testimonialCard:nth-child(-n+2) { grid-column: auto; }
+  .testimonialCard { flex-basis: 100%; }
   .checkoutInfo ul { display: flex; flex-wrap: wrap; gap: 6px 13px; padding-top: 9px; font-size: 16px; }
   .checkoutInfo li { gap: 5px; margin: 0; }
   .checkoutInfo li svg { width: 16px; height: 16px; }

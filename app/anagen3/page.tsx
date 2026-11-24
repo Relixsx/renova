@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- Campaign photos have locally optimized responsive variants. */
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
 import { absoluteUrl } from "../lib/site";
@@ -51,41 +52,10 @@ const steps: { icon: IconName; title: string; text: string }[] = [
   { icon: "wallet", title: "Pay when it arrives", text: "Pay the total shown on your order when you receive it." },
 ];
 
-const testimonials = [
-  {
-    quotes: [
-      "Since I started using this product the hair fall has reduced",
-      "And my hair feels stronger now",
-    ],
-    followUp: "Please I need another 3 packs",
-  },
-  {
-    quotes: [
-      "I showed my barber yesterday",
-      "He said the hair is improving well",
-      "Even me I can see the hairline getting better",
-    ],
-    followUp: "Abeg keep one for me I want to order another pack today 😁",
-  },
-  {
-    quotes: [
-      "This product is really effective",
-      "My front hair is coming back gradually",
-    ],
-    followUp: "Please I need one more for me and one for my brother",
-  },
-  {
-    quotes: [
-      "I’ve been using it for 5 months now",
-      "My hair is fuller now and the breakage reduced",
-    ],
-    followUp: "I want another two packs please 🙏",
-  },
-  {
-    quotes: ["The product worked as intended"],
-    followUp: "I need two more 😁",
-  },
-];
+const testimonialScreenshots = [1, 2, 3, 4, 5].map(number => ({
+  src: `/anagen3/testimonials/whatsapp-${number}.png`,
+  alt: `Anagen WhatsApp testimonial screenshot ${number}`,
+}));
 
 const customerPhotos = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => ({
   src: `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`,
@@ -301,17 +271,14 @@ export default function Anagen3Page() {
         <div className={`${styles.container} ${styles.section}`}>
           <header className={styles.sectionHeading}>
             <h2 id="testimonials-heading">What customers say <em>about Anagen</em></h2>
-            <p>Excerpts from messages shared with Renova.</p>
+            <p>Tap a screenshot to see the conversation at full size.</p>
           </header>
           <ul className={styles.testimonialGrid} role="list">
-            {testimonials.map(({ quotes, followUp }) => (
-              <li key={followUp} className={styles.testimonialCard}>
-                <blockquote>
-                  <div className={styles.testimonialQuote}>
-                    {quotes.map(quote => <p key={quote}>“{quote}”</p>)}
-                  </div>
-                  <p className={styles.testimonialFollowUp}>“{followUp}”</p>
-                </blockquote>
+            {testimonialScreenshots.map(({ src, alt }) => (
+              <li key={src} className={styles.testimonialCard}>
+                <a href={src} aria-label={`View ${alt} at full size`}>
+                  <Image src={src} alt={alt} width={941} height={1672} sizes="(max-width: 720px) 92vw, (max-width: 980px) 46vw, (max-width: 1200px) 31vw, 367px" />
+                </a>
               </li>
             ))}
           </ul>
