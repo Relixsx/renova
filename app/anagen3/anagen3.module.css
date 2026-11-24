@@ -26,7 +26,7 @@
   outline-offset: 4px;
 }
 .page em { font-style: normal; color: var(--leaf); }
-.proof, .packages, .checkout, .faq { scroll-margin-top: 18px; }
+.proof, .packages, .testimonials, .checkout, .faq { scroll-margin-top: 18px; }
 
 .masthead { background: var(--forest); color: #fff; }
 .masthead .container, .footer .container { min-height: 69px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -136,7 +136,11 @@
 .heroTrust { display: flex; flex-wrap: wrap; gap: 7px 17px; margin-top: 12px; font-size: 16px; font-weight: 730; color: var(--leaf); }
 .heroTrust span, .checkoutInfo li { display: flex; align-items: center; gap: 7px; }
 .heroTrust svg { width: 17px; height: 17px; flex-shrink: 0; }
-.heroProofLink { display: none; }
+.heroLinks { display: flex; flex-wrap: wrap; gap: 0 18px; margin-top: 4px; }
+.heroProofLink { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; color: var(--leaf); font-size: 17px; font-weight: 780; }
+.heroProofLink:hover { text-decoration: underline; text-underline-offset: 4px; }
+.heroProofLink svg { width: 17px; height: 17px; }
+.heroGalleryLink { display: none; }
 
 .section { padding-block: clamp(48px, 7.5vw, 88px); }
 .sectionHeading { margin-bottom: clamp(22px, 4vw, 43px); text-align: center; }
@@ -208,6 +212,32 @@
 .steps li { min-width: 0; padding: 15px 9px 0 0; border-top: 1px solid var(--outline); }
 .steps li > svg { width: 27px; height: 27px; color: var(--leaf); margin-bottom: 8px; }
 .steps p { margin-top: 7px; color: var(--muted); }
+
+.testimonials { background: var(--mint); border-top: 1px solid var(--line); }
+.testimonials h2 { color: var(--forest); max-width: 23ch; }
+.testimonialGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 22px);
+  padding: 0;
+  list-style: none;
+}
+.testimonialCard {
+  grid-column: span 2;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 38px);
+  border: 1px solid var(--line);
+  border-radius: 14px 30px 14px 14px;
+  background: #fff;
+  color: var(--forest);
+}
+.testimonialCard:nth-child(-n+2) { grid-column: span 3; }
+.testimonialCard:first-child { background: var(--forest); border-color: var(--forest); color: #fff; }
+.testimonialCard blockquote { display: flex; flex-direction: column; gap: 18px; height: 100%; margin: 0; }
+.testimonialQuote { font-size: clamp(22px, 2.1vw, 30px); font-weight: 760; letter-spacing: -.026em; line-height: 1.35; }
+.testimonialQuote p + p { margin-top: 9px; }
+.testimonialCard .testimonialFollowUp { margin-top: auto; padding-top: 13px; border-top: 1px solid var(--line); color: var(--leaf); font-size: clamp(17px, 1.65vw, 19px); font-weight: 670; }
+.testimonialCard:first-child .testimonialFollowUp { color: var(--on-forest); border-color: var(--outline); }
 
 .checkoutGrid { display: grid; grid-template-columns: minmax(0, .63fr) minmax(0, 1fr); align-items: start; gap: clamp(21px, 6vw, 74px); }
 .checkoutInfo { padding-top: 24px; }
@@ -308,8 +338,7 @@
   .heroTrust { gap: 5px 12px; }
   .heroTrust span { gap: 5px; }
   .heroTrust svg { width: 15px; height: 15px; }
-  .heroProofLink { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; color: var(--leaf); font-size: 17px; font-weight: 780; }
-  .heroProofLink svg { width: 17px; height: 17px; }
+  .heroGalleryLink { display: inline-flex; }
   .heroBenefits { border-top: 1px solid var(--line); }
   .heroBenefits li:first-child { padding-top: 9px; }
   .heroBenefits li:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -340,6 +369,8 @@
   .bundleButton { min-height: 50px; padding: 8px 14px; }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 12px; }
   .checkoutInfo { padding-top: 0; }
+  .testimonialGrid { grid-template-columns: minmax(0, 1fr); }
+  .testimonialCard, .testimonialCard:nth-child(-n+2) { grid-column: auto; }
   .checkoutInfo ul { display: flex; flex-wrap: wrap; gap: 6px 13px; padding-top: 9px; font-size: 16px; }
   .checkoutInfo li { gap: 5px; margin: 0; }
   .checkoutInfo li svg { width: 16px; height: 16px; }

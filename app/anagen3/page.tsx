@@ -51,6 +51,42 @@ const steps: { icon: IconName; title: string; text: string }[] = [
   { icon: "wallet", title: "Pay when it arrives", text: "Pay the total shown on your order when you receive it." },
 ];
 
+const testimonials = [
+  {
+    quotes: [
+      "Since I started using this product the hair fall has reduced",
+      "And my hair feels stronger now",
+    ],
+    followUp: "Please I need another 3 packs",
+  },
+  {
+    quotes: [
+      "I showed my barber yesterday",
+      "He said the hair is improving well",
+      "Even me I can see the hairline getting better",
+    ],
+    followUp: "Abeg keep one for me I want to order another pack today 😁",
+  },
+  {
+    quotes: [
+      "This product is really effective",
+      "My front hair is coming back gradually",
+    ],
+    followUp: "Please I need one more for me and one for my brother",
+  },
+  {
+    quotes: [
+      "I’ve been using it for 5 months now",
+      "My hair is fuller now and the breakage reduced",
+    ],
+    followUp: "I want another two packs please 🙏",
+  },
+  {
+    quotes: ["The product worked as intended"],
+    followUp: "I need two more 😁",
+  },
+];
+
 const customerPhotos = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => ({
   src: `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`,
   width: 1080,
@@ -95,6 +131,7 @@ export default function Anagen3Page() {
         <Link href="/anagen3" className={styles.brand} aria-label="Anagen by Renova">anagen<span aria-hidden="true">.</span><small>BY RENOVA</small></Link>
         <nav aria-label="Anagen">
           <a href="#customer-photos" className={styles.navLink}>Customer photos</a>
+          <a href="#customer-testimonials" className={styles.navLink}>Testimonials</a>
           <a href="#packages" className={styles.navLink}>Packages</a>
           <a href="#order-form" className={styles.headerOrder}>Order now <Icon name="arrow" /></a>
         </nav>
@@ -138,7 +175,10 @@ export default function Anagen3Page() {
                 <span><Icon name="wallet" /> Pay on delivery</span>
                 <span><Icon name="truck" /> Free doorstep delivery</span>
               </div>
-              <a className={styles.heroProofLink} href="#customer-photos">See all {customerPhotos.length + supplierPhotos.length} comparisons <Icon name="arrow" /></a>
+              <div className={styles.heroLinks}>
+                <a className={styles.heroProofLink} href="#customer-testimonials">Testimonials <Icon name="arrow" /></a>
+                <a className={`${styles.heroProofLink} ${styles.heroGalleryLink}`} href="#customer-photos">{customerPhotos.length + supplierPhotos.length} comparisons <Icon name="arrow" /></a>
+              </div>
             </div>
           </div>
         </div>
@@ -254,6 +294,28 @@ export default function Anagen3Page() {
           <ol className={styles.steps}>{steps.map(({ icon, title: heading, text }) =>
             <li key={heading}><Icon name={icon} /><h3>{heading}</h3><p>{text}</p></li>
           )}</ol>
+        </div>
+      </section>
+
+      <section id="customer-testimonials" className={styles.testimonials} aria-labelledby="testimonials-heading">
+        <div className={`${styles.container} ${styles.section}`}>
+          <header className={styles.sectionHeading}>
+            <h2 id="testimonials-heading">What customers say <em>about Anagen</em></h2>
+            <p>Excerpts from messages shared with Renova.</p>
+          </header>
+          <ul className={styles.testimonialGrid} role="list">
+            {testimonials.map(({ quotes, followUp }) => (
+              <li key={followUp} className={styles.testimonialCard}>
+                <blockquote>
+                  <div className={styles.testimonialQuote}>
+                    {quotes.map(quote => <p key={quote}>“{quote}”</p>)}
+                  </div>
+                  <p className={styles.testimonialFollowUp}>“{followUp}”</p>
+                </blockquote>
+              </li>
+            ))}
+          </ul>
+          <div className={styles.centerAction}><OrderLink /></div>
         </div>
       </section>
 
