@@ -20,6 +20,7 @@ const reminders = await load("app/lib/customer-reminders.ts");
 const cod = await load("app/api/checkout/place-order/route.ts");
 const prepaid = await load("app/api/checkout/initialize/route.ts");
 const { AnagenOrderForm } = await load("app/components/anagen-order-form.tsx");
+const { anagenStates } = await load("app/lib/anagen-states.ts");
 const { ANAGEN, anagenProductValues } = await import(pathToFileURL(join(root, "app/lib/anagen-offer.mjs")));
 const { applyAnagenProductSetup, validateAnagenDatabaseUrl } = await import(pathToFileURL(join(root, "scripts/anagen-product-setup.mjs")));
 const pg = new PGlite();
@@ -299,7 +300,7 @@ test("Anagen setup is additive, rolls back a failed insert, and rejects an unrel
 });
 
 test("Anagen form renders a separate WhatsApp field, optional email and all Nigerian states without friend tracking", async () => {
-  const html = renderToStaticMarkup(React.createElement(AnagenOrderForm, { stock: 50, supportPhone: "2348000000000" }));
+  const html = renderToStaticMarkup(React.createElement(AnagenOrderForm, { stock: 50, supportPhone: "2348000000000", states: anagenStates }));
   assert.match(html, /<input(?=[^>]*name="whatsappPhone")(?=[^>]*required)[^>]*>/); assert.match(html, /name="email"/);
   assert.doesNotMatch(html, /<input(?=[^>]*name="email")(?=[^>]*required)[^>]*>/); assert.doesNotMatch(html, /Reply STOP/);
   assert.doesNotMatch(html, /name="(?:alternativePhone|cityTown)"/);
@@ -310,6 +311,6 @@ test("Anagen form renders a separate WhatsApp field, optional email and all Nige
   assert.match(html, /FCT — Abuja/); assert.match(html, /value="LA"/); assert.match(html, /value="ZA"/);
   assert.match(html, /₦11,200/); assert.match(html, /₦20,400/); assert.match(html, /₦28,600/);
   assert.match(html, /wa\.me\/2348000000000/); assert.doesNotMatch(html, /2347032161983|1023272507453983|process_order\.php/);
-  const unavailable = renderToStaticMarkup(React.createElement(AnagenOrderForm, { stock: 0, supportPhone: "" }));
+  const unavailable = renderToStaticMarkup(React.createElement(AnagenOrderForm, { stock: 0, supportPhone: "", states: anagenStates }));
   assert.match(unavailable, /currently unavailable/); assert.match(unavailable, /fieldset disabled/);
 });

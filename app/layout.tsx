@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import "./base.css";
 import { CartProvider } from "./components/cart-provider";
 import { MetaPixelLoader } from "./components/meta-pixel-loader";
 import { MetaPageTracker } from "./components/meta-page-tracker";

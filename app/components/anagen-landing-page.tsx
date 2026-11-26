@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import "../globals.css";
 import Link from "next/link";
 import { AnagenOrderForm, AnagenBundleLink } from "./anagen-order-form";
 import { AnagenComparisonGallery } from "./anagen-comparison-gallery";
 import { ProductMetaTracker } from "./product-meta-tracker";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
+import { anagenStates } from "../lib/anagen-states";
 import { absoluteUrl } from "../lib/site";
 import styles from "../anagen/anagen.module.css";
 
@@ -104,7 +106,7 @@ export function AnagenLandingPage({ variant, path }: { variant: "gold" | "lime";
       <section className={`${styles.section} ${styles.narrow}`}><div className={styles.deliveryNotice}><Icon name="truck" /><div><h2>A quick delivery note.</h2><p>We offer <strong>same-day delivery in state capitals</strong>, free doorstep delivery nationwide and payment on delivery. Please place an order when you are ready to receive and pay for it.</p><div><span><strong>Lagos:</strong> 1–2 working days</span><span><strong>Outside Lagos:</strong> 1–2 working days</span></div><small>Your selected availability helps our team arrange delivery. We will confirm the delivery time with you.</small></div></div></section>
     )}
 
-    <section id="order-form" className={`${styles.section} ${styles.narrow} ${styles.orderSection}`}><AnagenOrderForm supportPhone={supportPhone} /></section>
+    <section id="order-form" className={`${styles.section} ${styles.narrow} ${styles.orderSection}`}><AnagenOrderForm supportPhone={supportPhone} states={anagenStates} /></section>
     <footer className={styles.footer}><Link href="/shop" className={styles.footerBrand}>RENOVA</Link><p>Anagen herbal hair care, available at Renova.</p><nav aria-label="Footer"><Link href="/shop">Shop Renova</Link><Link href="/track-order">Track an order</Link><Link href="/privacy">Privacy</Link><Link href="/returns">Returns</Link><Link href="/terms">Terms</Link><a href="mailto:support@shoprenova.com.ng">Contact support</a></nav><small>© {new Date().getFullYear()} Renova. All rights reserved.</small></footer>
   </main>;
 }

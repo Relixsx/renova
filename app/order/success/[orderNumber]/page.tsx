@@ -1,4 +1,5 @@
 import { standardDeliveryEstimate } from "../../../lib/delivery-estimate";
+import "../../../globals.css";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";

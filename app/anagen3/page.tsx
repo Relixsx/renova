@@ -1,15 +1,25 @@
 /* eslint-disable @next/next/no-img-element -- Campaign photos have locally optimized responsive variants. */
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
+import { anagenStates } from "../lib/anagen-states";
 import { absoluteUrl } from "../lib/site";
 import { Anagen3BundleButton, Anagen3Checkout, Anagen3StickyOrder, Anagen3Stock } from "./interactive";
+import { previewImage } from "./previews";
+import { AnagenDiagnostics } from "./diagnostics";
 import styles from "./anagen3.module.css";
 
 const title = "Anagen Hair Reviver · From ₦11,200";
 const description = "Anagen is a concentrated herbal hair-care blend with two sachets and an application guide per pack. Free doorstep delivery and pay on delivery with Renova.";
 const heroImage = "/anagen3/pack-860.webp";
+const shortScreen = "(max-width: 480px) and (max-height: 720px)";
+const productPreview = previewImage(heroImage,
+  shortScreen + " clamp(172px, 52vw, 220px), (max-width: 720px) clamp(198px, 62vw, 320px), clamp(285px, 40.5vw, 470px)");
+const heroComparisonSizes = shortScreen + " clamp(306px, 94vw, 392px), (max-width: 720px) clamp(352px, 110.4vw, 570px), clamp(507px, 72.1vw, 837px)";
+const cardSizes = "(max-width: 720px) calc((100vw - 41px) / 2), (max-width: 940px) calc((100vw - 68px) / 3), min(calc((100vw - 82px) / 3), 372px)";
+const routineSizes = "(max-width: 720px) calc(100vw - 32px), min(48vw, 565px)";
+const testimonialSizes = "(max-width: 720px) min(calc(100vw - 46px), 426px), (max-width: 980px) 46vw, (max-width: 1200px) 31vw, 352px";
+const packagePreview = previewImage(heroImage, "(max-width: 720px) 28vw, 132px");
 const money = (kobo: number) => `₦${(kobo / 100).toLocaleString("en-NG")}`;
 
 export const metadata: Metadata = {
@@ -61,10 +71,12 @@ const customerPhotos = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => ({
   src: `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`,
   width: 1080,
   height: 810,
+  sizes: number === 1 ? heroComparisonSizes : number === 7 ? routineSizes : cardSizes,
   alt: `Before and after hair comparison ${number}, shared with Renova`,
 }));
 
 const [heroComparison, routineComparison] = customerPhotos;
+const heroComparisonPreview = previewImage(heroComparison.src, heroComparison.sizes);
 
 const supplierPhotos = [
   { src: "/anagen/hair1.jpg", width: 246, height: 132, alt: "Before and after views of the top of the scalp, shared by Anagen’s supplier" },
@@ -72,10 +84,12 @@ const supplierPhotos = [
   { src: "/anagen/hair3.jpg", width: 246, height: 141, alt: "Before and after photos of the side hairline, shared by Anagen’s supplier" },
 ];
 
-function ComparisonPhoto({ src, width, height, alt }: { src: string; width: number; height: number; alt: string }) {
+function ComparisonPhoto({ src, width, height, alt, sizes }: {
+  src: string; width: number; height: number; alt: string; sizes?: string;
+}) {
   return <figure className={styles.proofPhoto}>
     <a href={src} title="View full-size photo">
-      <img src={src} width={width} height={height} alt={alt} loading="lazy" decoding="async" />
+      <img {...(sizes ? previewImage(src, sizes) : { src })} width={width} height={height} alt={alt} loading="lazy" decoding="async" />
     </a>
   </figure>;
 }
@@ -89,16 +103,17 @@ export default function Anagen3Page() {
     ["Can I use my own hair cream or oil?", "Yes. Follow the instructions in the pack to mix Anagen with your preferred hair cream or oil."],
     ["How much does delivery cost?", "Doorstep delivery is free on every bundle shown on this page."],
     ["When should I expect my order?", `Estimated delivery is ${ANAGEN.estimate}. Renova will confirm timing for your address.`],
-    ["How do I track my order?", <>Keep the reference shown after you submit the form. Use it to <Link href="/track-order">track your order</Link> or contact <a href={support}>Renova support</a>.</>],
-    ["What is the return policy?", <>See Renova’s <Link href="/returns">returns policy</Link> for eligibility and fees. Request an eligible return within seven calendar days of delivery.</>],
+    ["How do I track my order?", <>Keep the reference shown after you submit the form. Use it to <Link href="/track-order" prefetch={false}>track your order</Link> or contact <a href={support}>Renova support</a>.</>],
+    ["What is the return policy?", <>See Renova’s <Link href="/returns" prefetch={false}>returns policy</Link> for eligibility and fees. Request an eligible return within seven calendar days of delivery.</>],
   ];
   const jsonLd = { "@context": "https://schema.org", "@type": "Product", name: ANAGEN.name, sku: ANAGEN.sku, brand: { "@type": "Brand", name: "Anagen" }, description, image: absoluteUrl(heroImage), offers: { "@type": "Offer", url: absoluteUrl("/anagen3"), price: (starter.totalKobo / 100).toFixed(2), priceCurrency: "NGN" } };
 
   return <main className={styles.page}>
+    {process.env.NEXT_PUBLIC_RENOVA_ANAGEN_DIAGNOSTICS === "1" && <AnagenDiagnostics />}
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
     <header className={styles.masthead}>
       <div className={styles.container}>
-        <Link href="/anagen3" className={styles.brand} aria-label="Anagen by Renova">anagen<span aria-hidden="true">.</span><small>BY RENOVA</small></Link>
+        <Link href="/anagen3" prefetch={false} className={styles.brand} aria-label="Anagen by Renova">anagen<span aria-hidden="true">.</span><small>BY RENOVA</small></Link>
         <nav aria-label="Anagen">
           <a href="#customer-photos" className={styles.navLink}>Customer photos</a>
           <a href="#customer-testimonials" className={styles.navLink}>Testimonials</a>
@@ -118,15 +133,15 @@ export default function Anagen3Page() {
           <div className={styles.heroGrid}>
             <figure className={styles.heroPhoto}>
               <div className={styles.packPhoto}>
-                <img src={heroImage} srcSet="/anagen3/pack-540.webp 540w, /anagen3/pack-860.webp 860w" sizes="(max-width: 720px) clamp(198px, 62vw, 320px), clamp(285px, 40.5vw, 470px)" width="860" height="860" fetchPriority="high" alt="Actual Anagen Hair Reviver pouch in silver packaging" />
+                <img {...productPreview} width="860" height="860" loading="eager" fetchPriority="high" data-anagen-hero-product alt="Actual Anagen Hair Reviver pouch in silver packaging" />
               </div>
               <a className={styles.heroComparison} href={heroComparison.src} aria-label="View the full-size before and after hair photos of a man, shared with Renova">
                 <span className={styles.heroPortrait}>
-                  <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="" />
+                  <img {...heroComparisonPreview} width={heroComparison.width} height={heroComparison.height} alt="" />
                   <span>Before</span>
                 </span>
                 <span className={styles.heroPortrait}>
-                  <img src={heroComparison.src} width={heroComparison.width} height={heroComparison.height} alt="" />
+                  <img {...heroComparisonPreview} width={heroComparison.width} height={heroComparison.height} alt="" />
                   <span>After</span>
                 </span>
               </a>
@@ -162,7 +177,7 @@ export default function Anagen3Page() {
           <div className={styles.concernGrid}>
             {concerns.map(({ image, title: heading, alt }) =>
               <figure className={styles.concernCard} key={image}>
-                <img src={`/anagen3/${image}.webp`} width="540" height="455" loading="lazy" decoding="async" alt={alt} />
+                <img {...previewImage(`/anagen3/${image}.webp`, cardSizes)} width="540" height="455" loading="lazy" decoding="async" alt={alt} />
                 <figcaption>{heading}</figcaption>
               </figure>
             )}
@@ -244,7 +259,7 @@ export default function Anagen3Page() {
                 <p className={styles.packageTag}>{["Starter", "Recommended", "Best value"][index]}</p>
                 <div className={styles.packVisual} aria-hidden="true">
                   {Array.from({ length: bundle.packs }, (_, packIndex) =>
-                    <img key={packIndex} src="/anagen3/pack-540.webp" width="540" height="540" loading="lazy" decoding="async" alt="" />
+                    <img key={packIndex} {...packagePreview} width="540" height="540" loading="lazy" decoding="async" alt="" />
                   )}
                 </div>
                 <h3>{bundle.label} of Anagen</h3>
@@ -277,7 +292,7 @@ export default function Anagen3Page() {
             {testimonialScreenshots.map(({ src, alt }) => (
               <li key={src} className={styles.testimonialCard}>
                 <a href={src} aria-label={`View ${alt} at full size`}>
-                  <Image src={src} alt={alt} width={941} height={1672} sizes="(max-width: 720px) 92vw, (max-width: 980px) 46vw, (max-width: 1200px) 31vw, 367px" />
+                  <img {...previewImage(src, testimonialSizes)} alt={alt} width="941" height="1672" loading="lazy" decoding="async" />
                 </a>
               </li>
             ))}
@@ -297,7 +312,7 @@ export default function Anagen3Page() {
               <li><Icon name="check" /> Estimated {ANAGEN.estimate}</li>
             </ul>
           </aside>
-          <div className={styles.formFrame}><Anagen3Checkout supportPhone={supportPhone} /></div>
+          <div className={styles.formFrame}><Anagen3Checkout supportPhone={supportPhone} states={anagenStates} /></div>
         </div>
       </section>
       <Anagen3StickyOrder />
@@ -313,9 +328,9 @@ export default function Anagen3Page() {
     </section>
 
     <footer className={styles.footer}><div className={styles.container}>
-      <Link href="/shop" className={styles.brand}>anagen<span aria-hidden="true">.</span><small>BY RENOVA</small></Link>
+      <Link href="/shop" prefetch={false} className={styles.brand}>anagen<span aria-hidden="true">.</span><small>BY RENOVA</small></Link>
       <nav aria-label="Footer">
-        <Link href="/track-order">Track order</Link><Link href="/delivery">Delivery</Link><Link href="/returns">Returns</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><a href={support}>Contact Renova</a>
+        <Link href="/track-order" prefetch={false}>Track order</Link><Link href="/delivery" prefetch={false}>Delivery</Link><Link href="/returns" prefetch={false}>Returns</Link><Link href="/privacy" prefetch={false}>Privacy</Link><Link href="/terms" prefetch={false}>Terms</Link><a href={support}>Contact Renova</a>
       </nav>
     </div></footer>
   </main>;

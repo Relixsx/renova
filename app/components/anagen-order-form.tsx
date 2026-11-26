@@ -2,14 +2,15 @@
 
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getAllStates, getLGAsByState } from "ng-geo-data";
+import type { AnagenState } from "../lib/anagen-states";
+import { reportAnagenDiagnostic } from "../lib/anagen-diagnostics";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
+import { browserUuid } from "../lib/browser-uuid";
 import { CHECKOUT_WHATSAPP_NOTICE_VERSION } from "../lib/checkout-whatsapp";
 import { trackMetaEvent } from "../lib/meta-pixel";
 import { currentAnagenCampaign, trackAnagen3, trackAnagen3Meta } from "../lib/anagen3-analytics";
 import styles from "../anagen/anagen.module.css";
 
-const states = getAllStates();
 const keyName = "renova-anagen-pending-order";
 const money = (amount: number) => `₦${(amount / 100).toLocaleString("en-NG")}`;
 type ReceivedOrder = { orderNumber: string; totalKobo: number; packs: number; alreadyReceived?: boolean };
@@ -31,11 +32,12 @@ function recordPackageSelection(packs: number) {
   try { trackAnagen3("AnagenPackageSelected", { num_items: packs, value: offer.totalKobo / 100 }); } catch { /* Analytics is optional. */ }
 }
 
-export function AnagenOrderForm({ stock, supportPhone, funnel }: {
-  stock?: number | null; supportPhone: string; funnel?: AnagenFunnel;
+export function AnagenOrderForm({ stock, supportPhone, funnel, states }: {
+  stock?: number | null; supportPhone: string; funnel?: AnagenFunnel; states: AnagenState[];
 }) {
   const [quantity, setQuantity] = useState(1);
   const [stateCode, setStateCode] = useState("");
+  const [lgaOptions, setLgaOptions] = useState<{ code: string; areas: { name: string }[] }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [referenceUsed, setReferenceUsed] = useState(false);
@@ -51,7 +53,19 @@ export function AnagenOrderForm({ stock, supportPhone, funnel }: {
   // The public landing page does not query/poll Neon for each visitor.
   // The order endpoint always verifies current catalogue availability.
   const available = stock === undefined || (stock !== null && stock >= quantity);
-  const localGovernments = stateCode ? getLGAsByState(stateCode) : [];
+  const localGovernments = lgaOptions?.code === stateCode ? lgaOptions.areas : [];
+
+  useEffect(() => {
+    if (!stateCode) return;
+    let current = true;
+    import("ng-geo-data").then(({ getLGAsByState }) => {
+      if (current) setLgaOptions({ code: stateCode, areas: getLGAsByState(stateCode) });
+    }).catch(() => {
+      // The full address can still be used when optional LGA choices fail to load.
+      if (current) setLgaOptions({ code: stateCode, areas: [] });
+    });
+    return () => { current = false; };
+  }, [stateCode]);
 
   useEffect(() => {
     const selectPackage = (event: Event) => {
@@ -86,14 +100,17 @@ export function AnagenOrderForm({ stock, supportPhone, funnel }: {
     if (!form.reportValidity()) return;
     submission.current = true; setBusy(true); setError(""); setReferenceUsed(false);
     const fields = new FormData(form);
+    let timeout: number | undefined;
     try {
+      const controller = typeof AbortController === "function" ? new AbortController() : undefined;
+      if (controller) timeout = window.setTimeout(() => controller.abort(), 30_000);
       if (!pendingKey.current) {
         try { pendingKey.current = sessionStorage.getItem(keyName) || ""; } catch { /* Private storage may be unavailable. */ }
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pendingKey.current)) pendingKey.current = crypto.randomUUID();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pendingKey.current)) pendingKey.current = browserUuid();
         try { sessionStorage.setItem(keyName, pendingKey.current); } catch { /* In-memory retry protection still works. */ }
       }
       const response = await fetch("/api/anagen/order", {
-        method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(30000),
+        method: "POST", headers: { "content-type": "application/json" }, signal: controller?.signal,
         body: JSON.stringify({
           offerVersion: ANAGEN.version, idempotencyKey: pendingKey.current, quantity,
           ...(funnel ? { funnel, campaign: currentAnagenCampaign() } : {}),
@@ -105,6 +122,7 @@ export function AnagenOrderForm({ stock, supportPhone, funnel }: {
       const payload = await response.json() as ReceivedOrder & { error?: string; code?: string };
       if (payload.code === "REFERENCE_USED") setReferenceUsed(true);
       if (!response.ok || !payload.orderNumber || !Number.isInteger(payload.totalKobo)) {
+        if (funnel) reportAnagenDiagnostic("order-rejected");
         if (funnel && [400, 409, 413].includes(response.status)) {
           try { trackAnagen3("AnagenOrderValidationError", { reason: payload.code === "REFERENCE_USED" ? "duplicate_reference" : response.status === 409 ? "offer_or_stock" : "invalid_input" }); } catch { /* Analytics is optional. */ }
         }
@@ -119,8 +137,9 @@ export function AnagenOrderForm({ stock, supportPhone, funnel }: {
       pendingKey.current = ""; form.reset(); setQuantity(1); setStateCode(""); setReceived(payload);
       window.dispatchEvent(new CustomEvent("renova-anagen-completed"));
     } catch (reason) {
+      if (funnel) reportAnagenDiagnostic("checkout-error");
       setError(reason instanceof Error ? reason.message : "The connection was interrupted. Retry with the same details; your reference prevents duplicate orders.");
-    } finally { submission.current = false; setBusy(false); }
+    } finally { window.clearTimeout(timeout); submission.current = false; setBusy(false); }
   }
 
   if (received) return <section id="anagen-order-confirmed" ref={completion} className={styles.success} data-anagen-funnel={funnel} tabIndex={-1} aria-live="polite">
@@ -165,7 +184,7 @@ export function AnagenOrderForm({ stock, supportPhone, funnel }: {
         <p id="anagen-address-help" className={styles.fieldHint}>Include your town or city here so our delivery team can find you.</p>
         <div className={styles.twoColumns}>
           <label htmlFor="anagen-state">State <span>*</span><select id="anagen-state" name="stateCode" autoComplete="address-level1" required value={stateCode} onChange={(event) => setStateCode(event.target.value)}><option value="">Select your state</option>{states.map((state) => <option key={state.code} value={state.code}>{state.code === "FC" ? "FCT — Abuja" : state.name}</option>)}</select></label>
-          <label htmlFor="anagen-lga">Local government area <small>Optional</small><select id="anagen-lga" name="lga" key={stateCode} defaultValue="" disabled={!stateCode}><option value="">{stateCode ? "Leave blank if you’re not sure" : "Select your state first"}</option>{localGovernments.map((area) => <option key={area.name} value={area.name}>{area.name}</option>)}</select></label>
+          <label htmlFor="anagen-lga">Local government area <small>Optional</small><select id="anagen-lga" name="lga" key={stateCode} defaultValue="" disabled={!stateCode}><option value="">{!stateCode ? "Select your state first" : lgaOptions?.code === stateCode ? "Leave blank if you’re not sure" : "Loading local government areas…"}</option>{localGovernments.map((area) => <option key={area.name} value={area.name}>{area.name}</option>)}</select></label>
         </div>
         <label htmlFor="anagen-quantity">Choose your package <span>*</span><select id="anagen-quantity" name="quantity" value={quantity} onChange={(event) => {
           const packs = Number(event.target.value);

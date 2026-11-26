@@ -18,10 +18,11 @@ const getBundleCapacity = unstable_cache(async () => {
 }, ["anagen-bundle-capacity"], { revalidate: 45 });
 
 export async function GET() {
+  const headers = { "Cache-Control": "no-store" };
   try {
-    return Response.json({ capacity: await getBundleCapacity() });
+    return Response.json({ capacity: await getBundleCapacity() }, { headers });
   } catch {
     // Checkout still verifies the current catalogue when the read cache is unavailable.
-    return Response.json({ capacity: undefined }, { status: 503 });
+    return Response.json({ capacity: undefined }, { status: 503, headers });
   }
 }

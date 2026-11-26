@@ -1,0 +1,326 @@
+{
+  "/anagen3/pack-860.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/pack-860-360.80d6b833b9e1.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/pack-860-540.5511b159a7c2.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/pack-860-860.6e91dbcb5c46.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-01.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-01-360.e7db39b64fa5.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-01-540.f058c9d4df4b.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-01-720.d1ac1bbc36e8.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-01-860.7b8ed8452dbd.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-01-1080.a105b9393de1.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-02.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-02-360.d3aa1868265f.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-02-540.b7e9cbb6e1d0.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-02-720.0143f78063df.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-02-860.7a4eefea6b61.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-02-1080.0ebc7e0f9e0d.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-03.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-03-360.434ecf683222.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-03-540.4274b5accffb.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-03-720.84ad76860088.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-03-860.af487d5885fc.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-03-1080.18910fb81ad3.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-04.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-04-360.feea6469bb0f.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-04-540.fba3ad75ace8.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-04-720.85e2587c874a.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-04-860.03675de4c535.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-04-1080.85a5b54b8876.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-05.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-05-360.284e460164b3.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-05-540.99bed107b017.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-05-720.f963b4440f5c.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-05-860.e5e5ca13deb9.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-05-1080.7afa0d659b72.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-06.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-06-360.3346c24f03e8.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-06-540.81073fa51603.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-06-720.2877c9afdecd.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-06-860.3f5bd33643a8.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-06-1080.d069b10696da.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-07.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-07-360.8380c4e49e0c.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-07-540.98678f14607e.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-07-720.849f29a79988.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-07-860.243328c3df75.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-07-1080.e84a856206c2.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-08.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-08-360.5a6bb8204d70.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-08-540.7971a965b85f.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-08-720.690dbcc44813.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-08-860.93b8c97f7111.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-08-1080.458fc546a089.webp"
+    }
+  ],
+  "/anagen/customer-gallery/photo-09.webp": [
+    {
+      "width": 360,
+      "src": "/anagen3/previews/photo-09-360.9dc17c92c53b.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/photo-09-540.f10a71b0ce90.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/photo-09-720.22fb18d346e1.webp"
+    },
+    {
+      "width": 860,
+      "src": "/anagen3/previews/photo-09-860.f08a3d2538f0.webp"
+    },
+    {
+      "width": 1080,
+      "src": "/anagen3/previews/photo-09-1080.a3b51840e31e.webp"
+    }
+  ],
+  "/anagen3/concern-edges.webp": [
+    {
+      "width": 320,
+      "src": "/anagen3/previews/concern-edges-320.2e05e479d2e1.webp"
+    },
+    {
+      "width": 420,
+      "src": "/anagen3/previews/concern-edges-420.4d11ac71b542.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/concern-edges-540.3f637c08bc9a.webp"
+    }
+  ],
+  "/anagen3/concern-breakage.webp": [
+    {
+      "width": 320,
+      "src": "/anagen3/previews/concern-breakage-320.66e6049aef01.webp"
+    },
+    {
+      "width": 420,
+      "src": "/anagen3/previews/concern-breakage-420.55d4db952a7a.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/concern-breakage-540.888440753b2a.webp"
+    }
+  ],
+  "/anagen3/concern-scalp.webp": [
+    {
+      "width": 320,
+      "src": "/anagen3/previews/concern-scalp-320.d1b43682ed6b.webp"
+    },
+    {
+      "width": 420,
+      "src": "/anagen3/previews/concern-scalp-420.b1fd002dc9ca.webp"
+    },
+    {
+      "width": 540,
+      "src": "/anagen3/previews/concern-scalp-540.b77a3a5c3625.webp"
+    }
+  ],
+  "/anagen3/testimonials/whatsapp-1.png": [
+    {
+      "width": 480,
+      "src": "/anagen3/previews/whatsapp-1-480.6804f8a99a5c.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/whatsapp-1-720.cee1bfa23c64.webp"
+    },
+    {
+      "width": 941,
+      "src": "/anagen3/previews/whatsapp-1-941.db9bf90b83e4.webp"
+    }
+  ],
+  "/anagen3/testimonials/whatsapp-2.png": [
+    {
+      "width": 480,
+      "src": "/anagen3/previews/whatsapp-2-480.124262055c96.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/whatsapp-2-720.f3bf876397d4.webp"
+    },
+    {
+      "width": 941,
+      "src": "/anagen3/previews/whatsapp-2-941.83589b1b8f16.webp"
+    }
+  ],
+  "/anagen3/testimonials/whatsapp-3.png": [
+    {
+      "width": 480,
+      "src": "/anagen3/previews/whatsapp-3-480.17bb18b8bea4.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/whatsapp-3-720.f63143234f5a.webp"
+    },
+    {
+      "width": 941,
+      "src": "/anagen3/previews/whatsapp-3-941.7c3b298d6744.webp"
+    }
+  ],
+  "/anagen3/testimonials/whatsapp-4.png": [
+    {
+      "width": 480,
+      "src": "/anagen3/previews/whatsapp-4-480.28fe38b77720.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/whatsapp-4-720.2e994aa79db3.webp"
+    },
+    {
+      "width": 941,
+      "src": "/anagen3/previews/whatsapp-4-941.e0aadbc0cc93.webp"
+    }
+  ],
+  "/anagen3/testimonials/whatsapp-5.png": [
+    {
+      "width": 480,
+      "src": "/anagen3/previews/whatsapp-5-480.7b01d8fe5fc5.webp"
+    },
+    {
+      "width": 720,
+      "src": "/anagen3/previews/whatsapp-5-720.623afec89080.webp"
+    },
+    {
+      "width": 941,
+      "src": "/anagen3/previews/whatsapp-5-941.389f10afc74c.webp"
+    }
+  ]
+}

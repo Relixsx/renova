@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportAnagenDiagnostic } from "../lib/anagen-diagnostics";
 
 declare global {
   interface Window {
@@ -38,11 +39,34 @@ export function MetaPixelLoader() {
 
     const script = document.createElement("script");
     script.async = true;
+    script.setAttribute("fetchpriority", "low");
     script.src = "https://connect.facebook.net/en_US/fbevents.js";
-    document.head.appendChild(script);
 
     fbq("init", pixelId);
     fbq("track", "PageView");
+
+    const product = document.querySelector<HTMLImageElement>("img[data-anagen-hero-product]");
+    if (!product) {
+      document.head.appendChild(script);
+    } else {
+      reportAnagenDiagnostic("meta-pageview-queued");
+      script.addEventListener("load", () => reportAnagenDiagnostic("meta-script-loaded"), { once: true });
+      script.addEventListener("error", () => reportAnagenDiagnostic("meta-script-error"), { once: true });
+      // Queue the event immediately while giving the critical product image a paint opportunity.
+      const afterPaint = () => window.requestAnimationFrame(() => window.setTimeout(load, 0));
+      const load = () => {
+        window.clearTimeout(deadline);
+        product.removeEventListener("load", afterPaint);
+        product.removeEventListener("error", afterPaint);
+        if (!script.isConnected) document.head.appendChild(script);
+      };
+      const deadline = window.setTimeout(load, 300);
+      if (product.complete) afterPaint();
+      else {
+        product.addEventListener("load", afterPaint, { once: true });
+        product.addEventListener("error", afterPaint, { once: true });
+      }
+    }
     window.dispatchEvent(new Event("renova-meta-ready"));
   }, []);
 

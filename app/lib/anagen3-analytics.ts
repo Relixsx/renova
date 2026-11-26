@@ -1,6 +1,7 @@
 "use client";
 
 import { ANAGEN } from "./anagen-offer.mjs";
+import { browserUuid } from "./browser-uuid";
 import { readAnagenCampaign } from "./anagen-campaign";
 import { trackMetaEvent, type MetaEventName } from "./meta-pixel";
 
@@ -11,7 +12,7 @@ let pageEventKey: string | undefined;
 let interactionSequence = 0;
 
 function eventKey(stage: string) {
-  pageEventKey ||= window.crypto.randomUUID();
+  pageEventKey ||= browserUuid();
   return `anagen3-${pageEventKey}-${stage}`;
 }
 

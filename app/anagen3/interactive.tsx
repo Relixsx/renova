@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { AnagenBundleLink, AnagenOrderForm } from "../components/anagen-order-form";
 import { ANAGEN } from "../lib/anagen-offer.mjs";
+import type { AnagenState } from "../lib/anagen-states";
+import { reportAnagenDiagnostic } from "../lib/anagen-diagnostics";
 import { onMetaPixelReady } from "../lib/meta-pixel";
 import { trackAnagen3, trackAnagen3Meta } from "../lib/anagen3-analytics";
 import styles from "./anagen3.module.css";
@@ -14,15 +16,19 @@ const money = (kobo: number) => `₦${(kobo / 100).toLocaleString("en-NG")}`;
 export function Anagen3Stock({ children }: { children: ReactNode }) {
   const [stock, setStock] = useState<number | null>();
   useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/anagen/availability", { signal: controller.signal }).then(async (response) => {
-      if (!response.ok) return;
+    const controller = typeof AbortController === "function" ? new AbortController() : undefined;
+    let active = true;
+    fetch("/api/anagen/availability", { signal: controller?.signal, priority: "low" }).then(async (response) => {
+      if (!active) return;
+      if (!response.ok) { reportAnagenDiagnostic("availability-error"); return; }
       const { capacity } = await response.json();
-      if (capacity === null || (Number.isInteger(capacity) && capacity >= 0 && capacity <= ANAGEN.bundles.length)) {
+      if (active && (capacity === null || (Number.isInteger(capacity) && capacity >= 0 && capacity <= ANAGEN.bundles.length))) {
         setStock(capacity);
       }
-    }).catch(() => { /* Checkout independently verifies the catalogue. */ });
-    return () => controller.abort();
+    }).catch(() => {
+      if (active) reportAnagenDiagnostic("availability-error");
+    });
+    return () => { active = false; controller?.abort(); };
   }, []);
   return <StockContext.Provider value={stock}>{children}</StockContext.Provider>;
 }
@@ -37,9 +43,9 @@ export function Anagen3BundleButton({ bundle, primary = false }: { bundle: Bundl
   </AnagenBundleLink>;
 }
 
-export function Anagen3Checkout({ supportPhone }: { supportPhone: string }) {
+export function Anagen3Checkout({ supportPhone, states }: { supportPhone: string; states: AnagenState[] }) {
   const stock = useContext(StockContext);
-  return <AnagenOrderForm stock={stock} supportPhone={supportPhone} funnel="anagen3" />;
+  return <AnagenOrderForm stock={stock} supportPhone={supportPhone} states={states} funnel="anagen3" />;
 }
 
 export function Anagen3StickyOrder() {

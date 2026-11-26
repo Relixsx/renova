@@ -85,6 +85,14 @@ test('native production Gold and Electric Lime pages keep their URLs, shared ord
 test('native production Anagen 3 serves an independent page with the shared checkout and local campaign media', async () => {
  const server = await nextServer('off');
  try {
+  const campaign = '?fbclid=test-click&utm_source=facebook&utm_campaign=november&utm_content=hair%20care';
+  const alias = await server.fetch('/anagen/3' + campaign);
+  assert.equal(alias.status, 308);
+  const destination = new URL(alias.headers.get('location'), 'http://localhost');
+  assert.equal(destination.pathname, '/anagen3');
+  assert.deepEqual([...destination.searchParams], [...new URLSearchParams(campaign)]);
+  assert.equal((await server.fetch(destination.pathname + destination.search)).status, 200);
+  assert.equal((await server.fetch('/api/anagen/availability')).headers.get('cache-control'), 'no-store');
   const response = await server.fetch('/anagen3');
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -100,24 +108,34 @@ test('native production Anagen 3 serves an independent page with the shared chec
   const hero = html.match(/<section[^>]*aria-labelledby="anagen3-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
   const heroSources = [...hero.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
   const heroComparison = "/anagen/customer-gallery/photo-01.webp";
-  assert.deepEqual(heroSources, ["/anagen3/pack-860.webp", heroComparison, heroComparison]);
+  const manifest = JSON.parse(await readFile('app/anagen3/previews.json', 'utf8'));
+  const pathsFor = original => manifest[original].map(variant => variant.src);
+  assert.ok(pathsFor('/anagen3/pack-860.webp').includes(heroSources[0]));
+  assert.ok(pathsFor(heroComparison).includes(heroSources[1]));
+  assert.equal(heroSources[1], heroSources[2]);
+  assert.equal(heroSources.length, 3);
+  assert.match(hero, /<img(?=[^>]*\bloading="eager")(?=[^>]*\bfetchpriority="high")(?=[^>]*\bsrcset=)/i);
   assert.ok(hero.includes(`href="${heroComparison}"`), "The hero comparison links to the original");
   assert.match(hero, /<span>Before<\/span>[\s\S]*<span>After<\/span>/);
   const routine = html.match(/<section[^>]*aria-labelledby="use-heading"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
-  assert.match(routine, /<img\b[^>]*\ssrc="\/anagen\/customer-gallery\/photo-07\.webp"/);
+  assert.match(routine, /<img\b[^>]*\ssrc="\/anagen3\/previews\/photo-07-/);
   assert.doesNotMatch(html, /application illustration|\/anagen3\/application-\d+\.webp/i);
   const gallery = html.match(/<section id="customer-photos"[^>]*>[\s\S]*?<\/section>/)?.[0] ?? "";
-  const photoSources = [...gallery.matchAll(/<img\b[^>]*\ssrc="(\/anagen\/[^"]+)"/g)].map(([, src]) => src);
+  const photoSources = [...gallery.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
   const menFirst = [1, 7, 2, 3, 4, 5, 6, 8, 9].map(number => `/anagen/customer-gallery/photo-${String(number).padStart(2, "0")}.webp`);
-  assert.deepEqual(photoSources, [...menFirst, "/anagen/hair1.jpg", "/anagen/hair2.jpg", "/anagen/hair3.jpg"]);
+  assert.equal(photoSources.length, 12);
+  menFirst.forEach((original, index) => assert.ok(pathsFor(original).includes(photoSources[index])));
+  const originalPaths = [...menFirst, "/anagen/hair1.jpg", "/anagen/hair2.jpg", "/anagen/hair3.jpg"];
   assert.doesNotMatch(gallery, /<details\b/, "All comparisons are visible without expanding the gallery");
-  assert.deepEqual([...gallery.matchAll(/<a href="(\/anagen\/[^"]+)"/g)].map(([, href]) => href), photoSources);
+  assert.deepEqual([...gallery.matchAll(/<a href="(\/anagen\/[^"]+)"/g)].map(([, href]) => href), originalPaths);
+  for (const original of originalPaths) assert.equal((await server.fetch(original)).status, 200, original);
   const testimonials = html.match(/<section id="customer-testimonials"[^>]*>[\s\S]*?<\/section>/);
   assert.ok(testimonials, "Customer testimonials are rendered on Anagen 3");
   assert.match(html.slice(testimonials.index + testimonials[0].length), /^\s*<section id="order-form"/);
   const testimonialPaths = [1, 2, 3, 4, 5].map(number => `/anagen3/testimonials/whatsapp-${number}.png`);
   assert.deepEqual([...testimonials[0].matchAll(/<a href="(\/anagen3\/testimonials\/[^"]+)"/g)].map(([, src]) => src), testimonialPaths);
   assert.equal((testimonials[0].match(/<img\b/g) || []).length, 5);
+  assert.equal((testimonials[0].match(/loading="lazy"/g) || []).length, 5);
   assert.doesNotMatch(testimonials[0], /<blockquote\b/);
   for (const path of testimonialPaths) {
    const original = await server.fetch(path);
@@ -129,11 +147,28 @@ test('native production Anagen 3 serves an independent page with the shared chec
   assert.doesNotMatch(html, /choicemartng\.com|shopibesta\.com/);
   assert.match(html, /<select(?=[^>]*id="anagen-lga")(?![^>]*required)[^>]*>/);
   for (const asset of ['pack-540.webp', 'pack-860.webp', 'concern-edges.webp', 'concern-breakage.webp', 'concern-scalp.webp', 'blend.webp', 'sachets.webp', 'pouch.webp']) {
-   assert.ok(html.includes(`/anagen3/${asset}`), asset);
    const image = await server.fetch(`/anagen3/${asset}`);
    assert.equal(image.status, 200);
    assert.match(image.headers.get('content-type'), /image\/webp/);
    assert.ok((await image.arrayBuffer()).byteLength < 80000, `${asset} is optimized`);
+  }
+  const preview = await server.fetch(pathsFor(heroComparison)[0]);
+  assert.equal(preview.status, 200);
+  assert.match(preview.headers.get('content-type'), /image\/webp/);
+  assert.match(preview.headers.get('cache-control'), /max-age=31536000.*immutable/);
+  assert.ok((await preview.arrayBuffer()).byteLength < 30000, "The smallest proof image fits a phone");
+  const stylesheets = [...html.matchAll(/<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+)"[^>]*>/g)];
+  let css = '';
+  for (const [, path] of stylesheets) css += await (await server.fetch(path)).text();
+  assert.ok(css.includes('--electric-lime'));
+  assert.doesNotMatch(css, /\.site-header\b|\.admin-shell\b/);
+  for (const [path, selector] of [['/about', '.site-header'], ['/checkout', '.checkout-shell'], ['/admin/login', '.admin-access']]) {
+   const response = await server.fetch(path);
+   assert.equal(response.status, 200, path);
+   const html = await response.text();
+   const links = [...html.matchAll(/<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+)"[^>]*>/g)];
+   const css = await Promise.all(links.map(async ([, url]) => (await server.fetch(url)).text()));
+   assert.ok(css.some(sheet => sheet.includes(selector)), `${path}: ${selector} stays styled`);
   }
  } finally { await server.close(); }
 });
